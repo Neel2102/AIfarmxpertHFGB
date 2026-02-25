@@ -1,0 +1,24 @@
+supply_chain_agents:
+  market_intelligence_agent:
+    description: "Provides insights into current and forecasted crop prices across different mandis and buyer channels"
+    priority: 2
+    dependencies: []
+    input_requirements: ["crop", "location", "quantity_quintals"]
+    
+  logistics_storage_agent:
+    description: "Helps plan post-harvest activities: when to store, sell, or transport based on price windows and spoilage risks"
+    priority: 3
+    dependencies: ["market_intelligence_agent", "yield_predictor_agent"]
+    input_requirements: ["crop", "quantity_quintals", "storage_capacity", "harvest_date", "market_distance_km"]
+    
+  input_procurement_agent:
+    description: "Advises where and when to buy inputs like seeds, fertilizers, and agrochemicals — includes price comparison"
+    priority: 1
+    dependencies: []
+    input_requirements: ["required_inputs", "field_size_acres", "budget", "location"]
+    
+  crop_insurance_risk_agent:
+    description: "Guides farmers on suitable insurance plans and provides claim process assistance in case of loss"
+    priority: 4
+    dependencies: []
+    input_requirements: ["crop", "field_size_acres", "crop_value", "location", "risk_factors"]

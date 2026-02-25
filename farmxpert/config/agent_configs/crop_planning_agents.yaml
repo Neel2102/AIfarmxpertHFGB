@@ -1,0 +1,48 @@
+crop_planning_agents:
+  crop_selector_agent:
+    description: "Recommends the best crops to plant based on soil condition, climate, seasonality, and market demand"
+    priority: 1
+    dependencies: ["soil_health_agent", "weather_watcher_agent", "market_intelligence_agent"]
+    input_requirements: ["soil_data", "season", "location", "market_prices"]
+    
+  seed_selection_agent:
+    description: "Suggests optimal seed varieties (hybrid, GMO, traditional) tailored to crop choice and farmer goals"
+    priority: 2
+    dependencies: ["crop_selector_agent"]
+    input_requirements: ["crop", "goals", "budget"]
+    
+  soil_health_agent:
+    description: "Interprets soil data (pH, NPK, organic content) and advises on soil treatment, amendments, and nutrient management"
+    priority: 1
+    dependencies: []
+    input_requirements: ["soil_data"]
+    
+  fertilizer_advisor_agent:
+    description: "Plans fertilizer application schedules that adapt to crop stage, weather, and soil feedback"
+    priority: 3
+    dependencies: ["soil_health_agent", "growth_stage_monitor_agent", "weather_watcher_agent"]
+    input_requirements: ["crop", "growth_stage", "soil_npk", "weather_forecast"]
+    
+  irrigation_planner_agent:
+    description: "Provides smart irrigation advice based on seasonal needs, evapotranspiration, and scheduling constraints"
+    priority: 3
+    dependencies: ["weather_watcher_agent", "growth_stage_monitor_agent"]
+    input_requirements: ["crop", "season", "soil_moisture", "weather", "field_size_acres"]
+    
+  pest_disease_diagnostic_agent:
+    description: "Understands pest/disease symptoms described by the farmer and recommends appropriate treatments"
+    priority: 4
+    dependencies: ["weather_watcher_agent"]
+    input_requirements: ["symptoms", "crop", "location", "weather_conditions"]
+    
+  weather_watcher_agent:
+    description: "Monitors weather conditions and issues time-sensitive guidance (e.g., avoid fertilizing before rain)"
+    priority: 1
+    dependencies: []
+    input_requirements: ["location", "planned_activities"]
+    
+  growth_stage_monitor_agent:
+    description: "Tracks the developmental stage of crops based on time and expected growth models. Adjusts other plans accordingly"
+    priority: 2
+    dependencies: []
+    input_requirements: ["crop", "planting_date", "current_date", "environmental_factors"]

@@ -1,0 +1,138 @@
+{
+  "weather_watcher": {
+    "name": "Weather Watcher Agent",
+    "description": "Monitors weather conditions and provides agricultural insights",
+    "capabilities": [
+      "weather_forecasting",
+      "temperature_monitoring",
+      "humidity_tracking",
+      "rainfall_analysis",
+      "weather_alerts"
+    ],
+    "endpoints": [
+      "/weather",
+      "/weather/analyze"
+    ],
+    "data_sources": [
+      "OpenWeatherMap",
+      "WeatherAPI"
+    ],
+    "status": "active"
+  },
+  "growth_stage_monitor": {
+    "name": "Growth Stage Monitor",
+    "description": "Analyzes crop growth stages and health status",
+    "capabilities": [
+      "stage_estimation",
+      "health_assessment",
+      "disease_detection",
+      "growth_prediction"
+    ],
+    "endpoints": [
+      "/growth/analyze",
+      "/growth/stage"
+    ],
+    "data_sources": [
+      "crop_database",
+      "image_analysis"
+    ],
+    "status": "active"
+  },
+  "irrigation_agent": {
+    "name": "Irrigation Agent",
+    "description": "Provides irrigation recommendations and scheduling",
+    "capabilities": [
+      "irrigation_planning",
+      "moisture_analysis",
+      "water_usage_optimization",
+      "irrigation_scheduling"
+    ],
+    "endpoints": [
+      "/irrigation/analyze",
+      "/irrigation/schedule"
+    ],
+    "data_sources": [
+      "soil_moisture_sensors",
+      "weather_data",
+      "crop_database"
+    ],
+    "status": "active"
+  },
+  "fertilizer_agent": {
+    "name": "Fertilizer Agent",
+    "description": "Analyzes soil conditions and provides fertilizer recommendations",
+    "capabilities": [
+      "soil_analysis",
+      "nutrient_recommendations",
+      "fertilizer_planning"
+    ],
+    "endpoints": [
+      "/fertilizer/analyze",
+      "/fertilizer/recommend"
+    ],
+    "data_sources": [
+      "soil_database",
+      "nutrient_database"
+    ],
+    "status": "active"
+  },
+  "soil_health_agent": {
+    "name": "Soil Health Agent",
+    "description": "Analyzes soil health and provides management recommendations",
+    "capabilities": [
+      "soil_testing",
+      "health_assessment",
+      "nutrient_analysis",
+      "soil_recommendations"
+    ],
+    "endpoints": [
+      "/soil/analyze",
+      "/soil/health"
+    ],
+    "data_sources": [
+      "soil_sensors",
+      "soil_database"
+    ],
+    "status": "active"
+  },
+  "market_intelligence_agent": {
+    "name": "Market Intelligence Agent",
+    "description": "Provides market price analysis and selling recommendations",
+    "capabilities": [
+      "price_tracking",
+      "market_trends",
+      "revenue_projection",
+      "selling_optimization",
+      "market_intelligence"
+    ],
+    "endpoints": [
+      "/market/analyze",
+      "/market/prices"
+    ],
+    "data_sources": [
+      "market_data_apis",
+      "historical_prices"
+    ],
+    "status": "active"
+  },
+  "task_scheduler_agent": {
+    "name": "Task Scheduler Agent",
+    "description": "Manages farming tasks and schedules",
+    "capabilities": [
+      "task_creation",
+      "task_scheduling",
+      "task_prioritization",
+      "deadline_tracking"
+    ],
+    "endpoints": [
+      "/tasks/create",
+      "/tasks/list",
+      "/tasks/update"
+    ],
+    "data_sources": [
+      "task_database",
+      "crop_database"
+    ],
+    "status": "active"
+  }
+}

@@ -1,0 +1,18 @@
+support_agents:
+  farmer_coach_agent:
+    description: "A conversational mentor that educates and supports the farmer with localized advice and seasonal tips"
+    priority: 5
+    dependencies: []
+    input_requirements: ["farmer_experience", "current_season", "crops_grown", "location", "specific_question"]
+    
+  compliance_certification_agent:
+    description: "Guides the farmer through certification processes like organic, export standards, or government schemes"
+    priority: 4
+    dependencies: []
+    input_requirements: ["certification_type", "farm_size_acres", "current_practices", "target_market", "timeline_months"]
+    
+  community_engagement_agent:
+    description: "Facilitates peer networking, co-operative planning, shared purchases, or government interaction"
+    priority: 5
+    dependencies: []
+    input_requirements: ["location", "farmer_group_size", "common_interests", "resource_sharing_needs", "government_schemes_interest"]

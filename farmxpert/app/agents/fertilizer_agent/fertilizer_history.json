@@ -1,0 +1,30 @@
+[
+  {
+    "crop": "cotton",
+    "fertilizer": "nitrogen_source",
+    "application_date": "2026-01-29T22:29:59.563409",
+    "dose_per_acre_kg": 8.0,
+    "total_quantity_kg": 16.0
+  },
+  {
+    "crop": "cotton",
+    "fertilizer": "phosphorus_source",
+    "application_date": "2026-01-29T22:29:59.563409",
+    "dose_per_acre_kg": 4.0,
+    "total_quantity_kg": 8.0
+  },
+  {
+    "crop": "cotton",
+    "fertilizer": "potassium_source",
+    "application_date": "2026-01-29T22:29:59.563409",
+    "dose_per_acre_kg": 3.0,
+    "total_quantity_kg": 6.0
+  },
+  {
+    "crop": "wheat",
+    "fertilizer": "nitrogen_source",
+    "application_date": "2026-02-03T21:53:15.414067",
+    "dose_per_acre_kg": 5.15,
+    "total_quantity_kg": 5.15
+  }
+]

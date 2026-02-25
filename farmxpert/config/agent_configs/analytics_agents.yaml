@@ -1,0 +1,18 @@
+analytics_agents:
+  yield_predictor_agent:
+    description: "Estimates crop yields using farm-specific historical data, agronomic variables, and forecast conditions"
+    priority: 2
+    dependencies: ["soil_health_agent", "weather_watcher_agent", "fertilizer_advisor_agent"]
+    input_requirements: ["crop", "field_size_acres", "soil_quality", "irrigation_type", "fertilizer_plan", "historical_yields"]
+    
+  profit_optimization_agent:
+    description: "Evaluates profitability across different crop strategies and input combinations. Suggests changes to increase margins"
+    priority: 3
+    dependencies: ["yield_predictor_agent", "market_intelligence_agent"]
+    input_requirements: ["crop", "field_size_acres", "input_costs", "market_prices", "yield_estimate"]
+    
+  carbon_sustainability_agent:
+    description: "Recommends regenerative farming practices and tracks eligibility for carbon credits and sustainability programs"
+    priority: 4
+    dependencies: []
+    input_requirements: ["current_practices", "farm_size_acres", "soil_organic_matter", "tillage_type", "cover_crops"]

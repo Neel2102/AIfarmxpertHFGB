@@ -1,0 +1,208 @@
+# Indian Agent Names and Configurations
+# Each agent has an Indian name and role description
+
+agents:
+  # Crop Planning Agents
+  crop_selector_agent:
+    indian_name: "Arjun"
+    full_name: "Arjun Singh"
+    role: "Crop Selection Specialist"
+    description: "Expert in selecting the best crops for your region and season"
+    avatar: "🌾"
+    expertise: ["crop_selection", "seasonal_planning", "regional_adaptation"]
+    
+  soil_health_agent:
+    indian_name: "Priya"
+    full_name: "Priya Sharma"
+    role: "Soil Health Expert"
+    description: "Analyzes soil conditions and provides health recommendations"
+    avatar: "🌱"
+    expertise: ["soil_analysis", "nutrient_management", "soil_conservation"]
+    
+  seed_selection_agent:
+    indian_name: "Rajesh"
+    full_name: "Rajesh Kumar"
+    role: "Seed Selection Advisor"
+    description: "Helps choose the best seeds for optimal yield"
+    avatar: "🌰"
+    expertise: ["seed_varieties", "germination", "yield_optimization"]
+    
+  fertilizer_advisor_agent:
+    indian_name: "Sunita"
+    full_name: "Sunita Reddy"
+    role: "Fertilizer Specialist"
+    description: "Provides fertilizer recommendations based on soil and crop needs"
+    avatar: "🌿"
+    expertise: ["fertilizer_planning", "nutrient_balance", "organic_farming"]
+    
+  irrigation_planner_agent:
+    indian_name: "Vikram"
+    full_name: "Vikram Singh"
+    role: "Irrigation Planner"
+    description: "Optimizes water usage and irrigation schedules"
+    avatar: "💧"
+    expertise: ["water_management", "irrigation_systems", "drought_resistance"]
+    
+  pest_disease_diagnostic_agent:
+    indian_name: "Meera"
+    full_name: "Meera Iyer"
+    role: "Pest & Disease Expert"
+    description: "Diagnoses and treats crop diseases and pest problems"
+    avatar: "🔬"
+    expertise: ["pest_identification", "disease_diagnosis", "organic_pest_control"]
+    
+  weather_watcher_agent:
+    indian_name: "Dinesh"
+    full_name: "Dinesh Joshi"
+    role: "Weather Analyst"
+    description: "Monitors weather patterns and provides forecasts"
+    avatar: "🌤️"
+    expertise: ["weather_forecasting", "climate_analysis", "disaster_preparedness"]
+    
+  growth_stage_monitor_agent:
+    indian_name: "Kavita"
+    full_name: "Kavita Mehta"
+    role: "Growth Monitor"
+    description: "Tracks crop growth stages and development"
+    avatar: "📈"
+    expertise: ["growth_tracking", "development_stages", "harvest_timing"]
+    
+  # Farm Operations Agents
+  task_scheduler_agent:
+    indian_name: "Amit"
+    full_name: "Amit Patel"
+    role: "Task Scheduler"
+    description: "Plans and schedules farm operations efficiently"
+    avatar: "📅"
+    expertise: ["task_planning", "resource_optimization", "workflow_management"]
+    
+  machinery_equipment_agent:
+    indian_name: "Suresh"
+    full_name: "Suresh Gupta"
+    role: "Machinery Expert"
+    description: "Advises on farm machinery and equipment"
+    avatar: "🚜"
+    expertise: ["machinery_selection", "equipment_maintenance", "automation"]
+    
+  farm_layout_mapping_agent:
+    indian_name: "Rekha"
+    full_name: "Rekha Verma"
+    role: "Farm Layout Specialist"
+    description: "Designs optimal farm layouts and field arrangements"
+    avatar: "🗺️"
+    expertise: ["farm_design", "field_planning", "spatial_optimization"]
+    
+  # Analytics Agents
+  yield_predictor_agent:
+    indian_name: "Nikhil"
+    full_name: "Nikhil Agarwal"
+    role: "Yield Predictor"
+    description: "Predicts crop yields using data analysis"
+    avatar: "📊"
+    expertise: ["yield_modeling", "data_analysis", "prediction_algorithms"]
+    
+  profit_optimization_agent:
+    indian_name: "Anita"
+    full_name: "Anita Desai"
+    role: "Profit Optimizer"
+    description: "Maximizes farm profitability through strategic planning"
+    avatar: "💰"
+    expertise: ["cost_analysis", "profit_optimization", "market_strategy"]
+    
+  carbon_sustainability_agent:
+    indian_name: "Ravi"
+    full_name: "Ravi Nair"
+    role: "Sustainability Expert"
+    description: "Promotes sustainable and eco-friendly farming practices"
+    avatar: "🌍"
+    expertise: ["carbon_footprint", "sustainable_farming", "environmental_impact"]
+    
+  # Supply Chain Agents
+  market_intelligence_agent:
+    indian_name: "Deepak"
+    full_name: "Deepak Shah"
+    role: "Market Analyst"
+    description: "Provides market insights and price trends"
+    avatar: "📈"
+    expertise: ["market_analysis", "price_trends", "demand_forecasting"]
+    
+  logistics_storage_agent:
+    indian_name: "Pooja"
+    full_name: "Pooja Jain"
+    role: "Logistics Coordinator"
+    description: "Manages storage and logistics for farm produce"
+    avatar: "📦"
+    expertise: ["storage_management", "logistics_planning", "supply_chain"]
+    
+  input_procurement_agent:
+    indian_name: "Manoj"
+    full_name: "Manoj Tiwari"
+    role: "Procurement Specialist"
+    description: "Sources and procures farm inputs at best prices"
+    avatar: "🛒"
+    expertise: ["input_sourcing", "price_negotiation", "supplier_management"]
+    
+  crop_insurance_risk_agent:
+    indian_name: "Shilpa"
+    full_name: "Shilpa Rao"
+    role: "Risk Management Expert"
+    description: "Manages crop insurance and risk assessment"
+    avatar: "🛡️"
+    expertise: ["risk_assessment", "insurance_planning", "disaster_management"]
+    
+  # Support Agents
+  farmer_coach_agent:
+    indian_name: "Guru"
+    full_name: "Guru Swamy"
+    role: "Farmer Coach"
+    description: "Provides guidance and training for better farming practices"
+    avatar: "👨‍🏫"
+    expertise: ["farming_education", "best_practices", "skill_development"]
+    
+  compliance_certification_agent:
+    indian_name: "Lakshmi"
+    full_name: "Lakshmi Menon"
+    role: "Compliance Officer"
+    description: "Ensures compliance with agricultural regulations and certifications"
+    avatar: "📋"
+    expertise: ["regulatory_compliance", "certification_management", "quality_standards"]
+    
+  community_engagement_agent:
+    indian_name: "Rohit"
+    full_name: "Rohit Kumar"
+    role: "Community Manager"
+    description: "Facilitates farmer community interactions and knowledge sharing"
+    avatar: "👥"
+    expertise: ["community_building", "knowledge_sharing", "collaboration"]
+
+# Agent categories for UI display
+categories:
+  crop_planning:
+    name: "Crop Planning"
+    description: "Planning and selection of crops"
+    agents: ["Arjun", "Priya", "Rajesh", "Sunita", "Vikram", "Meera", "Dinesh", "Kavita"]
+    color: "#4CAF50"
+    
+  farm_operations:
+    name: "Farm Operations"
+    description: "Daily farm operations and management"
+    agents: ["Amit", "Suresh", "Rekha"]
+    color: "#FF9800"
+    
+  analytics:
+    name: "Analytics & Insights"
+    description: "Data analysis and predictions"
+    agents: ["Nikhil", "Anita", "Ravi"]
+    color: "#2196F3"
+    
+  supply_chain:
+    name: "Supply Chain"
+    description: "Market and logistics management"
+    agents: ["Deepak", "Pooja", "Manoj", "Shilpa"]
+    color: "#9C27B0"
+    
+  support:
+    name: "Support & Training"
+    description: "Education and community support"
+    agents: ["Guru", "Lakshmi", "Rohit"]
+    color: "#607D8B"

@@ -1,0 +1,20 @@
+{
+  "cereal": {
+    "default_rdf": {"N": 55, "P2O5": 25, "K2O": 20}
+  },
+  "pulse": {
+    "default_rdf": {"N": 10, "P2O5": 30, "K2O": 15}
+  },
+  "oilseed": {
+    "default_rdf": {"N": 35, "P2O5": 30, "K2O": 20}
+  },
+  "fiber": {
+    "default_rdf": {"N": 40, "P2O5": 20, "K2O": 20}
+  },
+  "tuber": {
+    "default_rdf": {"N": 50, "P2O5": 90, "K2O": 50}
+  },
+  "vegetable": {
+    "default_rdf": {"N": 45, "P2O5": 40, "K2O": 35}
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "wheat": {
+    "seasonal_rdf_kg_per_acre": {"N": 53, "P2O5": 24, "K2O": 18},
+    "stage_distribution": {
+      "sowing":   {"N": 0.30, "P2O5": 0.50, "K2O": 0.40},
+      "tillering":{"N": 0.40, "P2O5": 0.30, "K2O": 0.30},
+      "booting":  {"N": 0.20, "P2O5": 0.10, "K2O": 0.20},
+      "grain_filling":{"N":0.10,"P2O5":0.10,"K2O":0.10}
+    }
+  },
+
+  "rice": {
+    "seasonal_rdf_kg_per_acre": {"N": 62, "P2O5": 25, "K2O": 25},
+    "stage_distribution": {
+      "transplanting":{"N":0.25,"P2O5":0.50,"K2O":0.40},
+      "tillering":    {"N":0.35,"P2O5":0.30,"K2O":0.30},
+      "panicle":      {"N":0.25,"P2O5":0.10,"K2O":0.20},
+      "heading":      {"N":0.15,"P2O5":0.10,"K2O":0.10}
+    }
+  },
+
+  "maize": {
+    "seasonal_rdf_kg_per_acre": {"N": 61, "P2O5": 24, "K2O": 16},
+    "stage_distribution": {
+      "basal":      {"N":0.33,"P2O5":1.00,"K2O":1.00},
+      "knee_high":  {"N":0.33},
+      "tasseling":  {"N":0.34}
+    }
+  },
+
+  "cotton": {
+    "seasonal_rdf_kg_per_acre": {"N": 40, "P2O5": 20, "K2O": 20},
+    "stage_distribution": {
+      "vegetative": {"N":0.40,"P2O5":0.40,"K2O":0.30},
+      "flowering":  {"N":0.30,"P2O5":0.30,"K2O":0.30},
+      "boll_filling":{"N":0.30,"P2O5":0.30,"K2O":0.40}
+    }
+  },
+
+  "soybean": {
+    "seasonal_rdf_kg_per_acre": {"N": 8, "P2O5": 32, "K2O": 16},
+    "stage_distribution": {
+      "sowing":     {"N":1.0,"P2O5":1.0,"K2O":1.0}
+    }
+  },
+
+  "potato": {
+    "seasonal_rdf_kg_per_acre": {"N": 48, "P2O5": 97, "K2O": 48},
+    "stage_distribution": {
+      "planting":        {"N":0.40,"P2O5":0.60,"K2O":0.50},
+      "tuber_initiation":{"N":0.30,"P2O5":0.20,"K2O":0.30},
+      "tuber_bulking":   {"N":0.30,"P2O5":0.20,"K2O":0.20}
+    }
+  }
+}

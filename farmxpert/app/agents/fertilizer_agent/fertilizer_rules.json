@@ -1,0 +1,26 @@
+[
+  {
+    "crop": "wheat",
+    "stage": "tillering",
+    "nitrogen_status": "low",
+    "fertilizer": "Urea",
+    "dose": "45 kg per acre",
+    "warning": "Do not apply if rain expected"
+  },
+  {
+    "crop": "wheat",
+    "stage": "tillering",
+    "phosphorus_status": "low",
+    "fertilizer": "SSP",
+    "dose": "40 kg per acre",
+    "warning": "Apply after irrigation"
+  },
+  {
+    "crop": "wheat",
+    "stage": "tillering",
+    "potassium_status": "low",
+    "fertilizer": "MOP",
+    "dose": "30 kg per acre",
+    "warning": "Do not mix with urea"
+  }
+]

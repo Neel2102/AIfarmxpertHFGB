@@ -1,0 +1,551 @@
+🌾 1. Crop Selector Agent
+
+This agent recommends crops based on soil data, climate, and market demand.
+
+Tools to Integrate:
+
+Web Scraping Tool:
+
+Purpose: Scrape market data, trends, and demand for specific crops from online sources (e.g., local mandi prices, market reports).
+
+Suggested Tool: BeautifulSoup
+ or Scrapy
+ (open-source, free).
+
+Integration: Set up a cron job to scrape market prices and crop demand data regularly. You could create an API endpoint that the Crop Selector Agent queries to pull the latest market data.
+
+Climate Prediction Model:
+
+Purpose: Predict climate conditions and their impact on crop growth over the season.
+
+Suggested Tool: OpenWeatherMap API
+ (free tier available), or Climacell
+ for hyperlocal weather prediction.
+
+Integration: Call the weather API to pull long-term forecasts (temperature, rainfall) and correlate with crop requirements.
+
+Market Analysis API:
+
+Purpose: Analyze historical crop prices and predict future demand.
+
+Suggested Tool: Trading Economics API
+ (offers free access to economic data).
+
+Integration: Query historical crop prices, crop demand patterns, and market trends using this API. Feed this data into the Crop Selector Agent to provide tailored recommendations based on market conditions.
+
+🌾 2. Seed Selection Agent
+
+This agent recommends seed varieties (GMO, hybrid, traditional) based on the selected crop.
+
+Tools to Integrate:
+
+Genetic Database API:
+
+Purpose: Query data about seed varieties, their traits, yield, disease resistance, and climate adaptability.
+
+Suggested Tool: Use Google's AI Tools
+ to access datasets related to crop genetics or use specialized agri-databases such as SeedQuest
+.
+
+Integration: Create an API that allows the agent to query the database based on crop type and environmental conditions.
+
+Soil Suitability Tool:
+
+Purpose: Assess the soil type and condition for matching with the seed variety.
+
+Suggested Tool: Integrate with SoilSensor API or any IoT-based soil sensors (e.g., Sensoterra
+).
+
+Integration: Pull soil data (e.g., pH, NPK levels, moisture) from sensors or user input. Based on that, recommend seeds optimized for the given soil.
+
+Yield Prediction Model:
+
+Purpose: Predict crop yield based on different seed varieties and growing conditions.
+
+Suggested Tool: Develop your own simple linear regression model using historical yield data, or use TensorFlow or Scikit-learn to build more advanced models.
+
+Integration: The agent can call the model using a machine learning API or directly from a local Python environment to predict the best seed options.
+
+🌾 3. Soil Health Agent
+
+Analyzes soil reports and suggests amendments based on lab test data or sensors.
+
+Tools to Integrate:
+
+Soil Sensor Data Integration Tool:
+
+Purpose: Connect to soil sensors for real-time data on pH, NPK, moisture, and organic content.
+
+Suggested Tool: Use IoT platforms like ThingSpeak or Blynk for real-time sensor data integration.
+
+Integration: The Soil Health Agent fetches data from these platforms using APIs, which can feed into the soil analysis model.
+
+Soil Amendment Recommendation Tool:
+
+Purpose: Suggest amendments (e.g., fertilizers, lime, compost) based on soil test data.
+
+Suggested Tool: A Rule-Based Engine built in Python (using libraries like pyKnow or Experta) to suggest soil amendments based on test results.
+
+Integration: Once data is pulled from sensors or lab reports, the agent runs it through a set of predefined rules to recommend the most suitable soil amendment.
+
+Laboratory Test Result Analyzer:
+
+Purpose: Analyze detailed lab test reports (for soil samples) and generate a list of recommended actions.
+
+Suggested Tool: OCR (Optical Character Recognition) Tool for interpreting scanned soil reports; use Tesseract OCR (open-source).
+
+Integration: When a farmer uploads a test report, use OCR to extract data and run it through a database of known soil amendment guidelines.
+
+🌾 4. Fertilizer Advisor Agent
+
+Provides fertilizer recommendations based on crop stage, weather, and soil status.
+
+Tools to Integrate:
+
+Fertilizer Database Tool:
+
+Purpose: Access detailed fertilizer information, types, usage guidelines, and cost.
+
+Suggested Tool: Build your own Fertilizer API or integrate with an external one like AgFunder's Market API.
+
+Integration: The agent queries the database to provide recommendations based on crop and soil conditions.
+
+Weather Forecast API:
+
+Purpose: Adjust fertilizer application schedules based on expected rainfall or temperature.
+
+Suggested Tool: Use OpenWeatherMap API (free tier) to get weather forecasts.
+
+Integration: Based on weather conditions, adjust the fertilizer schedule dynamically to avoid over-application before rainfall.
+
+Plant Growth Simulation Tool:
+
+Purpose: Simulate plant growth based on fertilizer inputs.
+
+Suggested Tool: Use a simulation engine like SIMS (Simulation Modeling System) or develop a simple growth model using Scikit-learn.
+
+Integration: Integrate this tool to simulate how different fertilization schedules impact growth and adjust the recommendations accordingly.
+
+🌾 5. Irrigation Planner Agent
+
+Helps with smart irrigation schedules using weather forecast, soil moisture, and evapotranspiration data.
+
+Tools to Integrate:
+
+Evapotranspiration Model:
+
+Purpose: Calculate crop water needs based on evapotranspiration (ET) data.
+
+Suggested Tool: Use the FAO Penman-Monteith Equation or ET Calculator API from platforms like AgriAPI.
+
+Integration: Use real-time data from weather APIs and soil moisture sensors to calculate ET and adjust irrigation schedules accordingly.
+
+IoT Soil Moisture Sensors Integration:
+
+Purpose: Provide real-time soil moisture levels to optimize irrigation.
+
+Suggested Tool: Integrate with sensor platforms like Sensoterra or Netafim for soil moisture data.
+
+Integration: Pull real-time soil moisture data from sensors and calculate irrigation needs dynamically.
+
+Weather API:
+
+Purpose: Predict rainfall and adjust irrigation plans accordingly.
+
+Suggested Tool: Use OpenWeatherMap API or Tomorrow.io API for hyperlocal weather forecasts.
+
+Integration: Fetch weather data (especially precipitation forecasts) and automatically adjust irrigation schedules if rain is expected.
+
+🌾 6. Pest & Disease Diagnostic Agent
+
+Detects plant diseases through image scans and text-based descriptions, recommending treatments.
+
+Tools to Integrate:
+
+Image Recognition Tool:
+
+Purpose: Identify plant diseases through leaf scans or photos.
+
+Suggested Tool: Use TensorFlow or PyTorch to build a custom deep learning model for disease recognition (or integrate Plant.id API).
+
+Integration: The agent processes image input (via smartphone, drone) to identify plant diseases and suggest treatments.
+
+Voice-to-Text API:
+
+Purpose: Convert spoken pest or disease descriptions into actionable data.
+
+Suggested Tool: Google Cloud Speech-to-Text API or IBM Watson Speech-to-Text (offers free tier).
+
+Integration: Convert voice input from farmers into text, then match it with known pest or disease descriptions.
+
+Disease Prediction Model:
+
+Purpose: Predict potential disease outbreaks based on environmental data.
+
+Suggested Tool: KNN (K-Nearest Neighbors) or Random Forest in Scikit-learn to predict outbreaks.
+
+Integration: The agent processes historical weather data, crop type, and current field conditions to predict disease likelihood.
+
+🌾 7. Weather Watcher Agent
+
+Provides real-time weather monitoring and forecasting with alerts.
+
+Tools to Integrate:
+
+Weather API:
+
+Purpose: Provide accurate, real-time weather forecasts and alerts.
+
+Suggested Tool: Use OpenWeatherMap or Weatherstack API (free tier).
+
+Integration: The agent queries these APIs to fetch weather forecasts and send timely alerts to farmers about adverse conditions (rain, frost).
+
+Alert System:
+
+Purpose: Send real-time alerts for critical weather events.
+
+Suggested Tool: Twilio API for SMS alerts, or Push Notifications API for mobile apps.
+
+Integration: Trigger alerts based on weather thresholds (e.g., heavy rain, frost risk) and notify farmers instantly.
+
+🌾 8. Growth Stage Monitor Agent
+
+Monitors crop growth stages using drone/satellite images.
+
+Tools to Integrate:
+
+Satellite Image Processing Tool:
+
+Purpose: Analyze NDVI (Normalized Difference Vegetation Index) to track crop health.
+
+Suggested Tool: Use Google Earth Engine or Sentinel Hub for satellite data.
+
+Integration: Fetch satellite images for the farm field, process them to track NDVI, and monitor plant health/growth stages.
+
+Drone Image Processing Tool:
+
+Purpose: Analyze crop health from drone images.
+
+Suggested Tool: Use OpenCV for image processing or integrate with a drone software suite like Pix4D.
+
+Integration: Process drone imagery to assess growth stages, disease, or stress, and send alerts if development is off-track.
+
+Growth Stage Prediction Model:
+
+Purpose: Predict plant growth stages based on environmental and historical data.
+
+Suggested Tool: Use machine learning models like KNN or Random Forest to predict growth stages.
+
+Integration: Combine real-time data (weather, soil) with historical growth data to predict and monitor plant development.
+
+🌾 9. Task Scheduler Agent
+
+Helps with planning and prioritizing farm tasks.
+
+Tools to Integrate:
+
+Task Prioritization Model:
+
+Purpose: Use AI to prioritize tasks based on urgency and available resources.
+
+Suggested Tool: Use Google OR-Tools for task optimization.
+
+Integration: The agent calculates the optimal sequence of tasks, accounting for factors like labor availability, weather forecasts, and task urgency.
+
+Real-Time Tracking Tool:
+
+Purpose: Track progress on tasks (e.g., crop planting, irrigation) in real-time.
+
+Suggested Tool: Use Trello API or Monday.com API to manage tasks and track progress.
+
+Integration: Farmers or workers can update task statuses, which the agent uses to adjust plans dynamically.
+
+🌾 10. Machinery & Equipment Agent
+
+Advises on machinery use, maintenance, and recommendations.
+
+Tools to Integrate:
+
+Maintenance Tracker:
+
+Purpose: Monitor equipment usage, schedule regular maintenance, and prevent downtime.
+
+Suggested Tool: UpKeep or Fiix for machinery maintenance tracking.
+
+Integration: The agent logs usage statistics (hours, load) and schedules maintenance based on predefined thresholds.
+
+Predictive Maintenance Tool:
+
+Purpose: Predict when machinery will need repairs or maintenance based on usage data.
+
+Suggested Tool: Use IBM Watson IoT for predictive maintenance.
+
+Integration: Fetch data from connected equipment and use machine learning models to predict failures.
+
+12. Farm Layout & Mapping Agent
+
+Tools to Use:
+
+QGIS (open-source) – for mapping, overlaying fields, irrigation lines, and boundaries.
+
+Shapely / GeoPandas – Python libraries for spatial data analysis.
+
+OpenStreetMap (OSM) API – for base maps and geodata.
+
+Integration Plan:
+
+In tools.py:
+
+generate_field_map() – uses GeoPandas + OSM to construct maps.
+
+analyze_field_shapes() – calculates area, boundaries, irrigation zones.
+
+export_map() – outputs maps in formats (e.g. PNG, GeoJSON).
+
+In Agent:
+
+Use these tools to visualize fields, layer irrigation lines, and highlight management zones.
+
+13. Yield Predictor Agent
+
+Tools to Use:
+
+Scikit-learn – for training regression models on historical yield data.
+
+NOAA or CMIP6 climate datasets – for historical weather patterns (free).
+
+TensorFlow Lite (optional) – for lightweight yield prediction models offline.
+
+Integration Plan:
+
+In tools.py:
+
+train_yield_model() – loads historical data, trains a model.
+
+predict_yield() – uses model and real-time weather/soil data to forecast yield.
+
+load_climate_data() – fetches historical climate series.
+
+In Agent:
+
+Integrate yield prediction into recommendations, providing expected output as tonnes per hectare, etc.
+
+14. Profit Optimization Agent
+
+Tools to Use:
+
+Pandas + NumPy – for cost/yield/price analysis.
+
+Google Sheets API or Excel via openpyxl – store/export cost templates.
+
+Simple linear optimization via SciPy or PuLP – for crop mix optimization.
+
+Integration Plan:
+
+In tools.py:
+
+calculate_profitability() – computes profit margins per crop.
+
+optimize_crop_mix() – suggests crop mix for max profit given land constraints.
+
+export_profit_report() – outputs Excel/CSV.
+
+In Agent:
+
+Pull inputs, run tools to suggest best yields vs costs vs land area.
+
+15. Carbon & Sustainability Agent
+
+Tools to Use:
+
+Cool Farm Tool (free beta) – for estimating farm-level greenhouse gas emissions.
+
+FAOSTAT (free) – for carbon sequestration data.
+
+Spreadsheet model – to calculate carbon footprint manually.
+
+Integration Plan:
+
+In tools.py:
+
+calculate_carbon_footprint() – uses input (fertilizer, fuel, etc.) with Cool Farm formulas.
+
+estimate_sequestration() – based on practice inputs (cover cropping, no-till).
+
+suggest_sustainable_practices() – map practices to carbon reduction.
+
+In Agent:
+
+Provide farmers with carbon dashboard: total footprint, reduction potential, suggestions, carbon credit estimates.
+
+16. Market Intelligence Agent
+
+Tools to Use:
+
+Web scraping via BeautifulSoup or Scrapy – for mandi/market prices.
+
+Alpha Vantage or TradingEconomics APIs – for commodity price trends (free tier).
+
+Plotly or Matplotlib – to chart price trends.
+
+Integration Plan:
+
+In tools.py:
+
+fetch_mandi_prices() – scrape local mandi web portals.
+
+fetch_global_prices() – via API calls.
+
+plot_price_trend() – generate visuals.
+
+In Agent:
+
+Recommend when and where to sell, showing historical price movement and forecasts.
+
+17. Logistics & Storage Agent
+
+Tools to Use:
+
+OpenRouteService – open routing for truck routes.
+
+Warehouse 4.0 APIs or open listing (local warehouses).
+
+Simple distance/time cost model.
+
+Integration Plan:
+
+In tools.py:
+
+calculate_transport_route() – via OpenRouteService.
+
+list_storage_options() – fetch local facility data from directories.
+
+estimate_storage_cost() – basic cost model.
+
+In Agent:
+
+Suggest nearest storage, cost-optimal transport routes, cold storage options.
+
+18. Input Procurement Agent
+
+Tools to Use:
+
+Google Shopping API or scraping to compare seed/chemical prices.
+
+Local supplier directory APIs (if exist) or static catalogs.
+
+Simple discount schedule algorithm.
+
+Integration Plan:
+
+In tools.py:
+
+search_suppliers() – query products and prices.
+
+compare_offers() – rank suppliers by price, distance.
+
+suggest_bulk_timing() – advice when bulk purchases cheaper (based on seasonality).
+
+In Agent:
+
+Return a supplier list with prices and bulk options.
+
+19. Crop Insurance & Risk Agent
+
+Tools to Use:
+
+Public insurance scheme sites (e.g., India's Pradhan Mantri Fasal Bima Yojana).
+
+Risk modeling using historical yield and weather correlation (SciPy).
+
+Form autofill via fdfgen or templating.
+
+Integration Plan:
+
+In tools.py:
+
+fetch_insurance_plans() – scrape government/insurer info.
+
+calculate_risk_score() – risk based on climate/soil.
+
+generate_claim_form() – produce prefilled PDF form.
+
+In Agent:
+
+Offer best plan, risk advice, claim initiation guidance.
+
+20. Farmer Coach Agent
+
+Tools to Use:
+
+Local knowledge base (loaded as JSON or CSV).
+
+Chatbot API – e.g., Rasa open-source for FAQ.
+
+Google Translate API (free tier) – for multilingual support.
+
+Integration Plan:
+
+In tools.py:
+
+fetch_local_tips(task, season) – retrieves advice entries.
+
+chat_faq(user_query) – returns FAQ answers.
+
+translate_text() – for dialect support.
+
+In Agent:
+
+Provide localized, dialect-aware mentoring and conversational help.
+
+21. Compliance & Certification Agent
+
+Tools to Use:
+
+FSSAI and organic certification site scraping – fetch requirements.
+
+Checklist builder – using Python for stepwise guidance.
+
+Document organizer – simple file management.
+
+Integration Plan:
+
+In tools.py:
+
+fetch_cert_requirements(cert_type) – scrape guidelines.
+
+build_cert_checklist(cert_type) – generate steps.
+
+manage_cert_docs() – store doc paths and statuses.
+
+In Agent:
+
+Guide farmer through certification, track progress, remind next steps.
+
+22. Community Engagement Agent
+
+Tools to Use:
+
+WhatsApp API (if available in free tier), or Telegram Bot API for group invites.
+
+Local scheme listing scraper (gov websites).
+
+Forum recommendation via Reddit API (e.g., r/farming).
+
+Integration Plan:
+
+In tools.py:
+
+list_nearby_peers() – via geolocation directories.
+
+fetch_coop_schemes() – scrape government scheme pages.
+
+create_group_message() – build invite message.
+
+In Agent:
+
+Connect farmer to peers, co‑ops, programs; suggest group events or bulk purchases.
+
+
+
+i want to add these tools in the agents i want you to add those tools in tools.py and import that into the agent and make sure that the superagent knows about it and we can use them firstly start by adding the tools to agents one by one when all of the things are completed then move to next and please generate a test python file for every agent where we can parse our own prompt to check it

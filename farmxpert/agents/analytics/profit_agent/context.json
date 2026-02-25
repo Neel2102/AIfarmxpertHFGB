@@ -1,0 +1,208 @@
+{
+  "last_run": {
+    "timestamp": "2026-01-12T11:10:09.982046",
+    "crop": "wheat",
+    "area_acre": 23.0,
+    "yield_per_acre": 45.0,
+    "expected_yield": 1035.0,
+    "total_expense": 22700,
+    "best_market": "Bhiloda APMC",
+    "best_price": 2650.0,
+    "best_profit": 2720050.0,
+    "status": "success"
+  },
+  "history": [
+    {
+      "crop": "tomato",
+      "area_acre": 2.0,
+      "yield_per_acre": 30.0,
+      "expected_yield": 60.0,
+      "total_expense": 15000,
+      "best_market": "Satara APMC",
+      "best_profit": 135000.0
+    },
+    {
+      "timestamp": "2026-01-05T22:00:44.558360",
+      "crop": "tobacco",
+      "area_acre": 4.0,
+      "yield_per_acre": 34.0,
+      "expected_yield": 136.0,
+      "total_expense": 22700,
+      "status": "no_market_data"
+    },
+    {
+      "timestamp": "2026-01-05T22:02:18.296201",
+      "crop": "tobacco",
+      "area_acre": 2.0,
+      "yield_per_acre": 23.0,
+      "expected_yield": 46.0,
+      "total_expense": 22700,
+      "status": "no_market_data"
+    },
+    {
+      "timestamp": "2026-01-05T22:03:15.890620",
+      "crop": "saffron",
+      "area_acre": 2.0,
+      "yield_per_acre": 12.0,
+      "expected_yield": 24.0,
+      "total_expense": 22700,
+      "status": "no_market_data"
+    },
+    {
+      "timestamp": "2026-01-05T22:03:47.134999",
+      "crop": "millets",
+      "area_acre": 2.0,
+      "yield_per_acre": 34.0,
+      "expected_yield": 68.0,
+      "total_expense": 22700,
+      "status": "no_market_data"
+    },
+    {
+      "timestamp": "2026-01-05T22:04:17.353152",
+      "crop": "wheat",
+      "area_acre": 2.0,
+      "yield_per_acre": 23.0,
+      "expected_yield": 46.0,
+      "total_expense": 22700,
+      "best_market": "Sirali APMC",
+      "best_price": 2650.0,
+      "best_profit": 99200.0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2026-01-05T22:08:00.311628",
+      "crop": "potato",
+      "area_acre": 2.0,
+      "yield_per_acre": 23.0,
+      "expected_yield": 46.0,
+      "total_expense": 22700,
+      "best_market": "Palakkad APMC",
+      "best_price": 3100.0,
+      "best_profit": 119900.0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2026-01-05T22:09:39.870037",
+      "crop": "green ginger",
+      "area_acre": 1.0,
+      "yield_per_acre": 34.0,
+      "expected_yield": 34.0,
+      "total_expense": 22700,
+      "status": "no_market_data"
+    },
+    {
+      "timestamp": "2026-01-05T22:10:27.601326",
+      "crop": "ginger",
+      "area_acre": 1.0,
+      "yield_per_acre": 23.0,
+      "expected_yield": 23.0,
+      "total_expense": 22700,
+      "best_market": "Gossaigaon APMC",
+      "best_price": 6500.0,
+      "best_profit": 126800.0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2026-01-06T11:00:54.468731",
+      "crop": "cottonseed",
+      "area_acre": 2.0,
+      "yield_per_acre": 23.0,
+      "expected_yield": 46.0,
+      "total_expense": 22700,
+      "status": "no_market_data"
+    },
+    {
+      "timestamp": "2026-01-06T11:01:20.128495",
+      "crop": "cotton",
+      "area_acre": 2.0,
+      "yield_per_acre": 34.0,
+      "expected_yield": 68.0,
+      "total_expense": 22700,
+      "status": "no_market_data"
+    },
+    {
+      "timestamp": "2026-01-06T11:02:03.742081",
+      "crop": "ginger",
+      "area_acre": 23.0,
+      "yield_per_acre": 23.0,
+      "expected_yield": 529.0,
+      "total_expense": 22700,
+      "best_market": "Kanjirappally APMC",
+      "best_price": 13800.0,
+      "best_profit": 7277500.0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2026-01-06T11:07:58.049775",
+      "crop": "cabbage",
+      "area_acre": 2.0,
+      "yield_per_acre": 23.0,
+      "expected_yield": 46.0,
+      "total_expense": 22700,
+      "best_market": "Singanallur(Uzhavar Sandhai ) APMC",
+      "best_price": 3100.0,
+      "best_profit": 119900.0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2026-01-06T11:09:10.030693",
+      "crop": "pumpkin",
+      "area_acre": 2.0,
+      "yield_per_acre": 45.0,
+      "expected_yield": 90.0,
+      "total_expense": 22700,
+      "best_market": "Pampady APMC",
+      "best_price": 3000.0,
+      "best_profit": 247300.0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2026-01-06T14:00:10.743480",
+      "crop": "wheat",
+      "area_acre": 3.0,
+      "yield_per_acre": 34.0,
+      "expected_yield": 102.0,
+      "total_expense": 22700,
+      "best_market": "Mehsana APMC",
+      "best_price": 2650.0,
+      "best_profit": 247600.0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2026-01-08T11:58:20.327091",
+      "crop": "ginger",
+      "area_acre": 23.0,
+      "yield_per_acre": 45.0,
+      "expected_yield": 1035.0,
+      "total_expense": 22700,
+      "best_market": "Kuruppanthura APMC",
+      "best_price": 8500.0,
+      "best_profit": 8774800.0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2026-01-08T13:47:38.504008",
+      "crop": "tomato",
+      "area_acre": 2.0,
+      "yield_per_acre": 34.0,
+      "expected_yield": 68.0,
+      "total_expense": 22700,
+      "best_market": "PMY Bilaspur",
+      "best_price": 5200.0,
+      "best_profit": 330900.0,
+      "status": "success"
+    },
+    {
+      "timestamp": "2026-01-12T11:10:09.982046",
+      "crop": "wheat",
+      "area_acre": 23.0,
+      "yield_per_acre": 45.0,
+      "expected_yield": 1035.0,
+      "total_expense": 22700,
+      "best_market": "Bhiloda APMC",
+      "best_price": 2650.0,
+      "best_profit": 2720050.0,
+      "status": "success"
+    }
+  ]
+}
