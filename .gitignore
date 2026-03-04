@@ -21,16 +21,24 @@ lerna-debug.log*
 .pnpm-debug.log*
 
 
-
 # Optional npm cache directory
 .npm
-
 
 # Next.js build output
 .next
 out
 
+# Environment files
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
 
+# Logs
+**/*.log
 
+# Local databases
+**/*.db
 
-
+# Office temporary files
+~$*
