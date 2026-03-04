@@ -44,16 +44,23 @@ class SoilTest(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False)
-    field_id = Column(Integer, ForeignKey("fields.id"))
-    test_date = Column(DateTime(timezone=True), nullable=False)
-    ph_level = Column(Float)
-    nitrogen_ppm = Column(Float)
-    phosphorus_ppm = Column(Float)
-    potassium_ppm = Column(Float)
-    organic_matter_percent = Column(Float)
-    soil_texture = Column(String(50))
-    test_lab = Column(String(255))
-    notes = Column(Text)
+    field_id = Column(Integer, ForeignKey("fields.id"), nullable=True)
+    test_date = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    
+    # 9 Blynk sensor parameters
+    air_temperature = Column(Float, nullable=True)       # V0 - °C
+    air_humidity = Column(Float, nullable=True)           # V1 - %
+    soil_moisture = Column(Float, nullable=True)          # V2 - %
+    soil_temperature = Column(Float, nullable=True)       # V3 - °C
+    soil_ec = Column(Float, nullable=True)                # V4 - µS/cm
+    soil_ph = Column(Float, nullable=True)                # V5 - pH
+    nitrogen = Column(Float, nullable=True)               # V6 - mg/kg
+    phosphorus = Column(Float, nullable=True)             # V7 - mg/kg
+    potassium = Column(Float, nullable=True)              # V8 - mg/kg
+    
+    # Metadata
+    source = Column(String(50), default="blynk")          # blynk, manual, lab
+    notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships

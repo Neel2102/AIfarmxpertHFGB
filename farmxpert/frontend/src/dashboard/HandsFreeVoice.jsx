@@ -180,9 +180,6 @@ export default function HandsFreeVoice() {
   const outputContextRef = useRef(null);
   const streamRef = useRef(null);
   const processorRef = useRef(null);
-  const workletNodeRef = useRef(null);
-  const mediaSourceRef = useRef(null);
-  const zeroGainRef = useRef(null);
   const sessionRef = useRef(null);
   const nextStartTimeRef = useRef(0);
   const audioSourcesRef = useRef(new Set());
@@ -205,68 +202,23 @@ export default function HandsFreeVoice() {
     }
   };
 
-  const cleanup = async () => {
-    setStatus('idle');
+  const cleanup = () => {
     setIsConnected(false);
+    setStatus('idle');
 
-    // 1. Capture current refs and IMMEDIATELY nullify them to prevent any other logic from grabbing them
-    const inCtx = inputContextRef.current;
-    const outCtx = outputContextRef.current;
-    const stream = streamRef.current;
-
-    inputContextRef.current = null;
-    outputContextRef.current = null;
-    streamRef.current = null;
-
-    // 2. Stop playback
-    stopAllAudio();
-
-    // 3. Stop media stream tracks
-    if (stream) {
-      try {
-        stream.getTracks().forEach(t => t.stop());
-      } catch (e) { }
-    }
-
-    // 4. Safely close contexts
-    const closeContext = async (ctx, name) => {
-      if (!ctx || ctx.state === 'closed') return;
-      if (ctx._closing) return; // Custom guard for race conditions
-      ctx._closing = true;
-      try {
-        await ctx.close();
-      } catch (e) {
-        if (e.name !== 'InvalidStateError') {
-          console.warn(`Error closing ${name} context:`, e);
-        }
-      }
-    };
-
-    await Promise.all([
-      closeContext(inCtx, 'input'),
-      closeContext(outCtx, 'output')
-    ]);
-
-    // 6. Cleanup transient nodes
-    if (mediaSourceRef.current) {
-      try { mediaSourceRef.current.disconnect(); } catch (e) { }
-      mediaSourceRef.current = null;
-    }
-    if (workletNodeRef.current) {
-      try {
-        workletNodeRef.current.port.onmessage = null;
-        workletNodeRef.current.disconnect();
-      } catch (e) { }
-      workletNodeRef.current = null;
-    }
-    if (zeroGainRef.current) {
-      try { zeroGainRef.current.disconnect(); } catch (e) { }
-      zeroGainRef.current = null;
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
     }
     if (processorRef.current) {
-      try { processorRef.current.disconnect(); } catch (e) { }
-      processorRef.current = null;
+      processorRef.current.disconnect();
     }
+    if (inputContextRef.current) {
+      inputContextRef.current.close();
+    }
+    if (outputContextRef.current) {
+      outputContextRef.current.close();
+    }
+    stopAllAudio();
   };
 
   const playAudioChunk = async (base64Data) => {
@@ -306,19 +258,13 @@ export default function HandsFreeVoice() {
 
   const startSession = async () => {
     try {
-      // Clear any existing session artifacts before starting a new one
-      await cleanup();
-
       setStatus('connecting');
       setErrorMessage('');
 
       const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-      const inCtx = new AudioContextCtor({ sampleRate: 16000 });
-      const outCtx = new AudioContextCtor({ sampleRate: 24000 });
-
-      inputContextRef.current = inCtx;
-      outputContextRef.current = outCtx;
-      nextStartTimeRef.current = outCtx.currentTime;
+      inputContextRef.current = new AudioContextCtor({ sampleRate: 16000 });
+      outputContextRef.current = new AudioContextCtor({ sampleRate: 24000 });
+      nextStartTimeRef.current = outputContextRef.current.currentTime;
 
       const ai = new GoogleGenAI({ apiKey: API_KEY });
 
@@ -335,98 +281,34 @@ export default function HandsFreeVoice() {
         },
         callbacks: {
           onopen: async () => {
-            // Check if this context is still the active one
-            if (inputContextRef.current !== inCtx) return;
-
             setIsConnected(true);
             setStatus('listening');
 
             try {
               const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-              if (inputContextRef.current !== inCtx) {
-                stream.getTracks().forEach(t => t.stop());
-                return;
-              }
               streamRef.current = stream;
 
-              if (inCtx.state === 'suspended') {
-                await inCtx.resume();
-              }
+              const source = inputContextRef.current.createMediaStreamSource(stream);
+              const processor = inputContextRef.current.createScriptProcessor(4096, 1, 1);
+              processorRef.current = processor;
 
-              const processorName = `farmxpert-pcm-processor-${Math.random().toString(36).substr(2, 9)}`;
-              const workletModuleCode = `
-class FarmxpertPcmProcessor extends AudioWorkletProcessor {
-  constructor() {
-    super();
-    this._buffer = [];
-    this._chunkSize = 4096;
-  }
-
-  process(inputs) {
-    const input = inputs[0];
-    if (!input || !input[0]) return true;
-
-    const ch0 = input[0];
-    for (let i = 0; i < ch0.length; i++) {
-      this._buffer.push(ch0[i]);
-      if (this._buffer.length >= this._chunkSize) {
-        const chunk = this._buffer.slice(0, this._chunkSize);
-        this._buffer = this._buffer.slice(this._chunkSize);
-        this.port.postMessage(chunk);
-      }
-    }
-    return true;
-  }
-}
-
-registerProcessor('${processorName}', FarmxpertPcmProcessor);
-              `;
-
-              const blob = new Blob([workletModuleCode], { type: 'application/javascript' });
-              const moduleUrl = URL.createObjectURL(blob);
-              await inCtx.audioWorklet.addModule(moduleUrl);
-              URL.revokeObjectURL(moduleUrl);
-
-              const source = inCtx.createMediaStreamSource(stream);
-              mediaSourceRef.current = source;
-
-              const workletNode = new AudioWorkletNode(inCtx, processorName, {
-                numberOfInputs: 1,
-                numberOfOutputs: 1,
-                channelCount: 1,
-                channelCountMode: 'explicit',
-                channelInterpretation: 'speakers'
-              });
-              workletNodeRef.current = workletNode;
-
-              const zeroGain = inCtx.createGain();
-              zeroGain.gain.value = 0;
-              zeroGainRef.current = zeroGain;
-
-              workletNode.port.onmessage = (event) => {
+              processor.onaudioprocess = (e) => {
                 if (isMuted) return;
-                const chunk = event.data;
-                if (!chunk || chunk.length === 0) return;
-                const float32 = new Float32Array(chunk);
-                const pcmBlob = createBlob(float32);
+                const inputData = e.inputBuffer.getChannelData(0);
+                const blob = createBlob(inputData);
                 sessionPromise.then(session => {
-                  session.sendRealtimeInput({ media: pcmBlob });
+                  session.sendRealtimeInput({ media: blob });
                 });
               };
 
-              source.connect(workletNode);
-              workletNode.connect(zeroGain);
-              zeroGain.connect(inCtx.destination);
+              source.connect(processor);
+              processor.connect(inputContextRef.current.destination);
             } catch (err) {
-              if (inputContextRef.current === inCtx) {
-                setStatus('error');
-                setErrorMessage('Microphone access denied.');
-              }
+              setStatus('error');
+              setErrorMessage('Microphone access denied.');
             }
           },
           onmessage: async (msg) => {
-            if (inputContextRef.current !== inCtx) return;
-
             if (msg.toolCall) {
               setStatus('speaking');
               for (const fc of msg.toolCall.functionCalls) {
@@ -462,16 +344,12 @@ registerProcessor('${processorName}', FarmxpertPcmProcessor);
             }
           },
           onclose: () => {
-            if (inputContextRef.current === inCtx) {
-              cleanup();
-            }
+            cleanup();
           },
           onerror: () => {
-            if (inputContextRef.current === inCtx) {
-              setStatus('error');
-              setErrorMessage('Connection lost.');
-              cleanup();
-            }
+            setStatus('error');
+            setErrorMessage('Connection lost.');
+            cleanup();
           }
         }
       });
@@ -488,74 +366,105 @@ registerProcessor('${processorName}', FarmxpertPcmProcessor);
   };
 
   useEffect(() => {
-    return () => { cleanup(); };
+    return () => cleanup();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-white relative overflow-hidden">
-      <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${status === 'speaking' ? 'opacity-100' : 'opacity-20'}`}>
-        <div className="w-64 h-64 bg-emerald-500 rounded-full blur-[100px] animate-pulse"></div>
-      </div>
+    <div className="handsfree-voice-page">
+      <div className="handsfree-voice-center">
+        <div className="handsfree-voice-topbar">
+          <div className="handsfree-voice-pill">
+            <Activity size={16} />
+            <span className="handsfree-voice-pill-text">LIVE MODE</span>
+          </div>
 
-      <div className="relative z-10 p-6 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <Activity className={`text-emerald-500 ${status === 'idle' ? '' : 'animate-pulse'}`} />
-          <span className="font-bold text-xl tracking-wider">LIVE MODE</span>
+          <div className="handsfree-voice-pill">
+            <span
+              className={`handsfree-voice-dot ${
+                status === 'listening'
+                  ? 'handsfree-voice-dot-listening'
+                  : status === 'connecting'
+                  ? 'handsfree-voice-dot-thinking'
+                  : status === 'speaking'
+                  ? 'handsfree-voice-dot-speaking'
+                  : status === 'error'
+                  ? 'handsfree-voice-dot-error'
+                  : 'handsfree-voice-dot-idle'
+              }`}
+            />
+            <span className="handsfree-voice-pill-text">
+              {status === 'idle' && 'Idle'}
+              {status === 'connecting' && 'Connecting'}
+              {status === 'listening' && 'Listening'}
+              {status === 'speaking' && 'Speaking'}
+              {status === 'error' && 'Error'}
+            </span>
+            <span className={`handsfree-voice-api ${navigator.onLine ? 'ok' : 'bad'}`}>{navigator.onLine ? 'ON' : 'OFF'}</span>
+          </div>
         </div>
-        {status === 'connecting' && <span className="text-sm text-emerald-400 animate-pulse">Establishing Secure Uplink...</span>}
-        {status === 'error' && <span className="text-sm text-red-400 flex items-center gap-2"><WifiOff size={14} /> {errorMessage}</span>}
-      </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center relative z-10">
-        <div className={`
-                    w-48 h-48 rounded-full border-4 flex items-center justify-center transition-all duration-300
-                    ${status === 'listening' ? 'border-emerald-500 shadow-[0_0_50px_rgba(16,185,129,0.5)] scale-110' : 'border-slate-700'}
-                    ${status === 'speaking' ? 'border-emerald-400 shadow-[0_0_80px_rgba(52,211,153,0.8)] scale-100' : ''}
-                `}>
-          {status === 'idle' && <MicOff size={48} className="text-slate-600" />}
-          {(status === 'listening' || status === 'connecting') && <Mic size={48} className="text-emerald-500" />}
-          {status === 'speaking' && <Volume2 size={48} className="text-white animate-bounce" />}
+        <button
+          type="button"
+          onClick={!isConnected ? startSession : undefined}
+          className={`handsfree-voice-livebtn ${isConnected ? 'active' : ''} ${status}`}
+          aria-label="Voice session"
+        >
+          <div className="handsfree-voice-livebtn-inner">
+            {status === 'idle' && <MicOff size={44} className="handsfree-voice-mic-icon" />}
+            {(status === 'listening' || status === 'connecting') && <Mic size={44} className="handsfree-voice-mic-icon" />}
+            {status === 'speaking' && <Volume2 size={44} className="handsfree-voice-mic-icon" />}
+            {status === 'error' && <WifiOff size={44} className="handsfree-voice-mic-icon" />}
+          </div>
+          <div className="handsfree-voice-livebtn-label">
+            {status === 'idle' && 'Tap to start'}
+            {status === 'connecting' && 'Connecting...'}
+            {status === 'listening' && 'Listening'}
+            {status === 'speaking' && 'Speaking'}
+            {status === 'error' && 'Reconnect'}
+          </div>
+        </button>
+
+        <div className="handsfree-voice-title">
+          {status === 'idle' && 'Ready to connect'}
+          {status === 'connecting' && 'Connecting to Farm Swarm...'}
+          {status === 'listening' && 'Listening...'}
+          {status === 'speaking' && 'FarmXpert Speaking...'}
+          {status === 'error' && 'Connection issue'}
         </div>
 
-        <h2 className="mt-8 text-2xl font-light text-slate-300 text-center">
-          {status === 'idle' && "Ready to connect"}
-          {status === 'connecting' && "Connecting to Farm Swarm..."}
-          {status === 'listening' && "Listening..."}
-          {status === 'speaking' && "FarmXpert Speaking..."}
-        </h2>
+        <div className="handsfree-voice-subtitle">
+          {status === 'listening'
+            ? 'Ask about weather, machinery status, or log a task.'
+            : 'Hands-free voice interface for field operations.'}
+        </div>
 
-        <p className="mt-4 text-slate-500 max-w-md text-center">
-          {status === 'listening' ? "Ask about weather, machinery status, or log a task." : "Hands-free voice interface for field operations."}
-        </p>
-      </div>
-
-      <div className="relative z-10 p-8 pb-12 flex justify-center gap-6">
-        {!isConnected ? (
-          <button
-            onClick={startSession}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-full px-12 py-6 text-xl font-bold shadow-lg transition-transform hover:scale-105 active:scale-95 flex items-center gap-3"
-          >
-            <Mic size={24} />
-            START VOICE SESSION
-          </button>
-        ) : (
-          <>
-            <button
-              onClick={toggleMute}
-              className={`p-6 rounded-full border-2 transition-colors ${isMuted ? 'bg-red-500/20 border-red-500 text-red-500' : 'bg-slate-800 border-slate-600 text-white'}`}
-            >
-              {isMuted ? <MicOff size={28} /> : <Mic size={28} />}
-            </button>
-
-            <button
-              onClick={cleanup}
-              className="bg-red-600 hover:bg-red-500 text-white rounded-full px-12 py-6 text-xl font-bold shadow-lg transition-transform hover:scale-105 active:scale-95"
-            >
-              END SESSION
-            </button>
-          </>
+        {status === 'error' && (
+          <div className="handsfree-voice-error">
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <WifiOff size={14} />
+              {errorMessage}
+            </span>
+          </div>
         )}
+
+        <div className="handsfree-voice-controls">
+          {!isConnected ? (
+            <button type="button" onClick={startSession} className="handsfree-voice-control handsfree-voice-btn-start">
+              <span className="handsfree-voice-btn-icon"><Mic size={18} /></span>
+              START VOICE SESSION
+            </button>
+          ) : (
+            <>
+              <button type="button" onClick={toggleMute} className="handsfree-voice-mini" aria-label={isMuted ? 'Unmute' : 'Mute'}>
+                {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
+              </button>
+              <button type="button" onClick={cleanup} className="handsfree-voice-control danger">
+                END SESSION
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <canvas ref={canvasRef} className="hidden" width="300" height="100"></canvas>

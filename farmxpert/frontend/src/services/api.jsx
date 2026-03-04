@@ -136,6 +136,13 @@ class ApiService {
     }
 
     /**
+     * Get chat history of sessions
+     */
+    async getHistory() {
+        return this.request('/api/super-agent/history');
+    }
+
+    /**
      * Cancel ongoing workflow
      */
     async cancelWorkflow(workflowId) {

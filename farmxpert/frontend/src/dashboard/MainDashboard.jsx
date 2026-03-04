@@ -9,6 +9,7 @@ import FarmMap from "./FarmMap";
 import HandsFreeVoice from "./HandsFreeVoice";
 import AgentCatalog from "./AgentCatalog";
 import HardwareIoT from "./HardwareIoT";
+import SettingsPage from './SettingsPage';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/Dashboard/MainDashboard.css';
 
@@ -23,13 +24,12 @@ const MainDashboard = () => {
       navigate('/login');
     } catch (error) {
       console.error('Logout failed:', error);
-      // Even if logout fails, clear local storage and redirect
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');
       navigate('/login');
     }
   };
-  
+
   return (
     <div className="main-dashboard-layout">
       <Sidebar isOpen={true} onLogout={handleLogout} />
@@ -43,6 +43,7 @@ const MainDashboard = () => {
           <Route path="/hardware-iot" element={<HardwareIoT />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/orchestrator/*" element={<Ai />} />
+          <Route path="/setting" element={<SettingsPage />} />
           <Route path="/" element={<Navigate to="/dashboard/today" replace />} />
           <Route path="*" element={<Navigate to="/dashboard/today" replace />} />
         </Routes>

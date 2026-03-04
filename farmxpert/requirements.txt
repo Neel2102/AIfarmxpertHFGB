@@ -17,7 +17,6 @@ python-multipart==0.0.6
 alembic==1.13.1
 PyJWT==2.8.0
 email-validator==2.1.0
-
 packaging==24.2
 requests==2.32.3
 numpy==1.26.4
@@ -25,3 +24,4 @@ pandas==2.2.3
 catboost==1.2.7
 loguru>=0.7.0
 openai>=1.0.0
+pgvector==0.2.5

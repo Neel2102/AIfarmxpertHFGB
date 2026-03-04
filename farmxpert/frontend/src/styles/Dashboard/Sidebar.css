@@ -616,6 +616,30 @@
   flex: 1;
   font-size: 0.75rem;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-info-container-sidebar {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-meta-sidebar {
+  font-size: 0.65rem;
+  opacity: 0.6;
+  color: var(--text-secondary);
+}
+
+.empty-history-sidebar {
+  padding: 1rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
 }
 
 .agent-status-sidebar {

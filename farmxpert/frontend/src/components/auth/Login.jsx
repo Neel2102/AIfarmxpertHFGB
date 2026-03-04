@@ -155,15 +155,6 @@ const Login = () => {
               Sign up here
             </Link>
           </div>
-
-          <div className="demo-section-login">
-            <p className="demo-title-login">Demo Accounts:</p>
-            <div className="demo-content-login">
-              <p>Farmer: farmer@demo.com</p>
-              <p>Admin: admin@demo.com</p>
-              <p className="demo-password-login">Password: any password</p>
-            </div>
-          </div>
         </div>
       </div>
     </div>

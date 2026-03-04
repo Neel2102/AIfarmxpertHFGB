@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from farmxpert.config.settings import settings
 from farmxpert.interfaces.api.routes import health_routes, agent_routes, farm_routes, auth_routes, agent_info_routes, super_agent
 from farmxpert.interfaces.api.routes import llm_usage_routes
+from farmxpert.interfaces.api.routes import blynk_routes
+from farmxpert.interfaces.api.routes import soil_routes
 from farmxpert.interfaces.api.middleware.logging_middleware import RequestLoggingMiddleware
 from farmxpert.models.database import Base, engine
 import farmxpert.models.user_models  # noqa: F401
@@ -53,6 +55,8 @@ def create_app() -> FastAPI:
     app.include_router(agent_routes.router, prefix="/api")
     app.include_router(farm_routes.router, prefix="/api")
     app.include_router(super_agent.router, prefix="/api")
+    app.include_router(blynk_routes.router, prefix="/api")
+    app.include_router(soil_routes.router, prefix="/api")
     
     # Add new agents
     app.include_router(profit_router, prefix="/api/agents/profit", tags=["Profit Agent"])

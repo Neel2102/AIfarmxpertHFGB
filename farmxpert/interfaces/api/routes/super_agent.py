@@ -14,9 +14,72 @@ from datetime import datetime
 from farmxpert.core.super_agent import super_agent, SuperAgentResponse
 from farmxpert.core.utils.logger import get_logger
 from farmxpert.services.gemini_service import gemini_service
+from farmxpert.models.database import get_db, engine
+from sqlalchemy import text
 
-# Simple in-memory chat history store for demo (session_id -> list of turns)
-# Turn format: {"role": "user"|"assistant", "content": "text"}
+
+# ── DB-backed chat history helpers ─────────────────────────
+
+def _db_get_history(session_id: str) -> List[Dict[str, str]]:
+    """Get chat history for a session from DB."""
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT role, content FROM chat_messages WHERE session_id = :sid ORDER BY id ASC"),
+            {"sid": session_id}
+        ).fetchall()
+        return [{"role": r[0], "content": r[1]} for r in rows]
+
+
+def _db_save_message(session_id: str, role: str, content: str):
+    """Save a single chat message to DB. Creates session if needed."""
+    with engine.connect() as conn:
+        # Ensure session exists
+        existing = conn.execute(
+            text("SELECT id FROM chat_sessions WHERE id = :sid"), {"sid": session_id}
+        ).fetchone()
+        if not existing:
+            title = content[:40] + "..." if len(content) > 40 else content
+            conn.execute(
+                text("INSERT INTO chat_sessions (id, title) VALUES (:sid, :title)"),
+                {"sid": session_id, "title": title}
+            )
+        else:
+            conn.execute(
+                text("UPDATE chat_sessions SET updated_at = NOW() WHERE id = :sid"),
+                {"sid": session_id}
+            )
+        conn.execute(
+            text("INSERT INTO chat_messages (session_id, role, content) VALUES (:sid, :role, :content)"),
+            {"sid": session_id, "role": role, "content": content}
+        )
+        conn.commit()
+
+
+def _db_get_all_sessions() -> List[Dict[str, Any]]:
+    """Get all chat sessions for the sidebar."""
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT s.id, s.title, s.updated_at, COUNT(m.id) as msg_count
+                FROM chat_sessions s
+                LEFT JOIN chat_messages m ON m.session_id = s.id
+                GROUP BY s.id, s.title, s.updated_at
+                ORDER BY s.updated_at DESC
+                LIMIT 50
+            """)
+        ).fetchall()
+        return [
+            {
+                "session_id": r[0],
+                "title": r[1],
+                "message_count": r[3],
+                "updated_at": r[2].isoformat() if r[2] else None,
+            }
+            for r in rows
+        ]
+
+
+# Keep in-memory fallback for current-session context window
 CHAT_HISTORY_STORE: Dict[str, List[Dict[str, str]]] = {}
 
 
@@ -380,8 +443,9 @@ async def process_user_query_ui_stream(request: QueryRequest):
                 yield f"data: {json.dumps({'type': 'start', 'session_id': session_id, 'timestamp': start_ts})}\n\n"
 
                 # Inject chat history into context for agents and synthesis
-                chat_history = CHAT_HISTORY_STORE.get(session_id, [])
-                context["chat_history"] = chat_history[-10:] # Keep last 10 turns (20 messages)
+                chat_history = _db_get_history(session_id)
+                CHAT_HISTORY_STORE[session_id] = chat_history  # cache
+                context["chat_history"] = chat_history[-10:]
                 
                 logger.info(f"Using chat history (last {len(context['chat_history'])} turns) for session {session_id}")
 
@@ -420,14 +484,14 @@ async def process_user_query_ui_stream(request: QueryRequest):
                 if not answer_text:
                     answer_text = "Response ready."
                 
-                # Save to history
+                # Save to DB and in-memory cache
+                _db_save_message(session_id, "user", request.query)
+                _db_save_message(session_id, "assistant", answer_text)
+                
                 if session_id not in CHAT_HISTORY_STORE:
                     CHAT_HISTORY_STORE[session_id] = []
-                
                 CHAT_HISTORY_STORE[session_id].append({"role": "user", "content": request.query})
                 CHAT_HISTORY_STORE[session_id].append({"role": "assistant", "content": answer_text})
-                
-                # Limit history size in memory
                 if len(CHAT_HISTORY_STORE[session_id]) > 20:
                     CHAT_HISTORY_STORE[session_id] = CHAT_HISTORY_STORE[session_id][-20:]
 
@@ -489,8 +553,9 @@ async def process_user_query(request: QueryRequest):
             context["user_id"] = request.user_id
         context["session_id"] = session_id
         
-        # Inject chat history into context
-        chat_history = CHAT_HISTORY_STORE.get(session_id, [])
+        # Inject chat history from DB into context
+        chat_history = _db_get_history(session_id)
+        CHAT_HISTORY_STORE[session_id] = chat_history  # cache
         context["chat_history"] = chat_history[-10:]
         
         # Process query through SuperAgent
@@ -546,13 +611,14 @@ async def process_user_query(request: QueryRequest):
         # Use natural language response from SuperAgent
         natural_language_response = result.natural_language or answer_text
 
-        # Save to history
+        # Save to DB and in-memory cache
+        _db_save_message(session_id, "user", request.query)
+        _db_save_message(session_id, "assistant", natural_language_response)
+        
         if session_id not in CHAT_HISTORY_STORE:
             CHAT_HISTORY_STORE[session_id] = []
-        
         CHAT_HISTORY_STORE[session_id].append({"role": "user", "content": request.query})
         CHAT_HISTORY_STORE[session_id].append({"role": "assistant", "content": natural_language_response})
-        
         if len(CHAT_HISTORY_STORE[session_id]) > 20:
             CHAT_HISTORY_STORE[session_id] = CHAT_HISTORY_STORE[session_id][-20:]
 
@@ -603,6 +669,27 @@ async def detect_language(request: LanguageDetectRequest):
     except Exception as e:
         logger.error(f"Language detection failed: {e}")
         raise HTTPException(status_code=500, detail=f"Language detection failed: {str(e)}")
+
+
+@router.get("/history")
+async def get_chat_history(session_id: Optional[str] = None):
+    """
+    Get chat history for the user.
+    If session_id is provided, returns history for that session.
+    Otherwise, returns grouped list of all sessions.
+    """
+    try:
+        if session_id:
+            # Return specific session history from DB
+            history = _db_get_history(session_id)
+            return {"session_id": session_id, "messages": history}
+        
+        # Return all sessions from DB (for the sidebar)
+        sessions_list = _db_get_all_sessions()
+        return {"sessions": sessions_list}
+    except Exception as e:
+        logger.error(f"Error fetching history: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch history: {str(e)}")
 
 
 @router.get("/agents", response_model=AgentInfoResponse)

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { Cpu, LayoutDashboard, Map, MessageSquare, Mic, Settings, Users } from "lucide-react";
+import { Cpu, History, LayoutDashboard, Map, MessageSquare, Mic, Settings, Users } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { useOrchestrator } from "../contexts/OrchestratorContext";
 import "../styles/Dashboard/Sidebar.css";
 
 const Sidebar = ({ onLogout }) => {
   const navigate = useNavigate();
-  useAuth(); // Auth context used for sidebar functionality
+  useAuth();
+  const { chatHistory, loadSessionMessages } = useOrchestrator();
 
   const [isOpen, setIsOpen] = useState(true);
   const [theme, setTheme] = useState(() => {
@@ -14,10 +16,12 @@ const Sidebar = ({ onLogout }) => {
   });
   const [expandedCategories, setExpandedCategories] = useState({
     main_menu: true,
+    history: false,
   });
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [animationKeys, setAnimationKeys] = useState({
     main_menu: 0,
+    history: 0,
   });
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
@@ -375,13 +379,65 @@ const Sidebar = ({ onLogout }) => {
                   className={({ isActive }) =>
                     `agent-item-sidebar ${isActive ? "active" : ""}`
                   }
-                  to="/dashboard/settings"
-                  onClick={() => handleNavigation("/dashboard/settings")}
+                  to="/dashboard/setting"
+                  onClick={() => handleNavigation("/dashboard/setting")}
                 >
                   <Settings className="agent-icon-sidebar" size={20} />
                   <span className="agent-name-sidebar">Settings</span>
                   <span className="agent-status-sidebar active-sidebar"></span>
                 </NavLink>
+              </div>
+            </div>
+
+            {/* Chat History Category */}
+            <div className="agent-category-sidebar">
+              <div
+                className="category-header-sidebar"
+                onClick={() => toggleCategory("history")}
+              >
+                <div className="category-left-sidebar">
+                  <History className="category-icon-sidebar" size={16} />
+                  <span className="category-title-sidebar">Chat History</span>
+                </div>
+                <span
+                  className={`category-toggle-sidebar ${expandedCategories.history ? "expanded-sidebar" : ""
+                    }`}
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16">
+                    <path d="M7 10l5 5 5-5z" fill="currentColor" />
+                  </svg>
+                </span>
+              </div>
+
+              <div
+                className={`agent-list-sidebar ${expandedCategories.history ? "expanded-sidebar" : ""
+                  }`}
+                key={`history_${animationKeys.history}`}
+              >
+                {chatHistory && chatHistory.length > 0 ? (
+                  chatHistory.map((session) => (
+                    <div
+                      key={session.session_id}
+                      className="agent-item-sidebar"
+                      onClick={() => {
+                        loadSessionMessages(session.session_id);
+                        handleNavigation("/dashboard/orchestrator");
+                      }}
+                    >
+                      <MessageSquare className="agent-icon-sidebar" size={18} />
+                      <div className="agent-info-container-sidebar">
+                        <span className="agent-name-sidebar">{session.title}</span>
+                        <span className="agent-meta-sidebar">
+                          {session.message_count} messages
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-history-sidebar">
+                    No history yet
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -20,23 +20,7 @@ yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
 
-# Local env files
-.env
-**/.env
 
-# Local databases
-*.db
-*.sqlite
-*.sqlite3
-
-# Logs
-logs/
-*.log
-
-
-
-# MS Office temporary files
-~$*
 
 # Optional npm cache directory
 .npm

@@ -12,6 +12,7 @@ const ACTIONS = {
     SET_REASONING_TREE: 'SET_REASONING_TREE',
     CLEAR_WORKFLOW: 'CLEAR_WORKFLOW',
     SET_SYSTEM_STATUS: 'SET_SYSTEM_STATUS',
+    SET_HISTORY: 'SET_HISTORY',
 };
 
 // Initial state
@@ -24,6 +25,7 @@ const initialState = {
     messages: [],
     reasoningTree: null,
     systemStatus: null,
+    chatHistory: [],
 };
 
 // Reducer function
@@ -31,21 +33,21 @@ function orchestratorReducer(state, action) {
     switch (action.type) {
         case ACTIONS.SET_LOADING:
             return { ...state, loading: action.payload };
-        
+
         case ACTIONS.SET_ERROR:
             return { ...state, error: action.payload, loading: false };
-        
+
         case ACTIONS.SET_SESSION:
             return { ...state, session: action.payload };
-        
+
         case ACTIONS.SET_WORKFLOW:
-            return { 
-                ...state, 
+            return {
+                ...state,
                 currentWorkflow: action.payload,
                 loading: false,
-                error: null 
+                error: null
             };
-        
+
         case ACTIONS.UPDATE_AGENT_STATUS:
             return {
                 ...state,
@@ -54,16 +56,22 @@ function orchestratorReducer(state, action) {
                     [action.payload.agentName]: action.payload.status
                 }
             };
-        
+
         case ACTIONS.ADD_MESSAGE:
+            if (Array.isArray(action.payload)) {
+                return { ...state, messages: action.payload };
+            }
             return {
                 ...state,
                 messages: [...state.messages, action.payload]
             };
-        
+
+        case 'SET_MESSAGES':
+            return { ...state, messages: action.payload };
+
         case ACTIONS.SET_REASONING_TREE:
             return { ...state, reasoningTree: action.payload };
-        
+
         case ACTIONS.CLEAR_WORKFLOW:
             return {
                 ...state,
@@ -72,10 +80,13 @@ function orchestratorReducer(state, action) {
                 reasoningTree: null,
                 error: null
             };
-        
+
         case ACTIONS.SET_SYSTEM_STATUS:
             return { ...state, systemStatus: action.payload };
-        
+
+        case ACTIONS.SET_HISTORY:
+            return { ...state, chatHistory: action.payload };
+
         default:
             return state;
     }
@@ -91,6 +102,7 @@ export function OrchestratorProvider({ children }) {
     // Initialize system status on mount
     useEffect(() => {
         initializeSystem();
+        loadHistory();
     }, []);
 
     const initializeSystem = async () => {
@@ -120,10 +132,10 @@ export function OrchestratorProvider({ children }) {
             });
 
             const response = await apiService.processQuery(query, sessionId);
-            
+
             // Set workflow
             dispatch({ type: ACTIONS.SET_WORKFLOW, payload: response.workflow });
-            
+
             // Set session if provided
             if (response.session) {
                 dispatch({ type: ACTIONS.SET_SESSION, payload: response.session });
@@ -148,10 +160,59 @@ export function OrchestratorProvider({ children }) {
         }
     };
 
+    const loadHistory = async () => {
+        try {
+            const result = await apiService.getHistory();
+            dispatch({ type: ACTIONS.SET_HISTORY, payload: result.sessions || [] });
+            return result.sessions;
+        } catch (error) {
+            console.error('Failed to load history:', error);
+            // Don't throw to not disrupt the main flow
+            return [];
+        }
+    };
+
+    const loadSessionMessages = async (sessionId) => {
+        try {
+            dispatch({ type: ACTIONS.SET_LOADING, payload: true });
+
+            // Get history for this session specifically
+            const result = await apiService.request(`/api/super-agent/history?session_id=${sessionId}`);
+
+            if (result && result.messages) {
+                // Convert simple text messages format to UI messages
+                const formattedMessages = result.messages.map((m, idx) => ({
+                    id: Date.now() + idx,
+                    type: m.role === 'user' ? 'user' : 'assistant',
+                    content: m.content,
+                    timestamp: new Date().toISOString()
+                }));
+
+                // Keep the 'Welcome to Farm Orchestrator' message if we want, or clear
+                dispatch({
+                    type: ACTIONS.SET_SESSION,
+                    payload: { id: sessionId }
+                });
+
+                dispatch({
+                    type: ACTIONS.ADD_MESSAGE, // We update state.messages below
+                    payload: formattedMessages
+                });
+
+                // Set the exact messages list
+                dispatch({ type: 'SET_MESSAGES', payload: formattedMessages });
+            }
+            dispatch({ type: ACTIONS.SET_LOADING, payload: false });
+        } catch (error) {
+            console.error('Failed to load session messages:', error);
+            dispatch({ type: ACTIONS.SET_LOADING, payload: false });
+        }
+    };
+
     const getWorkflowStatus = async (workflowId) => {
         try {
             const status = await apiService.getWorkflowStatus(workflowId);
-            
+
             // Update agent statuses
             if (status.agents) {
                 Object.entries(status.agents).forEach(([agentName, agentStatus]) => {
@@ -189,12 +250,12 @@ export function OrchestratorProvider({ children }) {
         try {
             dispatch({ type: ACTIONS.SET_LOADING, payload: true });
             const response = await apiService.submitVoiceInput(audioBlob, sessionId);
-            
+
             // Process the voice input response
             if (response.query) {
                 await processQuery(response.query, sessionId);
             }
-            
+
             return response;
         } catch (error) {
             dispatch({ type: ACTIONS.SET_ERROR, payload: error.message });
@@ -216,7 +277,7 @@ export function OrchestratorProvider({ children }) {
             if (!state.session?.id) {
                 throw new Error('No active session');
             }
-            
+
             const updatedSession = await apiService.updateSession(state.session.id, preferences);
             dispatch({ type: ACTIONS.SET_SESSION, payload: updatedSession });
             return updatedSession;
@@ -256,6 +317,8 @@ export function OrchestratorProvider({ children }) {
         clearError,
         clearWorkflow,
         initializeSystem,
+        loadHistory,
+        loadSessionMessages,
     };
 
     return (

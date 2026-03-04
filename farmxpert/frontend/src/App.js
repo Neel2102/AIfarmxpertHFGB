@@ -16,6 +16,7 @@ import OfflineIndicator from './components/OfflineIndicator';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AgentProvider } from './contexts/AgentContext';
 import { ChatProvider } from './contexts/ChatContext';
+import { OrchestratorProvider } from './contexts/OrchestratorContext';
 
 // Styles
 
@@ -82,23 +83,30 @@ function App() {
   return (
     <AuthProvider>
       <OfflineIndicator />
-      <AgentProvider>
-        <ChatProvider>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/dashboard/*" element={
-              <PrivateRoute>
-                <MainDashboard />
-              </PrivateRoute>
-            } />
-            <Route path="/*" element={<AppContent />} />
-          </Routes>
-        </ChatProvider>
-      </AgentProvider>
+      <OrchestratorProvider>
+        <AgentProvider>
+          <ChatProvider>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              {/* <Route path="/setting" element={
+                <PrivateRoute>
+                  <Navigate to="/dashboard/setting" replace />
+                </PrivateRoute>
+              } /> */}
+              <Route path="/dashboard/*" element={
+                <PrivateRoute>
+                  <MainDashboard />
+                </PrivateRoute>
+              } />
+              <Route path="/*" element={<AppContent />} />
+            </Routes>
+          </ChatProvider>
+        </AgentProvider>
+      </OrchestratorProvider>
     </AuthProvider>
   );
 }

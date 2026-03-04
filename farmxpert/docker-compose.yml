@@ -1,64 +1,101 @@
+# ============================================================
+# FarmXpert — Docker Compose (Enterprise Edition)
+# ============================================================
+# Services:
+#   1. PostgreSQL 16 + pgvector (primary DB)
+#   2. PgBouncer (connection pooling)
+# Usage:
+#   docker-compose up -d
+#   psql -h localhost -p 6432 -U farmxpert farmxpert_db  ← via PgBouncer
+#   docker-compose exec postgres psql -U farmxpert -d farmxpert_db  ← direct
+# ============================================================
+
 version: '3.8'
 
 services:
-  # PostgreSQL Database
+  # ────────────────────────────────────────────
+  # PostgreSQL 16 + pgvector (Primary Database)
+  # ────────────────────────────────────────────
   postgres:
-    image: postgres:15
+    image: pgvector/pgvector:pg16
+    container_name: farmxpert_postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: farmxpert_db
-      POSTGRES_USER: farmxpert_user
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Hello
+      POSTGRES_DB: FarmXpert
+    ports:
+      - "5433:5432"     # direct PG access (admin/migrations only)
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+      - farmxpert_pgdata:/var/lib/postgresql/data
+      - farmxpert_cold:/var/lib/postgresql/cold_data
+      - farmxpert_wal_archive:/var/lib/postgresql/wal_archive
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./database/create_partitions.sql:/docker-entrypoint-initdb.d/02_partitions.sql
+      - ./database/seed_agents.sql:/docker-entrypoint-initdb.d/03_seed.sql
+    command: >
+      postgres
+        -c shared_buffers=256MB
+        -c work_mem=16MB
+        -c maintenance_work_mem=128MB
+        -c effective_cache_size=512MB
+        -c max_connections=200
+        -c wal_buffers=16MB
+        -c checkpoint_completion_target=0.9
+        -c random_page_cost=1.1
+        -c wal_level=replica
+        -c archive_mode=on
+        -c archive_command='cp %p /var/lib/postgresql/wal_archive/%f'
+        -c max_wal_senders=5
+        -c wal_keep_size=1GB
+        -c hot_standby=on
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U farmxpert_user -d farmxpert_db"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "pg_isready -U farmxpert -d farmxpert_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Backend API
-  backend:
-    build: .
-    environment:
-      - DATABASE_URL=postgresql://farmxpert_user:${DB_PASSWORD}@postgres:5432/farmxpert_db
-      - REDIS_URL=redis://redis:6379
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - ENVIRONMENT=production
-    ports:
-      - "8000:8000"
+  # ────────────────────────────────────────────
+  # PgBouncer (Connection Pooling)
+  # ────────────────────────────────────────────
+  # Transaction pooling mode: each transaction gets a connection,
+  # released back to pool after COMMIT/ROLLBACK.
+  # Supports thousands of concurrent farmer connections with
+  # only ~50 actual PostgreSQL connections.
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: farmxpert_pgbouncer
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./logs:/app/logs
-    restart: unless-stopped
-
-  # Frontend
-  frontend:
-    build: ./frontend
+    environment:
+      DATABASE_URL: "postgres://postgres:Hello@postgres:5432/FarmXpert"
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 50
+      MIN_POOL_SIZE: 10
+      RESERVE_POOL_SIZE: 10
+      RESERVE_POOL_TIMEOUT: 3
+      MAX_DB_CONNECTIONS: 100
+      SERVER_RESET_QUERY: "DISCARD ALL"
+      SERVER_CHECK_QUERY: "SELECT 1"
+      SERVER_CHECK_DELAY: 10
+      LOG_CONNECTIONS: 0
+      LOG_DISCONNECTIONS: 0
+      LOG_POOLER_ERRORS: 1
     ports:
-      - "80:80"
-    depends_on:
-      - backend
-    restart: unless-stopped
+      - "5432:5432"     # application connects here
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  postgres_data:
-  redis_data:
+  farmxpert_pgdata:
+    driver: local
+  farmxpert_cold:
+    driver: local
+  farmxpert_wal_archive:
+    driver: local

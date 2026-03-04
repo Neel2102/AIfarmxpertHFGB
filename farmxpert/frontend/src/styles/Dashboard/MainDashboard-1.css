@@ -1,0 +1,30 @@
+.main-dashboard-content-1 {
+  flex: 1;
+  width: 100%;
+  min-height: 100vh;
+  transition: margin-left 0.3s ease, background-color 0.3s ease;
+}
+
+/* Responsive adjustments per requirements */
+/* @media (min-width: 1025px) {
+  .main-dashboard-content-1 {
+    margin-left: 15.625%;
+  }
+} */
+
+/* @media (min-width: 768px) and (max-width: 1024px) {
+  .main-dashboard-content-1 {
+    margin-left: 8%;
+  }
+} */
+
+/* @media (max-width: 767px) {
+  .main-dashboard-content-1 {
+    margin-left: 0;
+  }
+} */
+
+/* When sidebar/menu is toggled off, force margin-left: 0 for all sizes */
+.sidebar-closed .main-dashboard-content-1 {
+  margin-left: 0 !important;
+}

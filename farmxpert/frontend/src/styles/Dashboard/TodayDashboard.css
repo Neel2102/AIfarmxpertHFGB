@@ -110,23 +110,20 @@
 
 .action-card {
   grid-column: span 6;
-  background: var(--card-bg);
-  border: 1px solid var(--border-light);
-  border-radius: 16px;
-  padding: 1rem;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.06), rgba(34, 197, 94, 0.02));
+  padding: 1.05rem;
 }
 
 .action-card.good {
-  border-left: 4px solid rgba(16, 185, 129, 1);
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.14), rgba(34, 197, 94, 0.03));
 }
 
 .action-card.warning {
-  border-left: 4px solid rgba(245, 158, 11, 1);
+  background: linear-gradient(180deg, rgba(250, 204, 21, 0.18), rgba(250, 204, 21, 0.04));
 }
 
 .action-card.info {
-  border-left: 4px solid rgba(59, 130, 246, 1);
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.09), rgba(34, 197, 94, 0.02));
 }
 
 .action-card-top {
@@ -138,12 +135,10 @@
 .action-card-icon {
   width: 36px;
   height: 36px;
-  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--tertiary-bg);
-  border: 1px solid var(--border-light);
+  background: rgba(34, 197, 94, 0.12);
   flex-shrink: 0;
 }
 
@@ -162,7 +157,7 @@
 .action-card-meta {
   margin-top: 0.85rem;
   padding-top: 0.85rem;
-  border-top: 1px solid var(--border-light);
+  border-top: 1px solid rgba(34, 197, 94, 0.22);
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
@@ -200,8 +195,8 @@
   align-items: center;
   padding: 0.2rem 0.5rem;
   border-radius: 999px;
-  border: 1px solid var(--border-light);
-  background: var(--tertiary-bg);
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  background: rgba(34, 197, 94, 0.08);
   font-size: 0.75rem;
   color: var(--text-secondary);
 }

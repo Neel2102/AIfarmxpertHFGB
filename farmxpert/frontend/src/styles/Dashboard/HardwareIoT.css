@@ -171,6 +171,31 @@
   flex-direction: column;
 }
 
+.hardware-iot-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.blynk-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.blynk-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.18);
+  transform: scale(1.05);
+}
+
 .hardware-iot-title {
   font-size: 16px;
   font-weight: 700;
@@ -293,4 +318,206 @@
   .hardware-iot-provision-card {
     width: 100%;
   }
+}
+
+/* ── Blynk Onboarding Inline Form ── */
+
+@keyframes blynk-float-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes blynk-wifi-anim {
+
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes blynk-spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.blynk-setup-card {
+  margin-top: 24px;
+  max-width: 460px;
+  border-radius: 16px;
+  border: 1px solid var(--border-light);
+  background: var(--secondary-bg);
+  padding: 2rem;
+  animation: blynk-float-in 0.5s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.blynk-setup-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #10b981, #3b82f6, #8b5cf6);
+}
+
+.blynk-setup-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 12px;
+  padding: 10px 16px;
+  color: #10b981;
+  margin-bottom: 14px;
+}
+
+.blynk-wifi-pulse {
+  animation: blynk-wifi-anim 2s infinite;
+  color: #3b82f6;
+}
+
+.blynk-setup-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+}
+
+.blynk-setup-desc {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 0 20px;
+}
+
+.blynk-setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.blynk-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.blynk-form-group label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.blynk-required {
+  color: #ef4444;
+}
+
+.blynk-optional {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 0.65rem;
+}
+
+.blynk-form-group input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-light);
+  background: var(--tertiary-bg);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  outline: none;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.blynk-form-group input:focus {
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.blynk-form-group input::placeholder {
+  color: var(--text-muted);
+}
+
+.blynk-form-hint {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.blynk-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  font-size: 0.75rem;
+}
+
+.blynk-submit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.blynk-submit-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+}
+
+.blynk-submit-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.blynk-spin {
+  animation: blynk-spinner 1s linear infinite;
+}
+
+.blynk-features {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-light);
+}
+
+.blynk-features-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.blynk-features-grid {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
 }

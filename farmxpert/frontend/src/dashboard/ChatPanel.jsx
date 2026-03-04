@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, Bot, BarChart3, Droplets, ThermometerSun, FlaskConical, Sprout, Calendar, Zap, Circle, Bug, Cloud, TrendingUp, Clock, Truck, MapPin, DollarSign, Leaf, Package, ShoppingCart, Shield, GraduationCap, Users } from 'lucide-react';
+import { useOrchestrator } from '../contexts/OrchestratorContext';
 import '../styles/Dashboard/ChatPanel.css';
 import '../styles/Dashboard/ChatPanel-reasoning.css';
 
@@ -8,6 +9,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
 const ChatPanel = ({ agent, farmData, sessionId }) => {
   const navigate = useNavigate();
+  const { messages: contextMessages, session: contextSession } = useOrchestrator();
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -31,13 +33,17 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
   // Debug logging removed
 
   useEffect(() => {
-    setMessages([{
-      id: Date.now(),
-      type: 'system',
-      content: `Welcome to ${getAgentDisplayName(agent)}!`,
-      timestamp: new Date().toISOString()
-    }]);
-  }, [agent]);
+    if (contextMessages && contextMessages.length > 0) {
+      setMessages(contextMessages);
+    } else {
+      setMessages([{
+        id: Date.now(),
+        type: 'system',
+        content: `Welcome to ${getAgentDisplayName(agent)} !`,
+        timestamp: new Date().toISOString()
+      }]);
+    }
+  }, [agent, contextMessages]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -265,9 +271,9 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
               farm_location: farmData?.farm?.location || 'ahmedabad, India',
               farm_size: farmData?.farm?.size_acres || '5 acres',
               current_season: 'Rainy',
-              session_id: sessionId
+              session_id: contextSession?.id || sessionId
             },
-            session_id: sessionId
+            session_id: contextSession?.id || sessionId
           })
         });
 

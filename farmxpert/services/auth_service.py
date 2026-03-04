@@ -150,7 +150,7 @@ class AuthService:
         return count
     
     def register_user(self, username: str, email: str, password: str, full_name: str, phone: str = None) -> Optional[User]:
-        """Register a new user"""
+        """Register a new user and auto-create their farm"""
         # Check if user already exists
         existing_user = self.db.query(User).filter(
             (User.username == username) | (User.email == email)
@@ -166,13 +166,29 @@ class AuthService:
             full_name=full_name,
             phone=phone,
             is_active=True,
-            is_verified=False  # Email verification can be added later
+            is_verified=False
         )
         user.set_password(password)
         
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
+        
+        # Auto-create a default farm for the farmer
+        try:
+            from farmxpert.models.farm_models import Farm
+            farm = Farm(
+                name=f"{full_name}'s Farm",
+                location="Not set",
+                size_acres=0,
+                farmer_name=full_name,
+                farmer_phone=phone,
+                farmer_email=email,
+            )
+            self.db.add(farm)
+            self.db.commit()
+        except Exception as e:
+            print(f"Auto-farm creation note: {e}")
         
         return user
     
