@@ -5,31 +5,30 @@
 #   1. PostgreSQL 16 + pgvector (primary DB)
 #   2. PgBouncer (connection pooling)
 # Usage:
-#   docker-compose up -d
-#   psql -h localhost -p 6432 -U farmxpert farmxpert_db  ← via PgBouncer
-#   docker-compose exec postgres psql -U farmxpert -d farmxpert_db  ← direct
+#   docker compose up -d
+#   psql -h localhost -p 5432 -U postgres farmxpert  ← via PgBouncer
+#   docker compose exec db psql -U postgres -d farmxpert  ← direct
 # ============================================================
 
-version: '3.8'
 
 services:
   # ────────────────────────────────────────────
   # PostgreSQL 16 + pgvector (Primary Database)
   # ────────────────────────────────────────────
-  postgres:
+  db:
     image: pgvector/pgvector:pg16
-    container_name: farmxpert_postgres
-    restart: unless-stopped
+    container_name: farmxpert_db
+    restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Hello
-      POSTGRES_DB: FarmXpert
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: farmxpert
+      POSTGRES_HOST_AUTH_METHOD: md5
+      POSTGRES_INITDB_ARGS: "--auth-host=md5"
     ports:
-      - "5433:5432"     # direct PG access (admin/migrations only)
+      - "5433:5432"       # direct PG access (admin/migrations only)
     volumes:
-      - farmxpert_pgdata:/var/lib/postgresql/data
-      - farmxpert_cold:/var/lib/postgresql/cold_data
-      - farmxpert_wal_archive:/var/lib/postgresql/wal_archive
+      - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
       - ./database/create_partitions.sql:/docker-entrypoint-initdb.d/02_partitions.sql
       - ./database/seed_agents.sql:/docker-entrypoint-initdb.d/03_seed.sql
@@ -43,14 +42,9 @@ services:
         -c wal_buffers=16MB
         -c checkpoint_completion_target=0.9
         -c random_page_cost=1.1
-        -c wal_level=replica
-        -c archive_mode=on
-        -c archive_command='cp %p /var/lib/postgresql/wal_archive/%f'
-        -c max_wal_senders=5
-        -c wal_keep_size=1GB
-        -c hot_standby=on
+        -c password_encryption=md5
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U farmxpert -d farmxpert_db"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d farmxpert"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -60,17 +54,16 @@ services:
   # ────────────────────────────────────────────
   # Transaction pooling mode: each transaction gets a connection,
   # released back to pool after COMMIT/ROLLBACK.
-  # Supports thousands of concurrent farmer connections with
-  # only ~50 actual PostgreSQL connections.
   pgbouncer:
     image: edoburu/pgbouncer:latest
     container_name: farmxpert_pgbouncer
-    restart: unless-stopped
+    restart: always
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
     environment:
-      DATABASE_URL: "postgres://postgres:Hello@postgres:5432/FarmXpert"
+      DATABASE_URL: "postgres://postgres:password@db:5432/farmxpert"
+      AUTH_TYPE: md5
       POOL_MODE: transaction
       MAX_CLIENT_CONN: 1000
       DEFAULT_POOL_SIZE: 50
@@ -85,7 +78,7 @@ services:
       LOG_DISCONNECTIONS: 0
       LOG_POOLER_ERRORS: 1
     ports:
-      - "5432:5432"     # application connects here
+      - "5432:5432"       # application connects here
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h localhost -p 5432"]
       interval: 10s
@@ -93,9 +86,5 @@ services:
       retries: 5
 
 volumes:
-  farmxpert_pgdata:
-    driver: local
-  farmxpert_cold:
-    driver: local
-  farmxpert_wal_archive:
+  postgres_data:
     driver: local

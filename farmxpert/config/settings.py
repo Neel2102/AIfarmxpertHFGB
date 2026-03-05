@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     low_llm_mode: bool = Field(default=False)
 
-    database_url: str = Field(default="postgresql://postgres:Hello@localhost:5432/FarmXpert")
+    database_url: str = Field(default="postgresql://postgres:password@localhost:5432/farmxpert")
     redis_url: str = Field(default="redis://localhost:6379/0")
     static_data_dir: str = Field(default="data/static")
     

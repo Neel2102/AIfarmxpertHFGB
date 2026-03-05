@@ -29,7 +29,7 @@ APP_PORT=8000
 GEMINI_API_KEY=your-gemini-api-key-here
 
 # Database Configuration (Optional)
-DATABASE_URL=postgresql://user:password@localhost:5432/farmxpert
+DATABASE_URL=postgresql://postgres:password@localhost:5432/farmxpert
 REDIS_URL=redis://localhost:6379/0
 """
         
