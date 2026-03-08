@@ -6,6 +6,7 @@ Pydantic models for authentication requests and responses
 from pydantic import BaseModel, EmailStr, Field, validator
 from typing import Optional
 from datetime import datetime
+import re
 
 class UserRegister(BaseModel):
     """User registration request"""

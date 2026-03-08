@@ -1,0 +1,10 @@
+python-dotenv
+requests
+pandas
+numpy
+scikit-learn
+catboost
+matplotlib
+langchain
+langchain-google-genai
+google-generativeai

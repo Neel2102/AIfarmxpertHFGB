@@ -126,6 +126,7 @@ async def analyze(request: Dict[str, Any]):
         })
 
 @router.get("/health")
+async def orchestrator_health():
     return {
         "status": "healthy",
         "agent": "orchestrator",
@@ -146,6 +147,10 @@ async def analyze(request: Dict[str, Any]):
             "comprehensive_farming_advice"
         ]
     }
+
+@router.get("/status")
+async def orchestrator_status():
+    return await orchestrator_health()
 
 @router.post("/language/detect")
 async def detect_language(request: Dict[str, str]):

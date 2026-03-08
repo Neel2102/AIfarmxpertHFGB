@@ -175,20 +175,21 @@ class AuthService:
         self.db.refresh(user)
         
         # Auto-create a default farm for the farmer
-        try:
-            from farmxpert.models.farm_models import Farm
-            farm = Farm(
-                name=f"{full_name}'s Farm",
-                location="Not set",
-                size_acres=0,
-                farmer_name=full_name,
-                farmer_phone=phone,
-                farmer_email=email,
-            )
-            self.db.add(farm)
-            self.db.commit()
-        except Exception as e:
-            print(f"Auto-farm creation note: {e}")
+        # TODO: Fix farm creation after ensuring proper database schema
+        # try:
+        #     from farmxpert.models.farm_models import Farm
+        #     farm = Farm(
+        #         name=f"{full_name}'s Farm",
+        #         location="Not set",
+        #         size_acres=0,
+        #         farmer_name=full_name,
+        #         farmer_phone=phone,
+        #         farmer_email=email,
+        #     )
+        #     self.db.add(farm)
+        #     self.db.commit()
+        # except Exception as e:
+        #     print(f"Auto-farm creation note: {e}")
         
         return user
     

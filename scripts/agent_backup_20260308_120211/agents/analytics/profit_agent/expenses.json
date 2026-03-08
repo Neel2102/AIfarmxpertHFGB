@@ -1,0 +1,9 @@
+{
+  "seed_price": 4200,
+  "fertilizer_price": 5500,
+  "machinery_expense": 3500,
+  "labour_charges": 4800,
+  "electricity_cost": 1200,
+  "logistics_cost": 2000,
+  "storage_cost": 1500
+}

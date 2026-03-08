@@ -1,0 +1,39 @@
+{
+  "migration_date": "2026-03-08T12:02:12.346666",
+  "migrated_agents": [
+    "soil_health",
+    "crop_selector",
+    "seed_selection",
+    "fertilizer_advisor",
+    "irrigation_planner",
+    "pest_disease_diagnostic",
+    "weather_watcher",
+    "growth_stage_monitor",
+    "task_scheduler",
+    "machinery_equipment",
+    "farm_layout_mapping",
+    "yield_predictor",
+    "profit_optimization",
+    "carbon_sustainability",
+    "market_intelligence",
+    "logistics_storage",
+    "input_procurement",
+    "crop_insurance_risk",
+    "farmer_coach",
+    "compliance_certification",
+    "community_engagement"
+  ],
+  "new_architecture": {
+    "core_agent": "farmxpert/core/core_agent.py",
+    "prompts": "farmxpert/core/agent_prompts.json",
+    "routes": "farmxpert/core/agent_routes.py"
+  },
+  "benefits": [
+    "Single point of maintenance",
+    "Consistent error handling",
+    "Unified logging and monitoring",
+    "Easier testing and debugging",
+    "Reduced code duplication",
+    "Faster development cycles"
+  ]
+}
