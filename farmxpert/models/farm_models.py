@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean, ForeignKey, JSON
+from sqlalchemy import Column, Integer, BigInteger, String, Float, DateTime, Text, Boolean, ForeignKey, JSON, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from farmxpert.models.database import Base
@@ -6,17 +6,21 @@ from farmxpert.models.database import Base
 class Farm(Base):
     __tablename__ = "farms"
     
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False)
-    location = Column(String(255), nullable=False)
-    size_acres = Column(Float, nullable=False)
-    farmer_name = Column(String(255), nullable=False)
-    farmer_phone = Column(String(20))
-    farmer_email = Column(String(255))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    id = Column(BigInteger, primary_key=True, index=True)
+    user_id = Column(BigInteger, ForeignKey("auth_users.id"), nullable=False)
+    farm_name = Column(String(255), nullable=False)
+    crop_type = Column(String(100))
+    state = Column(String(100))
+    district = Column(String(100))
+    village = Column(String(100))
+    latitude = Column(Numeric(10, 7))
+    longitude = Column(Numeric(10, 7))
+    soil_type = Column(String(100))
+    created_at = Column(DateTime(timezone=False), server_default=func.now())
+    updated_at = Column(DateTime(timezone=False), onupdate=func.now())
     
     # Relationships
+    auth_user = relationship("AuthUser", back_populates="farms")
     fields = relationship("Field", back_populates="farm")
     soil_tests = relationship("SoilTest", back_populates="farm")
     crops = relationship("Crop", back_populates="farm")

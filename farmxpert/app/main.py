@@ -1,22 +1,21 @@
 """
 FarmXpert AI Platform - Main FastAPI Application
-Modular Monolith Architecture with Orchestrator Pattern
+Updated to use the new core agent system
 """
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from farmxpert.app.orchestrator.router import router as orchestrator_router
-from farmxpert.app.orchestrator.dynamic_router import router as dynamic_router
-from farmxpert.app.agents.weather_watcher.router import router as weather_router
-from farmxpert.app.agents.growth_stage_monitor.router import router as growth_router
-from farmxpert.app.agents.soil_health.router import router as soil_health_router
-from farmxpert.app.agents.market_intelligence.router import router as market_intelligence_router
 
-from farmxpert.app.agents.profit_agent.router import router as profit_router
-from farmxpert.app.agents.profit_agent.router import router as profit_router
-from farmxpert.app.agents.yield_predictor.router import router as yield_router
-from farmxpert.app.routers.farm import router as farm_router
-from farmxpert.app.routers.system import router as system_router
+# Import the new core agent system instead of old scattered agents
+from farmxpert.core.core_agent_updated import process_farm_request
+from farmxpert.core.agent_routes import router as core_agent_router
+from farmxpert.interfaces.api.routes import health_routes, farm_routes, auth_routes, agent_info_routes, agent_routes
+from farmxpert.interfaces.api.routes import super_agent_updated
+from farmxpert.interfaces.api.routes import llm_usage_routes, blynk_routes, soil_routes
+from farmxpert.interfaces.api.middleware.logging_middleware import RequestLoggingMiddleware
+from farmxpert.models.database import Base, engine
+import farmxpert.models.user_models  # noqa: F401
+import farmxpert.models.farm_models  # noqa: F401
 
 app = FastAPI(
     title="FarmXpert AI Platform",
@@ -35,101 +34,74 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount agent routers
-app.include_router(
-    orchestrator_router, 
-    prefix="/orchestrator",
-    tags=["Orchestrator"]
-)
+@app.on_event("startup")
+async def _create_db_tables() -> None:
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"Warning: Database connection failed, continuing without DB: {e}")
 
-app.include_router(
-    dynamic_router,
-    prefix="/dynamic",
-    tags=["Dynamic Data"]
-)
+# Add middleware
+app.add_middleware(RequestLoggingMiddleware)
 
-app.include_router(
-    weather_router, 
-    prefix="/agents/weather",
-    tags=["Weather Watcher"]
-)
+# Include updated routes
+app.include_router(health_routes.router, prefix="/api")
+app.include_router(auth_routes.router, prefix="/api")
+app.include_router(agent_info_routes.router, prefix="/api")
+app.include_router(llm_usage_routes.router, prefix="/api")
 
-app.include_router(
-    growth_router, 
-    prefix="/agents/growth",
-    tags=["Growth Stage Monitor"]
-)
-
-app.include_router(
-    soil_health_router,
-    prefix="/agents/soil_health",
-    tags=["Soil Health"]
-)
-
-app.include_router(
-    market_intelligence_router,
-    prefix="/agents/market_intelligence",
-    tags=["Market Intelligence"]
-)
-
-app.include_router(
-    profit_router,
-    prefix="/agents/profit",
-    tags=["Profit Agent"]
-)
-
-app.include_router(
-    yield_router,
-    prefix="/agents/yield",
-    tags=["Yield Predictor"]
-)
-
-app.include_router(
-    farm_router,
-    prefix="/api/farms",
-    tags=["Farms"]
-)
-
-app.include_router(
-    system_router,
-    prefix="/api/system",
-    tags=["System"]
-)
+# Replace old agent system with new core agent router
+app.include_router(agent_routes.router, prefix="/api")  # This provides /api/agents/{agent_name}
+app.include_router(core_agent_router, prefix="/api")    # This provides /api/agent/* endpoints
+app.include_router(farm_routes.router, prefix="/api")
+app.include_router(super_agent_updated.router, prefix="/api")
+app.include_router(blynk_routes.router, prefix="/api")
+app.include_router(soil_routes.router, prefix="/api")
 
 @app.get("/")
 async def root():
     """Root endpoint - API information"""
+    from farmxpert.core.core_agent_updated import core_agent
+    
+    available_agents = core_agent.get_available_agents()
     return {
         "message": "FarmXpert AI Platform",
         "version": "1.0.0",
-        "architecture": "Modular Monolith",
-        "agents": {
-            "weather_watcher": "/agents/weather",
-            "growth_stage_monitor": "/agents/growth",
-            "soil_health": "/agents/soil_health",
-            "market_intelligence": "/agents/market_intelligence",
-            "profit_agent": "/agents/profit",
-            "yield_predictor": "/agents/yield"
-        },
-        "orchestrator": "/orchestrator",
-        "docs": "/docs"
+        "architecture": "Core Agent Router",
+        "core_agent": "active",
+        "available_agents": len(available_agents),
+        "endpoints": {
+            "health": "/health",
+            "docs": "/docs",
+            "agents": "/api/agents",
+            "core_agent": "/api/agent",
+            "super_agent": "/api/super-agent",
+            "chat": "/api/super-agent/chat"
+        }
     }
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "timestamp": "2026-01-30T11:33:00Z",
-        "agents": {
-            "weather_watcher": "active",
-            "growth_stage_monitor": "active",
-            "soil_health": "active",
-            "profit_agent": "active",
-            "yield_predictor": "active",
-            "orchestrator": "active"
+    try:
+        from farmxpert.core.core_agent_updated import core_agent
+        
+        available_agents = core_agent.get_available_agents()
+        
+        return {
+            "status": "healthy",
+            "timestamp": "2026-03-08T12:17:00Z",
+            "core_agent": "active",
+            "available_agents": len(available_agents),
+            "database": "connected",
+            "architecture": "Core Agent Router"
         }
-    }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": "2026-03-08T12:17:00Z"
+        }
 
 if __name__ == "__main__":
     import uvicorn

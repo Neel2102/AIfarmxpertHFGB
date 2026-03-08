@@ -109,10 +109,16 @@ class CoreAgent:
                 except Exception as e:
                     self.logger.warning(f"Failed to save user message: {e}")
             
+            # 🎯 CONTEXT INJECTOR: Fetch farm data and inject into user input
+            farm_context = await self._inject_farm_context(user_id, context)
+            
+            # Prepend farm context to user input
+            enhanced_user_input = f"{farm_context}\n\nUser Query: {user_input}" if farm_context else user_input
+            
             # Construct the enhanced prompt
             enhanced_prompt = self._construct_prompt(
                 agent_config,
-                user_input,
+                enhanced_user_input,
                 tool_data,
                 context
             )
@@ -329,6 +335,105 @@ Format your response as a helpful, expert advisor."""
             }
         }
     
+    async def _inject_farm_context(self, user_id: Optional[int], context: Optional[Dict[str, Any]]) -> str:
+        """
+        🎯 CONTEXT INJECTOR: Fetch farm data from database and format as context string
+        
+        Args:
+            user_id: User ID to fetch farm data for (defaults to 1 for testing)
+            context: Additional context from the request
+            
+        Returns:
+            Formatted context string to prepend to user input
+        """
+        try:
+            # Default to user_id = 1 for testing as requested
+            target_user_id = user_id or 1
+            
+            self.logger.info(f"Injecting farm context for user_id: {target_user_id}")
+            
+            # Get database session
+            db = get_database_session()
+            
+            # Fetch user's farms
+            farms = get_user_farms(db, target_user_id)
+            
+            if not farms:
+                self.logger.info(f"No farms found for user {target_user_id}")
+                return "System Note: No farm data found for this user."
+            
+            # Build context string from farm data
+            farm_context_parts = []
+            
+            for farm in farms:
+                farm_info = []
+                
+                # Basic farm info (using ORM attributes)
+                if farm.farm_name:
+                    farm_info.append(f"Farm Name: {farm.farm_name}")
+                
+                # Build location from components
+                location_parts = []
+                if farm.village:
+                    location_parts.append(farm.village)
+                if farm.district:
+                    location_parts.append(farm.district)
+                if farm.state:
+                    location_parts.append(farm.state)
+                
+                if location_parts:
+                    farm_info.append(f"Location: {', '.join(location_parts)}")
+                
+                if farm.soil_type:
+                    farm_info.append(f"Soil Type: {farm.soil_type}")
+                
+                if farm.crop_type:
+                    farm_info.append(f"Current Crop: {farm.crop_type}")
+                
+                # Get crops for this farm
+                try:
+                    crops = get_farm_crops(db, farm.id)
+                    if crops:
+                        crop_list = []
+                        for crop in crops:
+                            crop_info = crop.crop_type
+                            if crop.variety:
+                                crop_info += f" ({crop.variety})"
+                            if crop.status:
+                                crop_info += f" - {crop.status}"
+                            crop_list.append(crop_info)
+                        
+                        if crop_list:
+                            farm_info.append(f"Crops: {', '.join(crop_list)}")
+                except Exception as e:
+                    self.logger.warning(f"Failed to fetch crops for farm {farm.id}: {e}")
+                
+                # Get farm summary
+                try:
+                    summary = get_farm_summary(db, farm.id)
+                    if summary:
+                        if summary.get('total_crops'):
+                            farm_info.append(f"Total Crops: {summary['total_crops']}")
+                        if summary.get('active_tasks'):
+                            farm_info.append(f"Active Tasks: {summary['active_tasks']}")
+                except Exception as e:
+                    self.logger.warning(f"Failed to fetch farm summary for farm {farm.id}: {e}")
+                
+                if farm_info:
+                    farm_context_parts.append(" | ".join(farm_info))
+            
+            # Combine all farm information
+            if farm_context_parts:
+                context_string = f"System Note: User Farm Context - {'; '.join(farm_context_parts)}"
+                self.logger.info(f"Farm context injected: {context_string[:100]}...")
+                return context_string
+            else:
+                return "System Note: User has farm records but detailed information is not available."
+                
+        except Exception as e:
+            self.logger.error(f"Error injecting farm context: {e}")
+            return "System Note: Unable to retrieve farm context at this time."
+
     def _create_error_response(self, error_message: str, start_time: datetime) -> Dict[str, Any]:
         """Create a standardized error response"""
         execution_time = (datetime.now() - start_time).total_seconds()

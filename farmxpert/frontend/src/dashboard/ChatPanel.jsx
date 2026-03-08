@@ -5,16 +5,16 @@ import { useOrchestrator } from '../contexts/OrchestratorContext';
 import '../styles/Dashboard/ChatPanel.css';
 import '../styles/Dashboard/ChatPanel-reasoning.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || '';
+// Fallback to localhost:8000 if the env variable isn't set yet
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 const ChatPanel = ({ agent, farmData, sessionId }) => {
   const navigate = useNavigate();
-  const { messages: contextMessages, session: contextSession } = useOrchestrator();
+  const { messages: contextMessages } = useOrchestrator();
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [showReasoningFor, setShowReasoningFor] = useState(new Set()); // Track which messages show reasoning
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -27,10 +27,6 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
       return String(value);
     }
   };
-
-  // SmartChatUI component removed per user request for simple chatbot interface
-
-  // Debug logging removed
 
   useEffect(() => {
     if (contextMessages && contextMessages.length > 0) {
@@ -136,7 +132,6 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
     setIsDropdownOpen(false);
   };
 
-  // Get current agent name for display
   const getCurrentAgentName = () => {
     const currentAgent = agentOptions.find(option => option.id === agent);
     return currentAgent ? currentAgent.name : getAgentDisplayName(agent);
@@ -144,44 +139,28 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
 
   const cleanText = (text) => {
     if (!text) return '';
-
-    // Clean up the text and ensure proper formatting
     return text
-      .replace(/^["']|["']$/g, '')     // Remove surrounding quotes only
-      .replace(/\n\s*\n\s*\n/g, '\n\n') // Remove excessive line breaks
-      .replace(/\n\s*-\s*-\s*/g, '\n- ') // Fix double dashes
-      .replace(/\n\s*-\s*/g, '\n- ')    // Ensure proper bullet point formatting
-      .replace(/\n\s*\*\s*/g, '\n- ')   // Convert * to - for consistency
+      .replace(/^["']|["']$/g, '') 
+      .replace(/\n\s*\n\s*\n/g, '\n\n')
+      .replace(/\n\s*-\s*-\s*/g, '\n- ')
+      .replace(/\n\s*-\s*/g, '\n- ')
+      .replace(/\n\s*\*\s*/g, '\n- ')
       .trim();
   };
 
   const renderMarkdownText = (text) => {
-    // Handle all Markdown formatting
     let result = text;
-
-    // Handle code blocks first (```)
     result = result.replace(/```([\s\S]*?)```/g, '<pre class="code-block">$1</pre>');
-
-    // Handle inline code (`)
     result = result.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
-
-    // Handle bold text (**text**) - must be done before italic
     result = result.replace(/\*\*([^*]+)\*\*/g, '<strong class="bold-text">$1</strong>');
-
-    // Handle italic text (*text*)
     result = result.replace(/\*([^*]+)\*/g, '<em class="italic-text">$1</em>');
-
-    // Handle headers (##)
     result = result.replace(/^## (.+)$/gm, '<h3 class="markdown-header">$1</h3>');
 
-    // Split by line breaks and render
     const lines = result.split('\n');
     return lines.map((line, lineIndex) => {
       if (line.trim() === '') {
         return <div key={lineIndex} className="text-line empty-line"></div>;
       }
-
-      // Check if it's a section header (ends with colon)
       if (line.trim().endsWith(':')) {
         return (
           <div key={lineIndex} className="text-line section-header">
@@ -189,10 +168,7 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
           </div>
         );
       }
-
-      // Check if it's a bullet point (starts with - or *)
       if (line.trim().startsWith('-') || line.trim().startsWith('*')) {
-        // Remove the dash/asterisk from the text since CSS will add the bullet
         const cleanLine = line.replace(/^[\s]*[-*]\s*/, '');
         return (
           <div key={lineIndex} className="text-line bullet-point">
@@ -200,8 +176,6 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
           </div>
         );
       }
-
-      // Check if it's a numbered list item
       if (/^\d+\.\s/.test(line.trim())) {
         return (
           <div key={lineIndex} className="text-line numbered-point">
@@ -209,10 +183,7 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
           </div>
         );
       }
-
-      // Check if line contains bullet-like content (fallback for poorly formatted text)
       if (line.includes('•') || line.includes('*') || line.includes('-')) {
-        // Try to extract bullet content
         const bulletMatch = line.match(/(?:•|\*|-)\s*(.+)/);
         if (bulletMatch) {
           return (
@@ -222,8 +193,6 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
           );
         }
       }
-
-      // Regular text line
       return (
         <div key={lineIndex} className="text-line regular-text">
           <span dangerouslySetInnerHTML={{ __html: line }} />
@@ -239,15 +208,20 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
 
   const formatTime = (timestamp) => new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+  // ==========================================
+  // NEW CENTRALIZED API ROUTING LOGIC
+  // ==========================================
   const sendMessage = async () => {
     const text = inputValue.trim();
     if (!text || isLoading) return;
+
+    // 1. Add User Message
     const userMessage = { id: Date.now(), type: 'user', content: text, timestamp: new Date().toISOString() };
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setIsLoading(true);
 
-    // Create a placeholder for the response
+    // 2. Add Assistant Placeholder
     const assistantMessageId = Date.now() + 1;
     const assistantMessage = {
       id: assistantMessageId,
@@ -259,138 +233,58 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
     setMessages((prev) => [...prev, assistantMessage]);
 
     try {
-      if (agent === 'super-agent') {
-        const response = await fetch(`${API_BASE_URL}/api/super-agent/query/ui-stream`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            query: text,
-            context: {
-              farm_location: farmData?.farm?.location || 'ahmedabad, India',
-              farm_size: farmData?.farm?.size_acres || '5 acres',
-              current_season: 'Rainy',
-              session_id: contextSession?.id || sessionId
-            },
-            session_id: contextSession?.id || sessionId
-          })
-        });
+      // 3. Prepare payload for the central router
+      const agentRole = agent === 'super-agent' ? 'farmer_coach' : agent.replace(/-/g, '_');
+      
+      const response = await fetch(`${API_BASE_URL}/api/agent/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_input: text,
+          agent_role: agentRole,
+          user_id: 1 // Hardcoded for Context Injector testing
+        })
+      });
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        const applyUpdate = ({ ui, answer, sop, agent_responses, done }) => {
-          setMessages((prev) =>
-            prev.map((msg) => {
-              if (msg.id !== assistantMessageId) return msg;
-              return {
-                ...msg,
-                ui: ui ?? msg.ui,
-                content: typeof answer === 'string' ? answer : msg.content,
-                sop: sop ?? msg.sop,  // Capture SOP from streaming
-                agent_responses: agent_responses ?? msg.agent_responses,  // Capture agent responses
-                isStreaming: done ? false : msg.isStreaming,
-              };
-            })
-          );
-        };
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop();
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const raw = line.slice(6).trim();
-            if (!raw) continue;
-            try {
-              const evt = JSON.parse(raw);
-              if (evt.type === 'ui' && evt.ui) {
-                applyUpdate({
-                  ui: evt.ui,
-                  answer: evt.answer,
-                  sop: evt.sop,  // Capture SOP from event
-                  agent_responses: evt.agent_responses,  // Capture agent responses
-                  done: false
-                });
-              } else if (evt.type === 'complete') {
-                applyUpdate({ done: true });
-              } else if (evt.type === 'error') {
-                throw new Error(evt.error || 'Unknown streaming error');
-              }
-            } catch (parseError) {
-              console.error('Error parsing SSE data:', parseError);
-            }
-          }
-        }
-      } else {
-        // Individual agent chat - use unified agent endpoint for consistent natural language output
-        // Backend route: POST /api/agents/{agent_name}
-        const agentName = String(agent || '').replace(/-/g, '_');
-        const url = `${API_BASE_URL}/api/agents/${agentName}`;
-
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            query: text,
-            context: {
-              farm_location: farmData?.farm?.location || 'ahmedabad, India',
-              farm_size: farmData?.farm?.size_acres || '5 acres',
-              current_season: 'Rainy',
-            },
-            session_id: sessionId
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        // Unified endpoint guarantees a top-level `response` when possible.
-        // Still keep fallbacks for safety.
-        let content = '';
-        if (data?.response && typeof data.response === 'string') {
-          content = data.response;
-        } else if (data?.natural_language && typeof data.natural_language === 'string') {
-          content = data.natural_language;
-        } else if (data?.answer && typeof data.answer === 'string') {
-          content = data.answer;
-        } else if (data?.message && typeof data.message === 'string') {
-          content = data.message;
-        } else {
-          content = JSON.stringify(data, null, 2);
-        }
-
-        const ui = data?.ui && typeof data.ui === 'object' ? data.ui : null;
-        const sop = data; // Use full data as SOP for reasoning
-        setMessages((prev) =>
-          prev.map(msg =>
-            msg.id === assistantMessageId
-              ? { ...msg, content, ui, sop, isStreaming: false }
-              : msg
-          )
-        );
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    } catch (e) {
-      console.error('Error:', e);
+
+      const data = await response.json();
+      
+      // 4. Parse the response
+      let content = '';
+      if (data?.success && data?.response) {
+        content = data.response;
+      } else if (data?.response) {
+        content = data.response;
+      } else if (data?.message) {
+        content = data.message;
+      } else {
+        content = 'No response received from agent.';
+      }
+
+      // 5. Update UI state with AI response
       setMessages((prev) =>
         prev.map(msg =>
           msg.id === assistantMessageId
-            ? { ...msg, content: 'Error. Please try again.', isStreaming: false }
+            ? { 
+                ...msg, 
+                content, 
+                sop: data,
+                isStreaming: false 
+              }
+            : msg
+        )
+      );
+    } catch (e) {
+      console.error('Error connecting to core router:', e);
+      setMessages((prev) =>
+        prev.map(msg =>
+          msg.id === assistantMessageId
+            ? { ...msg, content: 'Error communicating with the AI. Please ensure the backend is running.', isStreaming: false }
             : msg
         )
       );
@@ -408,7 +302,6 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
 
   const setSuggestionText = (text) => {
     setInputValue(text);
-    // Optional: Auto-focus the textarea after setting text
     if (textareaRef.current) {
       textareaRef.current.focus();
     }
@@ -427,7 +320,6 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
             <div className="message-content">
               {m.type === 'assistant' ? (
                 <div>
-                  {/* Show natural language text as main content */}
                   {renderStructuredText(m.content)}
                   {m.isStreaming && (
                     <div className="typing-indicator">
@@ -437,7 +329,6 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
                     </div>
                   )}
 
-                  {/* Consulted Agents Chips - Simple & Clean */}
                   {m.agent_responses && m.agent_responses.length > 0 && !m.isStreaming && (
                     <div className="consulted-agents-row" style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '11px', color: '#9ca3af', alignSelf: 'center', fontWeight: 500 }}>INPUTS FROM:</span>

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-from farmxpert.core.core_agent import core_agent, process_farm_request
+from farmxpert.core.core_agent_updated import core_agent, process_farm_request
 from farmxpert.core.utils.logger import get_logger
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -32,7 +32,7 @@ class AgentResponse(BaseModel):
     data: Dict[str, Any]
     metadata: Dict[str, Any]
 
-@router.get("/roles", response_model=Dict[str, str])
+@router.get("/roles")
 async def get_available_agent_roles():
     """
     Get list of available agent roles with their descriptions

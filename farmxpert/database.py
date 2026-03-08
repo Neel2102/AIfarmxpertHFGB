@@ -6,6 +6,7 @@ No magic, no complex inheritance - just straightforward functions.
 import json
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime, timedelta
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, desc, asc, func
 

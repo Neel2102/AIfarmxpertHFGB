@@ -2,13 +2,32 @@
 User and Authentication Models
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Float, ForeignKey
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean, Text, Float, ForeignKey
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from datetime import datetime
 import hashlib
 import secrets
 
 from farmxpert.models.database import Base
+
+class AuthUser(Base):
+    """Auth User model matching the auth_users table"""
+    __tablename__ = "auth_users"
+    
+    id = Column(BigInteger, primary_key=True, index=True)
+    farmer_id = Column(String(50), unique=True, nullable=False, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    name = Column(String(100))
+    phone = Column(String(20), unique=True, index=True)
+    password_hash = Column(Text, nullable=False)
+    role = Column(String(20), default='farmer')
+    created_at = Column(DateTime(timezone=False), server_default=func.now())
+    updated_at = Column(DateTime(timezone=False), onupdate=func.now())
+    
+    # Relationships - using string references to avoid circular imports
+    farms = relationship("Farm", back_populates="auth_user")
 
 class User(Base):
     """User model for authentication and profile management"""

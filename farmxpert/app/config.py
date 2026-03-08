@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     
     # Database & Caching
     redis_url: Optional[str] = Field(default=None, env="REDIS_URL")
+    database_url: Optional[str] = Field(default=None, env="DATABASE_URL")
+    
+    # Environment
+    app_env: str = Field(default="development", env="APP_ENV")
+    
+    # Static Data
+    static_data_dir: str = Field(default="data/static", env="STATIC_DATA_DIR")
     
     # External Services
     sms_api_key: Optional[str] = Field(default=None, env="SMS_API_KEY")
@@ -78,6 +85,7 @@ class Settings(BaseSettings):
         env_file = PROJECT_ROOT / ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        extra = "allow"  # Allow extra fields from environment
 
 # Create global settings instance
 settings = Settings()
