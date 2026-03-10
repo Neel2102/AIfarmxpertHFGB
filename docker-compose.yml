@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: farmxpert_backend
+    ports:
+      - "8000:8000"
+    working_dir: /app
+    volumes:
+      - ./backend/farmxpert.db:/app/farmxpert.db
+    environment:
+      # If Gemini API key is needed, it can be passed through
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: farmxpert_frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    # Mounting the src folder allows hot-reloading for local development
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - /app/node_modules

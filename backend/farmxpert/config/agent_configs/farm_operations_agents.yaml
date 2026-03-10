@@ -1,0 +1,18 @@
+farm_operations_agents:
+  task_scheduler_agent:
+    description: "Suggests daily/weekly task plans based on crop calendars, labor availability, and weather"
+    priority: 2
+    dependencies: ["weather_watcher_agent", "growth_stage_monitor_agent"]
+    input_requirements: ["crop", "labor_available", "weather_forecast", "current_week"]
+    
+  machinery_equipment_agent:
+    description: "Advises on the use and scheduling of farm tools (tractors, sprayers), including maintenance tips"
+    priority: 3
+    dependencies: ["task_scheduler_agent"]
+    input_requirements: ["equipment", "planned_operations", "field_size_acres"]
+    
+  farm_layout_mapping_agent:
+    description: "Helps with field organization, plot allocation, crop rotation plans — all via logic-based planning, not imagery"
+    priority: 1
+    dependencies: ["crop_selector_agent"]
+    input_requirements: ["total_area_acres", "crops_to_plant", "previous_crops", "soil_zones"]

@@ -1,0 +1,288 @@
+.market-dashboard {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  animation: fadeIn 0.4s ease-out;
+}
+
+.market-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 32px;
+}
+
+.market-header h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-color);
+  margin-bottom: 8px;
+}
+
+.market-header .subtitle {
+  color: var(--text-color-secondary);
+  font-size: 16px;
+}
+
+.market-header .last-updated {
+  font-size: 14px;
+  color: var(--text-color-secondary);
+  background: var(--bg-secondary);
+  padding: 6px 12px;
+  border-radius: 20px;
+}
+
+.market-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Main Price Card */
+.price-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.price-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.08);
+}
+
+.price-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.price-card h3 {
+  font-size: 18px;
+  color: var(--text-color-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.trend-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.trend-badge.up {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+
+.trend-badge.down {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.trend-badge.stable {
+  background: rgba(107, 114, 128, 0.1);
+  color: #4b5563;
+}
+
+.price-display {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 32px;
+}
+
+.price-display .currency {
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--text-color-secondary);
+}
+
+.price-display .amount {
+  font-size: 64px;
+  font-weight: 800;
+  color: var(--text-color);
+  letter-spacing: -2px;
+  background: linear-gradient(135deg, var(--text-color) 0%, var(--primary-color) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.price-display .unit {
+  font-size: 18px;
+  color: var(--text-color-secondary);
+  margin-left: 8px;
+}
+
+/* Advice Section */
+.advice-section {
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.advice-chip {
+  align-self: flex-start;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+.advice-chip.sell {
+  background: #22c55e;
+  color: white;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+.advice-chip.hold {
+  background: #f59e0b;
+  color: white;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.advice-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--text-color);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.advice-reason svg {
+  color: var(--primary-color);
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+/* Info Grid */
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.info-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 24px;
+  transition: transform 0.2s ease;
+}
+
+.info-card:hover {
+  transform: translateY(-2px);
+}
+
+.info-card h4 {
+  color: var(--text-color-secondary);
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+.info-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-color);
+  margin-bottom: 8px;
+}
+
+.info-desc {
+  font-size: 14px;
+  color: var(--text-color-secondary);
+}
+
+/* Loading & Error States */
+.skeleton-header {
+  height: 40px;
+  width: 300px;
+  background: var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 40px;
+  animation: pulse 1.5s infinite;
+}
+
+.skeleton-card {
+  height: 300px;
+  width: 100%;
+  background: var(--card-bg);
+  border-radius: 24px;
+  margin-bottom: 24px;
+  animation: pulse 1.5s infinite;
+}
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.skeleton-item {
+  height: 120px;
+  background: var(--card-bg);
+  border-radius: 20px;
+  animation: pulse 1.5s infinite;
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 60vh;
+  gap: 16px;
+}
+
+.error-icon {
+  color: #dc2626;
+  margin-bottom: 16px;
+}
+
+.retry-btn {
+  padding: 10px 24px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.retry-btn:hover {
+  opacity: 0.9;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 0.3; }
+  100% { opacity: 0.6; }
+}
+
+/* Dark Mode Variables (assuming app uses these) */
+[data-theme='dark'] .market-dashboard {
+  --card-bg: #1e293b;
+  --bg-secondary: #0f172a;
+  --border-color: #334155;
+}

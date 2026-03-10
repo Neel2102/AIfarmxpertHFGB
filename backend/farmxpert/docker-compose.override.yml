@@ -1,0 +1,25 @@
+# Development override for hot-reloading and additional debugging
+
+services:
+  backend:
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@pgbouncer:5432/farmxpert
+      - DEBUG=true
+      - LOG_LEVEL=debug
+    volumes:
+      - ../farmxpert:/app
+      - /app/__pycache__
+    command: ["uvicorn", "farmxpert.interfaces.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--log-level", "debug"]
+
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ../../frontend/src:/app/src
+      - ../../frontend/public:/app/public
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - FAST_REFRESH=true
+      - DISABLE_ESLINT_PLUGIN=true
+      - NODE_OPTIONS=--no-deprecation

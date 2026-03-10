@@ -1,0 +1,984 @@
+"""
+FarmXpert Orchestrator Agent
+Central coordinator for all AI agents with unified configuration support
+"""
+
+import logging
+from datetime import datetime
+from typing import Dict, Any, List, Optional, Tuple
+
+# Import unified configuration
+try:
+    from farmxpert.agents.shared.config_service import agent_config_service
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
+    logging.warning("Unified configuration service not available")
+
+# Import individual agents
+from farmxpert.agents.operations.weather_watcher.services.weather_service import WeatherService
+from farmxpert.agents.supply_chain.market_intelligence_agent import MarketIntelligenceAgent
+from farmxpert.agents.operations.task_scheduler_agent import TaskSchedulerAgent
+
+# Import shared utilities
+from farmxpert.app.shared.utils import logger, create_success_response, create_error_response
+from farmxpert.app.shared.exceptions import FarmXpertException, OrchestratorException
+from farmxpert.app.shared.services.dynamic_data_service import dynamic_data_service
+from farmxpert.app.orchestrator.services import OrchestratorLLMService, RoutingRules
+from farmxpert.agents.agronomy.growth_stage_monitor_agent import GrowthStageMonitorAgent
+from farmxpert.agents.agronomy.soil_health_agent import SoilHealthAgent
+
+# DB access for user context enrichment
+try:
+    from farmxpert.models.database import SessionLocal
+    from farmxpert.models.user_models import User
+    from farmxpert.models.farm_models import Farm
+    from farmxpert.models.blynk_models import BlynkDevice, SensorReading
+    DB_CONTEXT_AVAILABLE = True
+except ImportError:
+    DB_CONTEXT_AVAILABLE = False
+    logging.warning("DB models not available for user context enrichment")
+
+class OrchestratorAgent:
+    """Central orchestrator that coordinates all AI agents."""
+
+    @staticmethod
+    def _missing_inputs(*, agent: str, missing_fields: List[str], questions: List[str]) -> Dict[str, Any]:
+        return {
+            "success": False,
+            "error": "Missing required inputs",
+            "missing_fields": missing_fields,
+            "questions": questions,
+            "agent": agent,
+        }
+
+    RULES = [
+        RoutingRules.explicit_strategy,
+        RoutingRules.by_query_keywords,
+        RoutingRules.by_payload_presence,
+        RoutingRules.fallback_both
+    ]
+
+    # Use unified configuration if available, fallback to static mapping
+    QUERY_TYPE_MAP = {
+        "weather_watcher": ["weather_watcher"],
+        "growth_stage_monitor": ["growth_stage_monitor"],
+        "irrigation_agent": ["irrigation_agent"],
+        "fertilizer_agent": ["fertilizer_agent"],
+        "soil_health_agent": ["soil_health_agent"],
+        "market_intelligence_agent": ["market_intelligence_agent"],
+        "task_scheduler_agent": ["task_scheduler_agent"],
+        "weather_only": ["weather_watcher"],
+        "growth_only": ["growth_stage_monitor"],
+        "irrigation_only": ["irrigation_agent"],
+        "fertilizer_only": ["fertilizer_agent"],
+        "soil_health_only": ["soil_health_agent"],
+        "market_only": ["market_intelligence_agent"],
+        "task_scheduling": ["task_scheduler_agent"],
+        "comprehensive_analysis": ["weather_watcher", "growth_stage_monitor", "irrigation_agent", "fertilizer_agent", "soil_health_agent", "market_intelligence_agent", "task_scheduler_agent"],
+        "conversational_query": ["weather_watcher", "growth_stage_monitor", "irrigation_agent", "fertilizer_agent", "soil_health_agent", "market_intelligence_agent", "task_scheduler_agent"],
+        "farmer_query": ["weather_watcher", "growth_stage_monitor", "irrigation_agent", "fertilizer_agent", "soil_health_agent", "market_intelligence_agent", "task_scheduler_agent"]
+    }
+
+    @staticmethod
+    def _fetch_user_context(user_id: int) -> Tuple[Optional[Any], Optional[Any]]:
+        """Fetch User onboarding_data and latest SensorReading for a user. Returns (user, sensor_reading)."""
+        if not DB_CONTEXT_AVAILABLE:
+            return None, None
+        try:
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.id == user_id).first()
+                if not user:
+                    return None, None
+                
+                # To get SoilTelemetry (SensorReading), we need Farm -> BlynkDevice
+                sensor_reading = None
+                farm = db.query(Farm).filter(Farm.farmer_name == user.username).first()
+                if farm:
+                    sensor_reading = (
+                        db.query(SensorReading)
+                        .filter(SensorReading.farm_id == farm.id)
+                        .order_by(SensorReading.recorded_at.desc())
+                        .first()
+                    )
+                return user, sensor_reading
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"Failed to fetch user context for user_id={user_id}: {e}")
+            return None, None
+
+    @staticmethod
+    def _build_system_prompt(user: Optional[Any], sensor_reading: Optional[Any]) -> str:
+        """Build a personalized system prompt from User onboarding_data and SensorReading data."""
+        base = (
+            "You are FarmXpert, an expert agricultural AI assistant. "
+            "Summarize farming insights clearly and briefly. "
+            "Do not invent data. Use a calm, farmer-friendly tone. "
+            "Avoid emojis and exaggeration.\n\n"
+        )
+
+        if not user or not hasattr(user, 'onboarding_data') or not user.onboarding_data:
+            return base + "Provide general farming advice."
+
+        # Build personalized context
+        profile = getattr(user, 'onboarding_data', {})
+        if not isinstance(profile, dict):
+            profile = {}
+            
+        parts = []
+        farm_size = profile.get('farmSize') or "unknown"
+        state = profile.get('state') or "an unknown state"
+        crop = profile.get('specificCrop') or profile.get('mainCropCategory') or "their crop"
+
+        parts.append(f"You are speaking to a farmer in {state} with {farm_size} of {crop}")
+
+        if profile.get('soilType'):
+            parts.append(f"soil type is {profile.get('soilType')}")
+        if profile.get('irrigationMethod'):
+            parts.append(f"irrigation method is {profile.get('irrigationMethod')}")
+
+        context_str = ". ".join(parts) + "."
+
+        soil_str = ""
+        if sensor_reading:
+            soil_parts = []
+            if sensor_reading.soil_ph is not None:
+                soil_parts.append(f"pH {float(sensor_reading.soil_ph):.1f}")
+            if sensor_reading.soil_moisture is not None:
+                soil_parts.append(f"moisture {float(sensor_reading.soil_moisture):.0f}%")
+            if sensor_reading.nitrogen is not None:
+                soil_parts.append(f"N={float(sensor_reading.nitrogen):.0f} mg/kg")
+            if sensor_reading.phosphorus is not None:
+                soil_parts.append(f"P={float(sensor_reading.phosphorus):.0f} mg/kg")
+            if sensor_reading.potassium is not None:
+                soil_parts.append(f"K={float(sensor_reading.potassium):.0f} mg/kg")
+            if soil_parts:
+                soil_str = f" Their current soil readings: {', '.join(soil_parts)}."
+
+        return base + context_str + soil_str + " Tailor all advice specifically to this farmer's situation."
+
+    @staticmethod
+    async def handle_request(request: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            # Fetch personalised user context if user_id provided
+            system_prompt: Optional[str] = None
+            user_id = request.get("user_id")
+            if user_id:
+                try:
+                    user, sensor_reading = OrchestratorAgent._fetch_user_context(int(user_id))
+                    system_prompt = OrchestratorAgent._build_system_prompt(user, sensor_reading)
+                    # Also inject farm data into the request so agents can use it
+                    if user and hasattr(user, 'onboarding_data') and isinstance(user.onboarding_data, dict):
+                        profile = user.onboarding_data
+                        if not request.get("location"):
+                            request = dict(request)  # make mutable copy
+                        else:
+                            request = dict(request)
+                        request.setdefault("location", {})
+                        if isinstance(request["location"], dict):
+                            request["location"].setdefault("state", profile.get("state"))
+                            request["location"].setdefault("district", profile.get("district"))
+                        if not request.get("crop_info"):
+                            request["crop_info"] = {}
+                        crop_name = profile.get("specificCrop") or profile.get("mainCropCategory")
+                        if crop_name:
+                            request["crop_info"].setdefault("name", crop_name)
+                        logger.info(f"User context injected for user_id={user_id}: {profile.get('state')}, {crop_name}")
+                except Exception as e:
+                    logger.warning(f"User context injection failed: {e}")
+
+            # Try to enrich with dynamic data, but don't fail if it doesn't work
+            try:
+                enriched_request = OrchestratorAgent._enrich_with_dynamic_data(request)
+                logger.info("Dynamic data enrichment successful")
+            except Exception as e:
+                logger.warning(f"Dynamic data enrichment failed: {e}")
+                enriched_request = request
+
+            # Determine query type using routing rules
+            query_type = OrchestratorAgent._determine_query_type(enriched_request)
+            # Ensure query_type is a string, not a list
+            if isinstance(query_type, list):
+                query_type = query_type[0] if query_type else "conversational_query"
+            logger.info(f"Determined query type: {query_type}")
+
+            # Get agents to call based on query type
+            agents_to_call = OrchestratorAgent.QUERY_TYPE_MAP.get(query_type, [])
+            logger.info(f"Agents to call: {agents_to_call}")
+
+            # Execute agents in parallel
+            results = await OrchestratorAgent._execute_agents(agents_to_call, enriched_request)
+
+            # Generate LLM summary (optional)
+            if enriched_request.get("skip_llm_summary"):
+                llm_summary = ""
+            else:
+                llm_summary = await OrchestratorAgent._generate_llm_summary(
+                    enriched_request, results, query_type, system_prompt=system_prompt
+                )
+
+            # Format results for better presentation
+            formatted_results = OrchestratorAgent._format_agent_results(results, agents_to_call)
+
+            # Return comprehensive response
+            return {
+                "success": True,
+                "query_type": query_type,
+                "agents_used": agents_to_call,
+                "routing": {
+                    "strategy": "orchestrator",
+                    "query_type": query_type,
+                    "agents_selected": agents_to_call
+                },
+                "results": results,
+                "formatted_results": formatted_results,
+                "recommendations": OrchestratorAgent._extract_recommendations(results),
+                "timestamp": datetime.utcnow().isoformat(),
+                "llm_summary": llm_summary
+            }
+
+        except Exception as e:
+            logger.error(f"Orchestrator error: {e}")
+            return create_error_response(f"Orchestrator failed: {str(e)}")
+
+    @staticmethod
+    def _validate_agent_input(agent_name: str, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate and standardize input using unified configuration"""
+        if CONFIG_AVAILABLE:
+            try:
+                return agent_config_service.validate_agent_input(agent_name, input_data)
+            except Exception as e:
+                logger.warning(f"Unified config validation failed for {agent_name}: {e}")
+                return input_data
+        else:
+            # Fallback to existing validation logic
+            return input_data
+
+    @staticmethod
+    def _determine_query_type(request: Dict[str, Any]) -> str:
+        """Determine query type using routing rules"""
+        for rule in OrchestratorAgent.RULES:
+            query_type = rule(request)
+            if query_type:
+                # If routing rule returns a list of agents, convert to appropriate query type
+                if isinstance(query_type, list):
+                    # Map agent lists to query types
+                    if set(query_type) == {"weather_watcher"}:
+                        return "weather_watcher"
+                    elif set(query_type) == {"growth_stage_monitor"}:
+                        return "growth_stage_monitor"
+                    elif set(query_type) == {"irrigation_agent"}:
+                        return "irrigation_agent"
+                    elif set(query_type) == {"fertilizer_agent"}:
+                        return "fertilizer_agent"
+                    elif set(query_type) == {"soil_health_agent"}:
+                        return "soil_health_agent"
+                    elif set(query_type) == {"market_intelligence_agent"}:
+                        return "market_intelligence_agent"
+                    elif set(query_type) == {"task_scheduler_agent"}:
+                        return "task_scheduler_agent"
+                    elif set(query_type) == {"weather_watcher", "growth_stage_monitor"}:
+                        return "weather_only"
+                    elif set(query_type) == {"weather_watcher", "irrigation_agent"}:
+                        return "weather_only"
+                    elif set(query_type) == {"weather_watcher", "fertilizer_agent"}:
+                        return "weather_only"
+                    elif set(query_type) == {"weather_watcher", "soil_health_agent"}:
+                        return "weather_only"
+                    elif set(query_type) == {"weather_watcher", "market_intelligence_agent"}:
+                        return "weather_only"
+                    elif set(query_type) == {"growth_stage_monitor", "irrigation_agent"}:
+                        return "growth_only"
+                    elif set(query_type) == {"growth_stage_monitor", "fertilizer_agent"}:
+                        return "growth_only"
+                    elif set(query_type) == {"growth_stage_monitor", "soil_health_agent"}:
+                        return "growth_only"
+                    elif set(query_type) == {"growth_stage_monitor", "market_intelligence_agent"}:
+                        return "growth_only"
+                    elif set(query_type) == {"irrigation_agent", "fertilizer_agent"}:
+                        return "irrigation_only"
+                    elif set(query_type) == {"irrigation_agent", "soil_health_agent"}:
+                        return "irrigation_only"
+                    elif set(query_type) == {"irrigation_agent", "market_intelligence_agent"}:
+                        return "irrigation_only"
+                    elif set(query_type) == {"fertilizer_agent", "soil_health_agent"}:
+                        return "fertilizer_only"
+                    elif set(query_type) == {"fertilizer_agent", "market_intelligence_agent"}:
+                        return "fertilizer_only"
+                    elif set(query_type) == {"soil_health_agent", "market_intelligence_agent"}:
+                        return "soil_health_only"
+                    elif len(query_type) >= 5:
+                        return "comprehensive_analysis"
+                    else:
+                        return "conversational_query"
+                return query_type
+        return "conversational_query"
+
+    @staticmethod
+    async def _execute_agents(agents_to_call: List[str], request: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute multiple agents and return results"""
+        results = {}
+        
+        for agent_name in agents_to_call:
+            try:
+                # Validate input using unified configuration
+                validated_input = OrchestratorAgent._validate_agent_input(agent_name, request)
+                
+                # Call the agent
+                if agent_name == "weather_watcher":
+                    result = await OrchestratorAgent._call_weather_agent(validated_input)
+                    logger.info(f"Weather agent raw result: {result}")
+                elif agent_name == "market_intelligence_agent":
+                    result = await OrchestratorAgent._call_market_agent(validated_input)
+                elif agent_name == "task_scheduler_agent":
+                    result = await OrchestratorAgent._call_task_scheduler_agent(validated_input)
+                elif agent_name == "growth_stage_monitor":
+                    result = await OrchestratorAgent._call_growth_agent(validated_input)
+                elif agent_name == "irrigation_agent":
+                    result = await OrchestratorAgent._call_irrigation_agent(validated_input)
+                elif agent_name == "fertilizer_agent":
+                    result = await OrchestratorAgent._call_fertilizer_agent(validated_input)
+                elif agent_name == "soil_health_agent":
+                    result = await OrchestratorAgent._call_soil_health_agent(validated_input)
+                else:
+                    result = {"error": f"Agent {agent_name} not implemented"}
+                
+                results[agent_name] = result
+                
+            except Exception as e:
+                logger.error(f"Error calling {agent_name}: {e}")
+                results[agent_name] = {"error": str(e)}
+        
+        return results
+
+    @staticmethod
+    async def _call_weather_agent(request: Dict[str, Any]) -> Dict[str, Any]:
+        """Call weather watcher agent"""
+        try:
+            location = request.get("location", {})
+            # Get latitude and longitude from either location or coordinates
+            lat = location.get("latitude") or location.get("coordinates", {}).get("latitude")
+            lon = location.get("longitude") or location.get("coordinates", {}).get("longitude")
+            
+            # Try to get coordinates from nested structures
+            if not lat or not lon:
+                # Check if location has coordinates nested further
+                if "coordinates" in location and isinstance(location["coordinates"], dict):
+                    lat = location["coordinates"].get("latitude")
+                    lon = location["coordinates"].get("longitude")
+            
+            if lat is None or lon is None:
+                return OrchestratorAgent._missing_inputs(
+                    agent="weather_watcher",
+                    missing_fields=["location.latitude", "location.longitude"],
+                    questions=[
+                        "What is your farm location (village/city + state)?",
+                        "If possible, share GPS coordinates (latitude, longitude).",
+                    ],
+                )
+            
+            weather_service = WeatherService()
+            weather_data = weather_service.get_weather(lat, lon)
+            
+            if weather_data:
+                return {
+                    "success": True,
+                    "data": {
+                        "location": location,
+                        "weather": {
+                            "temperature": weather_data.temperature,
+                            "humidity": weather_data.humidity,
+                            "wind_speed": weather_data.wind_speed,
+                            "weather_condition": weather_data.weather_condition,
+                            "rainfall_mm": weather_data.rainfall_mm
+                        },
+                        "alerts": [],
+                        "analysis_summary": f"Weather analyzed for coordinates ({lat}, {lon})"
+                    }
+                }
+            else:
+                return {"success": False, "error": "Weather data not available"}
+                
+        except Exception as e:
+            logger.error(f"Weather agent error: {e}")
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    def _extract_crop_from_query(query: str) -> Optional[str]:
+        """Extract crop name from query"""
+        if not query:
+            return None
+        
+        query_lower = query.lower()
+        
+        # Common crops
+        crop_keywords = {
+            "cotton": ["cotton"],
+            "wheat": ["wheat"],
+            "rice": ["rice"],
+            "maize": ["maize", "corn"],
+            "sugarcane": ["sugarcane"],
+            "soybean": ["soybean"],
+            "groundnut": ["groundnut", "peanut"],
+            "chickpea": ["chickpea", "gram"],
+            "lentil": ["lentil", "dal"],
+            "turmeric": ["turmeric"],
+            "chili": ["chili", "pepper"],
+            "onion": ["onion"],
+            "potato": ["potato"],
+            "tomato": ["tomato"],
+            "cucumber": ["cucumber"],
+            "carrot": ["carrot"]
+        }
+        
+        for crop, keywords in crop_keywords.items():
+            for keyword in keywords:
+                if keyword in query_lower:
+                    return crop
+        
+        return None
+
+    @staticmethod
+    async def _call_market_agent(request: Dict[str, Any]) -> Dict[str, Any]:
+        """Call market intelligence agent"""
+        try:
+            market_agent = MarketIntelligenceAgent()
+            crop_info = request.get("crop_info", {})
+            location = request.get("location", {})
+            query = request.get("query", "")
+            
+            # Try to extract crop from query if not in crop_info
+            crop_name = crop_info.get("name")
+            if not crop_name:
+                crop_name = OrchestratorAgent._extract_crop_from_query(query)
+            if not crop_name:
+                return OrchestratorAgent._missing_inputs(
+                    agent="market_intelligence_agent",
+                    missing_fields=["crop_info.name"],
+                    questions=[
+                        "Which crop do you want market/mandi prices for? (e.g., wheat, onion, tomato)",
+                    ],
+                )
+
+            state = location.get("state")
+            if not state:
+                return OrchestratorAgent._missing_inputs(
+                    agent="market_intelligence_agent",
+                    missing_fields=["location.state"],
+                    questions=[
+                        "Which state is your farm/market in? (e.g., Gujarat, Maharashtra)",
+                    ],
+                )
+            
+            agent_input: Dict[str, Any] = {
+                "query": query,
+                "context": {
+                    "crops": [crop_name],
+                    "location": location,
+                    "farm_location": location,
+                    "crop_info": crop_info,
+                },
+            }
+            return await market_agent.handle(agent_input)
+            
+        except Exception as e:
+            logger.error(f"Market agent error: {e}")
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    async def _call_task_scheduler_agent(request: Dict[str, Any]) -> Dict[str, Any]:
+        """Call task scheduler agent"""
+        try:
+            scheduler_agent = TaskSchedulerAgent()
+            crop_info = request.get("crop_info", {})
+            location = request.get("location", {})
+
+            crop_name = crop_info.get("name") if isinstance(crop_info, dict) else None
+            growth_stage = crop_info.get("growth_stage") if isinstance(crop_info, dict) else None
+
+            if not crop_name:
+                return {"success": False, "error": "Missing required input: crop_info.name"}
+            if not growth_stage:
+                return {"success": False, "error": "Missing required input: crop_info.growth_stage"}
+            if not isinstance(location, dict) or not location:
+                return {"success": False, "error": "Missing required input: location"}
+            
+            agent_input: Dict[str, Any] = {
+                "query": request.get("query") or "schedule_tasks",
+                "context": {
+                    "location": location,
+                    "farm_location": location,
+                    "crop_info": {"name": crop_name, "growth_stage": growth_stage},
+                    "resources": request.get("resources", {}) or {},
+                },
+            }
+            return await scheduler_agent.handle(agent_input)
+            
+        except Exception as e:
+            logger.error(f"Task scheduler agent error: {e}")
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    async def _call_growth_agent(request: Dict[str, Any]) -> Dict[str, Any]:
+        """Call growth stage monitor agent"""
+        try:
+            farmer_id = request.get("farmer_id")
+            field_id = request.get("field_id")
+            crop = request.get("crop") or {}
+            location = request.get("location") or {}
+
+            lat = location.get("latitude") or (location.get("coordinates") or {}).get("latitude")
+            lon = location.get("longitude") or (location.get("coordinates") or {}).get("longitude")
+
+            crop_name = None
+            if isinstance(crop, dict):
+                crop_name = crop.get("crop_name") or crop.get("name")
+
+            if not farmer_id:
+                return {"success": False, "error": "Missing required input: farmer_id"}
+            if not field_id:
+                return {"success": False, "error": "Missing required input: field_id"}
+            if not crop_name:
+                return {"success": False, "error": "Missing required input: crop.crop_name"}
+            if lat is None or lon is None:
+                return {"success": False, "error": "Missing required input: location.latitude/location.longitude"}
+
+            agent = GrowthStageMonitorAgent()
+            agent_input: Dict[str, Any] = {
+                "query": request.get("query") or "growth_stage_monitor",
+                "context": {
+                    "farmer_id": str(farmer_id),
+                    "field_id": str(field_id),
+                    "crop": {"crop_name": str(crop_name)},
+                    "location": {
+                        "latitude": float(lat),
+                        "longitude": float(lon),
+                        "district": location.get("district"),
+                        "state": location.get("state"),
+                        "country": location.get("country", "India"),
+                    },
+                    "images": request.get("images") or [],
+                    "triggered_at": request.get("timestamp") or request.get("triggered_at") or datetime.utcnow().isoformat(),
+                },
+            }
+
+            return await agent.handle(agent_input)
+            
+        except Exception as e:
+            logger.error(f"Growth agent error: {e}")
+            return {"error": str(e)}
+
+    @staticmethod
+    async def _call_irrigation_agent(request: Dict[str, Any]) -> Dict[str, Any]:
+        """Call irrigation agent"""
+        try:
+            crop = request.get("crop")
+            growth_stage = request.get("growth_stage")
+            soil_moisture_percent = request.get("soil_moisture_percent")
+            rain_last_3_days_mm = request.get("rain_last_3_days_mm")
+            rain_forecast_next_5_days = request.get("rain_forecast_next_5_days")
+
+            crop_name: Optional[str] = None
+            if isinstance(crop, dict):
+                crop_name = crop.get("crop_name") or crop.get("name")
+            elif isinstance(crop, str):
+                crop_name = crop
+
+            missing_fields: List[str] = []
+            questions: List[str] = []
+            if not crop_name:
+                missing_fields.append("crop.crop_name")
+                questions.append("Which crop are you irrigating? (e.g., cotton, wheat, tomato)")
+            if not growth_stage:
+                missing_fields.append("growth_stage")
+                questions.append("What is the crop growth stage? (e.g., sowing, vegetative, flowering, fruiting)")
+            if soil_moisture_percent is None:
+                missing_fields.append("soil_moisture_percent")
+                questions.append("What is your current soil moisture % (from sensor or manual estimate)?")
+
+            if missing_fields:
+                return OrchestratorAgent._missing_inputs(
+                    agent="irrigation_agent",
+                    missing_fields=missing_fields,
+                    questions=questions,
+                )
+
+            try:
+                sm = float(soil_moisture_percent)
+            except Exception:
+                return {"success": False, "error": "Invalid soil_moisture_percent; expected a number"}
+
+            # Rule-based interpretation derived from inputs only (no fabricated schedules)
+            if sm < 35:
+                status = "low"
+                recommendation = "Soil moisture is low. Irrigate soon to avoid stress."
+                water_requirement = "high"
+            elif sm < 50:
+                status = "moderate"
+                recommendation = "Soil moisture is moderate. Plan irrigation within 1-2 days depending on weather."
+                water_requirement = "medium"
+            elif sm <= 70:
+                status = "adequate"
+                recommendation = "Soil moisture is adequate. Avoid over-irrigation and monitor moisture daily."
+                water_requirement = "low"
+            else:
+                status = "high"
+                recommendation = "Soil moisture is high. Avoid irrigation and ensure proper drainage."
+                water_requirement = "none"
+
+            rain_note = None
+            if rain_last_3_days_mm is not None:
+                try:
+                    r3 = float(rain_last_3_days_mm)
+                    if r3 >= 10:
+                        rain_note = "Recent rainfall is significant; reduce irrigation."
+                except Exception:
+                    pass
+
+            forecast_note = None
+            if isinstance(rain_forecast_next_5_days, list) and rain_forecast_next_5_days:
+                forecast_note = "Rain is forecast soon; adjust irrigation accordingly."
+
+            notes = [n for n in [rain_note, forecast_note] if n]
+
+            return {
+                "success": True,
+                "data": {
+                    "crop": crop_name,
+                    "growth_stage": growth_stage,
+                    "status": status,
+                    "recommendation": recommendation,
+                    "analysis": {
+                        "soil_moisture_percent": sm,
+                        "water_requirement": water_requirement,
+                        "rain_last_3_days_mm": rain_last_3_days_mm,
+                        "rain_forecast_next_5_days": rain_forecast_next_5_days,
+                        "notes": notes,
+                    },
+                },
+            }
+            
+        except Exception as e:
+            logger.error(f"Irrigation agent error: {e}")
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    async def _call_fertilizer_agent(request: Dict[str, Any]) -> Dict[str, Any]:
+        """Call fertilizer agent"""
+        try:
+            # Use the legacy orchestrator-grade fertilizer advisor (no LLM, no fabrication)
+            from farmxpert.agents.agronomy.app_agents.fertilizer_agent.fertilizer_advisor import fertilizer_agent as legacy_fertilizer_agent
+
+            crop = request.get("crop")
+            growth_stage = request.get("growth_stage")
+            area_acres = request.get("area_acres")
+            soil = request.get("soil")
+            recent_weather = request.get("recent_weather")
+
+            crop_name: Optional[str] = None
+            if isinstance(crop, dict):
+                crop_name = crop.get("crop_name") or crop.get("name")
+            elif isinstance(crop, str):
+                crop_name = crop
+
+            missing_fields: List[str] = []
+            questions: List[str] = []
+
+            if not crop_name:
+                missing_fields.append("crop.crop_name")
+                questions.append("Which crop do you want fertilizer advice for? (e.g., wheat, cotton, tomato)")
+            if not growth_stage:
+                missing_fields.append("growth_stage")
+                questions.append("What is the crop growth stage? (e.g., sowing, vegetative, flowering, fruiting)")
+            if area_acres is None:
+                missing_fields.append("area_acres")
+                questions.append("What is the area (in acres) for which you need the fertilizer plan?")
+
+            # Soil NPK in kg/acre is required by the fertilizer advisor
+            n = p = k = None
+            if isinstance(soil, dict):
+                n = soil.get("n")
+                p = soil.get("p")
+                k = soil.get("k")
+            if n is None or p is None or k is None:
+                missing_fields.append("soil.n/soil.p/soil.k")
+                questions.append("Share your soil N, P, K values (kg/acre). If you have soil test report, paste N/P/K numbers.")
+
+            # Recent weather required by the fertilizer advisor
+            rain_last_3_days_mm = None
+            forecast_next_5_days = None
+            if isinstance(recent_weather, dict):
+                rain_last_3_days_mm = recent_weather.get("rain_last_3_days_mm")
+                forecast_next_5_days = recent_weather.get("forecast_next_5_days")
+            if rain_last_3_days_mm is None:
+                missing_fields.append("recent_weather.rain_last_3_days_mm")
+                questions.append("How much rain did you receive in the last 3 days (mm), approx?")
+            if forecast_next_5_days is None:
+                missing_fields.append("recent_weather.forecast_next_5_days")
+                questions.append("Do you expect rain in the next 5 days? If yes, share forecast (e.g., ['rain', 'no rain', ...]).")
+
+            if missing_fields:
+                return OrchestratorAgent._missing_inputs(
+                    agent="fertilizer_agent",
+                    missing_fields=missing_fields,
+                    questions=questions,
+                )
+
+            try:
+                area_acres_f = float(area_acres)
+                n_f = float(n)
+                p_f = float(p)
+                k_f = float(k)
+                rain_f = float(rain_last_3_days_mm)
+            except Exception:
+                return {"success": False, "error": "Invalid numeric input for fertilizer agent; expected numbers for area_acres, soil.n/p/k, rain_last_3_days_mm"}
+
+            payload = {
+                "crop": str(crop_name).lower(),
+                "growth_stage": str(growth_stage),
+                "area_acres": area_acres_f,
+                "soil": {"n": n_f, "p": p_f, "k": k_f},
+                "recent_weather": {
+                    "rain_last_3_days_mm": rain_f,
+                    "forecast_next_5_days": forecast_next_5_days if isinstance(forecast_next_5_days, list) else [str(forecast_next_5_days)],
+                },
+            }
+
+            out = legacy_fertilizer_agent(payload)
+            if not isinstance(out, dict):
+                return {"success": False, "error": "Fertilizer agent returned invalid output"}
+
+            if out.get("status") == "blocked":
+                return {"success": False, "error": "Blocked", "data": out}
+            return {"success": True, "data": out}
+            
+        except Exception as e:
+            logger.error(f"Fertilizer agent error: {e}")
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    async def _call_soil_health_agent(request: Dict[str, Any]) -> Dict[str, Any]:
+        """Call soil health agent"""
+        try:
+            agent = SoilHealthAgent()
+            agent_input: Dict[str, Any] = {
+                "query": request.get("query") or "soil_health",
+                "context": request,
+            }
+            return await agent.handle(agent_input)
+            
+        except Exception as e:
+            logger.error(f"Soil health agent error: {e}")
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    def _enrich_with_dynamic_data(request: Dict[str, Any]) -> Dict[str, Any]:
+        """Enrich request with dynamic data"""
+        try:
+            enriched = request.copy()
+            
+            # Add dynamic data only if available; do not fabricate defaults.
+            if dynamic_data_service and hasattr(dynamic_data_service, 'get_current_data'):
+                try:
+                    dynamic_data = dynamic_data_service.get_current_data()
+                    if dynamic_data:
+                        enriched["dynamic_data"] = dynamic_data
+                except Exception as e:
+                    logger.warning(f"Dynamic data enrichment failed: {e}")
+            
+            return enriched
+            
+        except Exception as e:
+            logger.warning(f"Dynamic data enrichment failed: {e}")
+            return request
+
+    @staticmethod
+    async def _generate_llm_summary(
+        request: Dict[str, Any],
+        results: Dict[str, Any],
+        query_type: str,
+        system_prompt: Optional[str] = None,
+    ) -> str:
+        """Generate LLM summary of agent results"""
+        try:
+            # Extract agent data for LLM summary
+            weather_analysis = results.get("weather_watcher", {}).get("data")
+            growth_analysis = results.get("growth_stage_monitor", {}).get("data")
+            irrigation_analysis = results.get("irrigation_agent", {}).get("data")
+            fertilizer_analysis = results.get("fertilizer_agent", {}).get("data")
+            soil_health_analysis = results.get("soil_health_agent", {}).get("data")
+            market_intelligence_analysis = results.get("market_intelligence_agent", {}).get("data")
+            task_scheduler_analysis = results.get("task_scheduler_agent", {}).get("data")
+            
+            # Call LLM service (not async)
+            summary = OrchestratorLLMService.generate_summary(
+                query=request.get("query"),
+                weather_analysis=weather_analysis,
+                growth_analysis=growth_analysis,
+                irrigation_analysis=irrigation_analysis,
+                fertilizer_analysis=fertilizer_analysis,
+                soil_health_analysis=soil_health_analysis,
+                market_intelligence_analysis=market_intelligence_analysis,
+                task_scheduler_analysis=task_scheduler_analysis,
+                system_prompt=system_prompt,
+            )
+            return summary or "Unable to generate summary"
+        except Exception as e:
+            logger.error(f"LLM summary generation failed: {e}")
+            return "Summary generation failed"
+
+    @staticmethod
+    def _format_agent_results(results: Dict[str, Any], agents_used: List[str]) -> Dict[str, Any]:
+        """Format agent results for better frontend display"""
+        formatted: Dict[str, Any] = {}
+
+        agent_display_names = {
+            'weather_watcher': 'Weather Watcher',
+            'growth_stage_monitor': 'Growth Stage Monitor',
+            'soil_health_agent': 'Soil Health',
+            'irrigation_agent': 'Irrigation Agent',
+            'fertilizer_agent': 'Fertilizer Agent',
+            'market_intelligence_agent': 'Market Intelligence',
+            'task_scheduler_agent': 'Task Scheduler'
+        }
+
+        # Build an ordered list: keep user-requested order, then include any extra results
+        order: List[str] = []
+        if agents_used:
+            order.extend(agents_used)
+        for k in results.keys():
+            if k not in order:
+                order.append(k)
+
+        for agent in order:
+            result = results.get(agent, {})
+            display_name = agent_display_names.get(agent, agent)
+
+            # Determine status
+            status = "success" if not result.get("error") and result.get("success", True) else "error"
+
+            # Default fields
+            summary = None
+            metrics: Dict[str, Any] = {}
+            raw = result.get("data") if isinstance(result, dict) else None
+
+            # Per-agent formatting
+            try:
+                if agent == "weather_watcher" and raw:
+                    weather = raw.get('weather', {})
+                    temp = weather.get('temperature')
+                    cond = weather.get('weather_condition') or weather.get('description')
+                    summary = f"Temperature: {temp}°C, {cond}"
+                    metrics = {
+                        "Humidity": f"{weather.get('humidity')}%",
+                        "Wind Speed": f"{weather.get('wind_speed')} m/s",
+                        "Rainfall": f"{weather.get('rainfall_mm')} mm"
+                    }
+
+                elif agent == "growth_stage_monitor" and raw:
+                    crop_info = raw.get('crop_info', {})
+                    stage = crop_info.get('growth_stage') or raw.get('stage_assessment', {}).get('current_stage')
+                    health = crop_info.get('health_status') or raw.get('health_status', {}).get('status')
+                    summary = f"Crop: {crop_info.get('crop_name', crop_info.get('name', 'Unknown'))} — Stage: {stage}"
+                    if raw.get('health_status'):
+                        metrics["Health Score"] = raw.get('health_status', {}).get('overall_score')
+
+                elif agent == "irrigation_agent" and raw:
+                    summary = raw.get('recommendation') or raw.get('status') or "Irrigation analysis complete"
+                    analysis = raw.get('analysis', {})
+                    if analysis:
+                        metrics["Soil Moisture"] = analysis.get('soil_moisture')
+                        metrics["Water Requirement"] = analysis.get('water_requirement')
+
+                elif agent == "fertilizer_agent" and raw:
+                    summary = raw.get('recommendation') or raw.get('status') or "Fertilizer analysis complete"
+                    if raw.get('analysis'):
+                        metrics.update(raw.get('analysis', {}))
+
+                elif agent == "soil_health_agent" and raw:
+                    # Handle both flat and nested structures
+                    soil = raw.get('analysis', {}) or raw.get('soil_metrics', {}) or raw
+                    summary = f"Soil health score: {raw.get('health_score', soil.get('health_score', 'N/A'))}"
+                    metrics = {
+                        "pH": soil.get('ph'),
+                        "Moisture": soil.get('moisture'),
+                        "Organic Matter": soil.get('organic_matter')
+                    }
+
+                elif agent == "market_intelligence_agent" and raw:
+                    # Support multiple market response shapes
+                    market = raw.get('market_data') or raw.get('analysis') or raw
+                    crop = market.get('crop') or raw.get('crop') or "Unknown"
+                    price = market.get('current_price') or market.get('best_price') or market.get('avg_price')
+                    trend = market.get('price_trend') or market.get('trend') or 'N/A'
+                    summary = f"{crop} — Price: ₹{price if price is not None else 'N/A'}"
+                    metrics = {
+                        "Current Price": price,
+                        "Trend": trend,
+                        "Confidence": market.get('confidence')
+                    }
+
+                elif agent == "task_scheduler_agent" and raw:
+                    tasks = raw.get('scheduled_tasks') or raw.get('tasks_for_today') or []
+                    summary = raw.get('summary') or f"{len(tasks)} tasks scheduled for today"
+                    if tasks:
+                        # Extract and format task details for metrics
+                        high_priority = sum(1 for t in tasks if t.get('priority') == 'High')
+                        medium_priority = sum(1 for t in tasks if t.get('priority') == 'Medium')
+                        metrics = {
+                            "Total Tasks": len(tasks),
+                            "High Priority": high_priority,
+                            "Medium Priority": medium_priority
+                        }
+                        # Add first few task names
+                        task_names = [t.get('task', f"Task {i+1}") for i, t in enumerate(tasks[:2])]
+                        if task_names:
+                            metrics["Next Tasks"] = " → ".join(task_names)
+
+                else:
+                    # Generic fallback when agent-specific parsing not defined
+                    if isinstance(raw, dict):
+                        # Try to find something useful
+                        if 'summary' in raw:
+                            summary = raw.get('summary')
+                        elif 'analysis_summary' in raw:
+                            summary = raw.get('analysis_summary')
+                        elif 'message' in raw:
+                            summary = raw.get('message')
+                        else:
+                            summary = None
+                    else:
+                        summary = result.get('error') if result.get('error') else str(raw)
+            except Exception as e:
+                summary = f"Parsing error: {e}"
+                status = "error"
+
+            formatted[agent] = {
+                "agent": agent,
+                "displayName": display_name,
+                "status": status,
+                "summary": summary,
+                "metrics": metrics if metrics else None,
+                "raw": raw,
+                "timestamp": result.get('timestamp') or None,
+                "error": result.get('error') if result.get('error') else None
+            }
+
+        # If more than one agent, return as ordered list as well for easy frontend rendering
+        ordered_list = [formatted[a] for a in order if a in formatted]
+        return {"by_agent": formatted, "ordered": ordered_list}
+
+    @staticmethod
+    def _extract_recommendations(results: Dict[str, Any]) -> List[str]:
+        """Extract recommendations from agent results"""
+        recommendations = []
+        
+        for agent_name, result in results.items():
+            if isinstance(result, dict) and "recommendations" in result:
+                agent_recommendations = result["recommendations"]
+                if isinstance(agent_recommendations, list):
+                    recommendations.extend(agent_recommendations)
+        
+        return recommendations

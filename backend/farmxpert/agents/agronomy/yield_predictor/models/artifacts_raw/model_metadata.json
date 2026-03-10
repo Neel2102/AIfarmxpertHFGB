@@ -1,0 +1,29 @@
+{
+  "config": {
+    "data_path": "data\\crop_production.csv",
+    "artifacts_dir": "models/artifacts_raw",
+    "district_encoding": "raw",
+    "log_target": true,
+    "test_years": 3,
+    "random_seed": 42,
+    "iterations": 2000,
+    "depth": 8,
+    "learning_rate": 0.05,
+    "l2_leaf_reg": 5.0
+  },
+  "feature_cols": [
+    "State_Name",
+    "District_Name",
+    "Crop",
+    "Season",
+    "Crop_Year",
+    "Area"
+  ],
+  "cat_features": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "district_freq_map": null
+}

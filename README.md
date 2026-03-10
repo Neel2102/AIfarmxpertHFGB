@@ -26,12 +26,19 @@ FarmXpert is an AI-powered farming advisory system that uses Gemini API and real
                         └─────────────────┘     └─────────────────┘
 ```
 
-## �🚀 Quick Start
+## 🚀 Quick Start
 
-### 1. Backend Setup
-
+### Option 1: One-Click Launcher (Windows)
 ```bash
-cd farmxpert
+# Run from repository root - starts both backend and frontend
+start.bat
+```
+
+### Option 2: Manual Start
+
+**Backend:**
+```bash
+cd backend/farmxpert
 
 # Install dependencies
 pip install -r requirements.txt
@@ -47,8 +54,7 @@ python scripts/init_db.py
 python start.py
 ```
 
-### 2. Frontend Setup
-
+**Frontend:**
 ```bash
 cd frontend
 npm install
@@ -85,11 +91,9 @@ DATABASE_URL=postgresql://user:password@localhost/farmxpert_db
 ## 🎯 Usage
 
 ### Local Development
-1. Start backend: `python start.py`
-2. Start frontend: `cd frontend && npm start`
-3. Open http://localhost:3000
-4. View farm dashboard with real data
-5. Use AI agents for farming advice
+1. Open http://localhost:3000
+2. View farm dashboard with real data
+3. Use AI agents for farming advice
 
 ### Production Deployment
 For production deployment, we recommend using:
@@ -112,21 +116,25 @@ For production deployment, we recommend using:
 ## 📁 Project Structure
 
 ```
-farmxpert/
+backend/
+├── farmxpert/        # FastAPI + Python package
 ├── agents/           # AI Agent implementations
-├── core/            # Core system components
-├── models/          # Database models
-├── repositories/    # Data access layer
-├── services/        # Gemini API service
-├── interfaces/      # FastAPI application
-├── frontend/        # React frontend
-├── edge/            # IoT edge device code
-│   ├── sensors/     # Sensor drivers and interfaces
-│   └── device_manager.py  # Main edge device controller
-├── scripts/         # Database initialization
-└── docs/            # Documentation
-    ├── api/         # API documentation
-    └── hardware/    # Hardware setup guides
+├── core/             # Core system components
+├── models/           # Database models
+├── repositories/     # Data access layer
+├── services/         # Gemini API service
+├── interfaces/       # FastAPI application
+├── scripts/          # Database initialization
+└── docs/             # Backend docs
+
+frontend/             # React frontend
+
+edge/                 # IoT edge device code
+├── sensors/          # Sensor drivers and interfaces
+└── device_manager.py # Main edge device controller
+
+scripts/              # Repo-level scripts
+docs/                 # Repo-level documentation
 ```
 
 ## 📶 Network Requirements

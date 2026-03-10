@@ -1,0 +1,39 @@
+default_plan:
+  - agent: soil_health_agent
+  - agent: weather_watcher_agent
+  - agent: market_intelligence_agent
+  - agent: crop_selector_agent
+  - agent: seed_selection_agent
+  - agent: growth_stage_monitor_agent
+
+workflow_templates:
+  crop_planning:
+    - soil_health_agent
+    - weather_watcher_agent
+    - market_intelligence_agent
+    - crop_selector_agent
+    - seed_selection_agent
+    - farm_layout_mapping_agent
+    
+  farm_operations:
+    - task_scheduler_agent
+    - machinery_equipment_agent
+    - fertilizer_advisor_agent
+    - irrigation_planner_agent
+    
+  harvest_planning:
+    - yield_predictor_agent
+    - market_intelligence_agent
+    - logistics_storage_agent
+    - profit_optimization_agent
+    
+  risk_management:
+    - crop_insurance_risk_agent
+    - pest_disease_diagnostic_agent
+    - weather_watcher_agent
+    
+  farmer_support:
+    - farmer_coach_agent
+    - compliance_certification_agent
+    - community_engagement_agent
+

@@ -1,6 +1,6 @@
 import re
 
-file_path = r'c:\Users\neels\OneDrive\Desktop\farmxpert\AIfarmxpert\farmxpert\core\super_agent.py'
+file_path = r'c:\Users\neels\OneDrive\Desktop\farmxpert\AIfarmxpertHFGB\backend\farmxpert\core\super_agent.py'
 
 with open(file_path, 'rb') as f:
     content = f.read()

@@ -1,0 +1,182 @@
+# ============================================================
+# FarmXpert — Docker Compose (Enterprise Edition)
+# ============================================================
+# Services:
+#   1. PostgreSQL 16 + pgvector (primary DB)
+#   2. PgBouncer (connection pooling)
+#   3. FastAPI Backend (port 8000)
+#   4. React Frontend (port 3000)
+# Usage:
+#   docker compose up -d
+#   psql -h localhost -p 5432 -U postgres farmxpert  ← via PgBouncer
+#   docker compose exec db psql -U postgres -d farmxpert  ← direct
+#   Frontend: http://localhost:3000
+#   Backend API: http://localhost:8000
+# ============================================================
+
+networks:
+  farmxpert-network:
+    driver: bridge
+
+services:
+  # ────────────────────────────────────────────
+  # PostgreSQL 16 + pgvector (Primary Database)
+  # ────────────────────────────────────────────
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: farmxpert_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: farmxpert
+      POSTGRES_HOST_AUTH_METHOD: md5
+      POSTGRES_INITDB_ARGS: "--auth-host=md5"
+    ports:
+      - "5433:5432"       # direct PG access (admin/migrations only)
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./database/create_partitions.sql:/docker-entrypoint-initdb.d/02_partitions.sql
+      - ./database/seed_agents.sql:/docker-entrypoint-initdb.d/03_seed.sql
+    command: >
+      postgres
+        -c shared_buffers=256MB
+        -c work_mem=16MB
+        -c maintenance_work_mem=128MB
+        -c effective_cache_size=512MB
+        -c max_connections=200
+        -c wal_buffers=16MB
+        -c checkpoint_completion_target=0.9
+        -c random_page_cost=1.1
+        -c password_encryption=md5
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d farmxpert"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - farmxpert-network
+
+  # ────────────────────────────────────────────
+  # PgBouncer (Connection Pooling)
+  # ────────────────────────────────────────────
+  # Transaction pooling mode: each transaction gets a connection,
+  # released back to pool after COMMIT/ROLLBACK.
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: farmxpert_pgbouncer
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgres://postgres:password@db:5432/farmxpert"
+      AUTH_TYPE: md5
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 50
+      MIN_POOL_SIZE: 10
+      RESERVE_POOL_SIZE: 10
+      RESERVE_POOL_TIMEOUT: 3
+      MAX_DB_CONNECTIONS: 100
+      SERVER_RESET_QUERY: "DISCARD ALL"
+      SERVER_CHECK_QUERY: "SELECT 1"
+      SERVER_CHECK_DELAY: 10
+      LOG_CONNECTIONS: 0
+      LOG_DISCONNECTIONS: 0
+      LOG_POOLER_ERRORS: 1
+    ports:
+      - "5432:5432"       # application connects here
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - farmxpert-network
+
+  # ────────────────────────────────────────────
+  # Redis (Caching & Session Storage)
+  # ────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: farmxpert_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - farmxpert-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ────────────────────────────────────────────
+  # FastAPI Backend
+  # ────────────────────────────────────────────
+  backend:
+    build:
+      context: ..
+      dockerfile: farmxpert/Dockerfile
+    container_name: farmxpert_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./.env
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@pgbouncer:5432/farmxpert
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/app
+    depends_on:
+      db:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
+    networks:
+      - farmxpert-network
+    volumes:
+      - ../farmxpert:/app
+      - /app/__pycache__
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: ["uvicorn", "farmxpert.interfaces.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  # ────────────────────────────────────────────
+  # React Frontend
+  # ────────────────────────────────────────────
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile.dev
+    container_name: farmxpert_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - farmxpert-network
+    volumes:
+      - ../../frontend/src:/app/src
+      - ../../frontend/public:/app/public
+      - /app/node_modules
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

@@ -2,16 +2,16 @@ Overall architecture
 
 - High-level: A FastAPI backend orchestrates a suite of domain “agents” (crop planning, operations, supply chain, analytics, support) via an intent-driven workflow engine, with Redis-backed sessions and SQLAlchemy models. A React frontend calls the backend. Configuration and model/LLM services are abstracted behind services/.
 - Key directories:
-  - Backend HTTP API: interfaces/api/ provides the FastAPI app, CORS, logging middleware, and routes for orchestrator, agents, farms, auth, health.
-  - Orchestration core: core/orchestrator/ has FarmOrchestrator, IntentEngine, WorkflowEngine, SessionManager, ResponseSynthesizer.
-  - Agent abstraction: core/base_agent/ defines BaseAgent, AgentInterface, AgentRegistry and an enhanced base with status/context models.
-  - Agents: agents/ grouped by domain (crop planning, farm operations, supply chain, analytics, support).
-  - Config: config/ central settings via Pydantic, DB/Redis factories, and YAML agent workflows.
-  - Models/DB: models/ holds SQLAlchemy base and domain/user models.
-  - Services: services/ includes LLM, auth/JWT, email, agent config, and utility tools.
+  - Backend HTTP API: backend/farmxpert/interfaces/api/ provides the FastAPI app, CORS, logging middleware, and routes for orchestrator, agents, farms, auth, health.
+  - Orchestration core: backend/farmxpert/core/orchestrator/ has FarmOrchestrator, IntentEngine, WorkflowEngine, SessionManager, ResponseSynthesizer.
+  - Agent abstraction: backend/farmxpert/core/base_agent/ defines BaseAgent, AgentInterface, AgentRegistry and an enhanced base with status/context models.
+  - Agents: backend/farmxpert/agents/ grouped by domain (crop planning, farm operations, supply chain, analytics, support).
+  - Config: backend/farmxpert/config/ central settings via Pydantic, DB/Redis factories, and YAML agent workflows.
+  - Models/DB: backend/farmxpert/models/ holds SQLAlchemy base and domain/user models.
+  - Services: backend/farmxpert/services/ includes LLM, auth/JWT, email, agent config, and utility tools.
   - Frontend: frontend/ is a CRA React app, proxied to the backend.
-  - Start scripts: start.py boots the API; start-frontend.py boots the React dev server.
-  - Migrations: alembic/ setup and initial migration.
+  - Start scripts: backend/farmxpert/start.py boots the API; backend/farmxpert/start-frontend.py boots the React dev server.
+  - Migrations: backend/farmxpert/alembic/ setup and initial migration.
   - Tests: tests/ unit and integration coverage for API and orchestrator.
 
 
@@ -94,8 +94,8 @@ Dependencies and versioning
 Build and deployment process
 
 - Local run
-  - Backend: python start.py creates .env template if missing, installs Python deps, and runs uvicorn at farmxpert.interfaces.api.main:app (with --reload in dev).
-  - Frontend: python start-frontend.py runs npm install then npm start with CRA dev server (proxy to http://localhost:8000).
+  - Backend: python backend/farmxpert/start.py creates a backend-local .env template if missing, installs Python deps, and runs uvicorn at farmxpert.interfaces.api.main:app (with --reload in dev).
+  - Frontend: python backend/farmxpert/start-frontend.py runs npm install then npm start with CRA dev server from the repo-root frontend/ (proxy to http://localhost:8000).
 - Containers: docker-compose.yml present for containerized dev/prod (configure services accordingly).
 - CI/CD: not included; recommended steps are install deps, run tests, build images, and deploy.
 

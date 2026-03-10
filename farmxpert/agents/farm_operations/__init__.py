@@ -1,1 +1,0 @@
-# Farm operations agents package
