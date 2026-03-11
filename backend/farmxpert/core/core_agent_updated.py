@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from pathlib import Path
 
-import litellm
+import google.generativeai as genai
 from farmxpert.config.settings import settings
 from farmxpert.models.farm_models import Farm, AgentInteraction
 from farmxpert.tools import (
@@ -137,48 +137,116 @@ class CoreAgent:
                 context
             )
             
-            # Call LLM using LiteLLM
+            # ── LLM Call: OpenAI (primary) → Gemini (fallback) ──────────────────────
             self.logger.info(f"Processing request with agent role: {agent_role}")
-            
-            # Set up LiteLLM with Gemini model
-            model_name = f"gemini/{settings.gemini_model}"
+            llm_response: str | None = None
 
-            max_attempts = 3
-            last_error: Exception | None = None
-            response = None
-
-            for attempt in range(max_attempts):
+            # ── Try OpenAI first (if key is configured and primary_llm = openai) ──
+            use_openai = bool(
+                settings.openai_api_key
+                and "placeholder" not in (settings.openai_api_key or "").lower()
+                and settings.primary_llm == "openai"
+            )
+            if use_openai:
                 try:
-                    response = await litellm.acompletion(
-                        model=model_name,
-                        messages=[{"role": "user", "content": enhanced_prompt}],
-                        temperature=settings.gemini_temperature,
-                        max_tokens=settings.gemini_max_output_tokens,
-                        timeout=settings.gemini_request_timeout,
-                    )
-                    last_error = None
-                    break
-                except Exception as e:
-                    last_error = e
-                    if self._is_transient_llm_error(e) and attempt < max_attempts - 1:
-                        delay = 0.6 * (2 ** attempt)
-                        self.logger.warning(f"LiteLLM transient error (attempt {attempt + 1}/{max_attempts}): {e}; retrying in {delay:.1f}s")
-                        await asyncio.sleep(delay)
-                        continue
-                    self.logger.error(f"LiteLLM call failed: {e}")
-                    break
+                    import openai as _openai_sdk
+                    _openai_sdk.api_key = settings.openai_api_key
+                    oai_client = _openai_sdk.AsyncOpenAI(api_key=settings.openai_api_key)
+                    max_oai_attempts = 3
+                    for attempt in range(max_oai_attempts):
+                        try:
+                            oai_resp = await asyncio.wait_for(
+                                oai_client.chat.completions.create(
+                                    model=settings.openai_model,
+                                    messages=[{"role": "user", "content": enhanced_prompt}],
+                                    temperature=settings.openai_temperature,
+                                    max_tokens=settings.openai_max_output_tokens,
+                                ),
+                                timeout=settings.openai_request_timeout,
+                            )
+                            llm_response = oai_resp.choices[0].message.content or ""
+                            llm_response = llm_response.strip()
+                            self.logger.info("OpenAI response received successfully")
+                            break
+                        except Exception as e:
+                            err_str = str(e).lower()
+                            is_rate = "rate" in err_str or "429" in err_str or "quota" in err_str
+                            if is_rate and attempt < max_oai_attempts - 1:
+                                delay = 2.0 * (2 ** attempt)
+                                self.logger.warning(f"OpenAI rate-limit (attempt {attempt + 1}), retrying in {delay}s")
+                                await asyncio.sleep(delay)
+                                continue
+                            self.logger.warning(f"OpenAI call failed (attempt {attempt + 1}): {e}; will try Gemini fallback")
+                            llm_response = None
+                            break
+                except Exception as import_err:
+                    self.logger.warning(f"OpenAI SDK import/init failed: {import_err}; falling back to Gemini")
+                    llm_response = None
 
-            if response is None:
-                if last_error and self._is_transient_llm_error(last_error):
-                    return self._create_error_response(
-                        "The AI model is currently busy (high demand). Please try again in a few seconds.",
-                        start_time,
-                    )
-                return self._create_error_response("I couldn't generate a response right now. Please try again.", start_time)
+            # ── Gemini fallback (or primary if primary_llm = gemini / OpenAI unavailable) ──
+            if llm_response is None:
+                try:
+                    genai.configure(api_key=settings.gemini_api_key or "")
+                    model = genai.GenerativeModel(settings.gemini_model)
+                    generation_config = {
+                        "temperature": settings.gemini_temperature,
+                        "max_output_tokens": settings.gemini_max_output_tokens,
+                    }
+                    max_gemini_attempts = 3
+                    last_gemini_error: Exception | None = None
+                    for attempt in range(max_gemini_attempts):
+                        try:
+                            response = await asyncio.wait_for(
+                                asyncio.to_thread(
+                                    model.generate_content,
+                                    enhanced_prompt,
+                                    generation_config=generation_config,
+                                ),
+                                timeout=settings.gemini_request_timeout,
+                            )
+                            try:
+                                llm_response = response.text.strip()
+                            except Exception:
+                                try:
+                                    llm_response = response.candidates[0].content.parts[0].text.strip()
+                                except Exception:
+                                    llm_response = str(response)
+                            last_gemini_error = None
+                            self.logger.info("Gemini fallback response received successfully")
+                            break
+                        except Exception as e:
+                            last_gemini_error = e
+                            err_str = str(e).lower()
+                            is_rate_limit = (
+                                "quota" in err_str or "rate" in err_str
+                                or "429" in err_str or "resource_exhausted" in err_str
+                            )
+                            if is_rate_limit and attempt < max_gemini_attempts - 1:
+                                delay = 2.0 * (2 ** attempt)
+                                self.logger.warning(f"Gemini rate-limit (attempt {attempt + 1}), retrying in {delay}s")
+                                await asyncio.sleep(delay)
+                                continue
+                            self.logger.error(f"Gemini SDK call failed: {e}")
+                            break
 
-            llm_response = response.choices[0].message.content
-            usage_metadata = response.usage
-            
+                    if llm_response is None and last_gemini_error:
+                        err_str = str(last_gemini_error).lower()
+                        if "quota" in err_str or "rate" in err_str or "429" in err_str:
+                            return self._create_error_response(
+                                "Both AI providers are temporarily rate-limited. Please wait 30 seconds and try again.",
+                                start_time,
+                            )
+                except Exception as gemini_err:
+                    self.logger.error(f"Gemini fallback failed entirely: {gemini_err}")
+
+            if llm_response is None:
+                return self._create_error_response(
+                    "I couldn't generate a response right now. Please try again.", start_time
+                )
+
+            # usage_metadata not directly available from SDK path; safe default
+            usage_metadata = None
+
             if user_id:
                 try:
                     db = get_database_session()

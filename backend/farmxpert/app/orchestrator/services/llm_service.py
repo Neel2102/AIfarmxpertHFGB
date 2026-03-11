@@ -20,8 +20,13 @@ except ImportError:
     GENAI_PACKAGE = "old"
 
 # Load project-level .env for backward compatibility
-_PROJECT_ROOT = Path(__file__).resolve().parents[4]
-load_dotenv(_PROJECT_ROOT / ".env")
+_FILE_PATH = Path(__file__).resolve()
+_PROJECT_ROOT = _FILE_PATH.parents[4]
+if not (_PROJECT_ROOT / ".env").exists():
+    _PROJECT_ROOT = _FILE_PATH.parents[5]
+env_path = _PROJECT_ROOT / ".env"
+logger.info(f"Loading .env from: {env_path} (exists: {env_path.exists()})")
+load_dotenv(env_path)
 
 GEMINI_API_KEY = settings.gemini_api_key or settings.google_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 OPENAI_API_KEY = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
@@ -33,13 +38,28 @@ if GEMINI_API_KEY:
     if GENAI_PACKAGE == "old":
         genai.configure(api_key=GEMINI_API_KEY)
 
-openai_client = None  # We'll ignore OpenAI as requested
+try:
+    from openai import OpenAI
+    if OPENAI_API_KEY:
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    else:
+        openai_client = None
+except ImportError:
+    openai_client = None
 
 SYSTEM_PROMPT = """
-You are FarmXpert Orchestrator Assistant.
-Summarize weather and growth insights clearly and briefly.
-Do not invent data. Use a calm, farmer-friendly tone.
-Avoid emojis and exaggeration.
+You are FarmXpert, a brilliant, empathetic, and highly expert agricultural AI advisor.
+You communicate exactly like a top-tier human consultant—natural, conversational, fluid, and incredibly helpful.
+You have vast knowledge of agronomy, soil science, crop management, and economics.
+
+CRITICAL INSTRUCTION: 
+1. Always use the data provided in 'BEHIND-THE-SCENES AGENT ANALYSIS RESULTS'.
+2. If location, soil type, or crop name are provided in the context, DO NOT ask the farmer for them. 
+3. Acknowledge these specific details (e.g., "Since your farm in [District] has [Soil Type]...") to show you are paying attention.
+4. Your response must be conversational. Never just list data like a robot.
+5. Synthesize the findings into actionable, friendly, and step-by-step guidance.
+6. If the user says something simple like 'hii', respond warmly as a personal advisor would, perhaps mentioning a quick highlight from the current farm status.
+7. Keep responses concise but high-impact. Use a professional yet reassuring tone.
 """
 
 
@@ -56,8 +76,9 @@ class OrchestratorLLMService:
         soil_health_analysis: Optional[Dict[str, Any]] = None,
         market_intelligence_analysis: Optional[Dict[str, Any]] = None,
         task_scheduler_analysis: Optional[Dict[str, Any]] = None,
-        recommendations: List[str] = None,
+        recommendations: Optional[List[str]] = None,
         system_prompt: Optional[str] = None,
+        chat_history: Optional[List[Dict[str, str]]] = None,
     ) -> Optional[str]:
         prompt = OrchestratorLLMService._build_prompt(
             query=query,
@@ -68,14 +89,16 @@ class OrchestratorLLMService:
             soil_health_analysis=soil_health_analysis,
             market_intelligence_analysis=market_intelligence_analysis,
             task_scheduler_analysis=task_scheduler_analysis,
-            recommendations=recommendations or []
+            recommendations=recommendations or [],
+            chat_history=chat_history or []
         )
 
+        # Try Gemini first as requested
         summary = OrchestratorLLMService._call_gemini(prompt, system_prompt=system_prompt)
         if summary:
             return summary
 
-        # Try OpenAI fallback (even though not configured, attempt it)
+        # Fallback to OpenAI
         summary = OrchestratorLLMService._call_openai(prompt)
         if summary:
             return summary
@@ -98,7 +121,7 @@ class OrchestratorLLMService:
         soil_health_analysis: Optional[Dict[str, Any]],
         market_intelligence_analysis: Optional[Dict[str, Any]],
         task_scheduler_analysis: Optional[Dict[str, Any]],
-        recommendations: List[str]
+        recommendations: Optional[List[str]]
     ) -> str:
         """Generate a fallback summary when LLM is unavailable"""
         summaries = []
@@ -132,23 +155,38 @@ class OrchestratorLLMService:
             status = fertilizer_analysis.get('status', 'adequate')
             summaries.append(f"Nutrient levels appear {status}.")
         
+        # Soil Health summary
+        if soil_health_analysis and isinstance(soil_health_analysis, dict):
+            score = soil_health_analysis.get('health_score') or soil_health_analysis.get('analysis', {}).get('health_score', 'N/A')
+            summaries.append(f"Soil health score is {score}.")
+
+        # Task Scheduler summary
+        if task_scheduler_analysis and isinstance(task_scheduler_analysis, dict):
+            tasks = task_scheduler_analysis.get('tasks_for_today') or task_scheduler_analysis.get('scheduled_tasks', [])
+            if tasks:
+                summaries.append(f"You have {len(tasks)} tasks scheduled for today.")
+        
         # Market summary
         if market_intelligence_analysis and isinstance(market_intelligence_analysis, dict):
-            analysis = market_intelligence_analysis.get('analysis', {})
-            if analysis.get('recommended_market'):
-                market = analysis.get('recommended_market', 'local market')
-                price = analysis.get('best_price', 'N/A')
+            # Check multiple potential keys
+            analysis = market_intelligence_analysis.get('analysis', {}) or market_intelligence_analysis
+            market = analysis.get('recommended_market') or analysis.get('best_market')
+            price = analysis.get('best_price') or analysis.get('current_price')
+            if market:
                 summaries.append(f"Best market opportunity: {market} with price around ₹{price}/quintal.")
         
         # Recommendations
         if recommendations:
             summaries.append(f"Key recommendations: {'; '.join(recommendations[:3])}")
         
-        # If we have summaries, join them
+        # If we have summaries, join them with a friendly intro
         if summaries:
-            return " ".join(summaries)
+            intro = "Analysis complete! "
+            if query and ("hi" in query.lower() or "hello" in query.lower()):
+                intro = "Hello! I've analyzed your farm's latest data. "
+            return intro + " ".join(summaries)
         
-        return "Analysis complete. Check the detailed agent results for full information."
+        return "I've processed your request and looked through the agent data, but I couldn't generate a detailed summary at the moment. Please check the individual agent results below for specific insights."
 
     @staticmethod
     def _build_prompt(
@@ -160,7 +198,8 @@ class OrchestratorLLMService:
         soil_health_analysis: Optional[Dict[str, Any]] = None,
         market_intelligence_analysis: Optional[Dict[str, Any]] = None,
         task_scheduler_analysis: Optional[Dict[str, Any]] = None,
-        recommendations: List[str] = None
+        recommendations: Optional[List[str]] = None,
+        chat_history: Optional[List[Dict[str, str]]] = None
     ) -> str:
         # Extract meaningful information from weather analysis
         weather_section = "No weather data available"
@@ -203,19 +242,15 @@ class OrchestratorLLMService:
 
         # Extract meaningful information from irrigation analysis
         irrigation_section = "No irrigation data available"
-        if irrigation_analysis:
-            if hasattr(irrigation_analysis, 'status'):
-                status = irrigation_analysis.status
-                if hasattr(irrigation_analysis, 'recommendation'):
-                    rec = irrigation_analysis.recommendation
-                    irrigation_section = f"Irrigation Status: {status}, Recommendation: {rec}"
-                else:
-                    irrigation_section = f"Irrigation Status: {status}"
-            elif isinstance(irrigation_analysis, dict):
-                status = irrigation_analysis.get('status', 'Unknown')
-                irrigation_section = f"Irrigation Status: {status}"
+        if irrigation_analysis and isinstance(irrigation_analysis, dict):
+            status = irrigation_analysis.get('status', 'Unknown')
+            rec = irrigation_analysis.get('recommendation')
+            if rec:
+                irrigation_section = f"Irrigation Status: {status}, Recommendation: {rec}"
             else:
-                irrigation_section = f"Irrigation analysis available: {type(irrigation_analysis).__name__}"
+                irrigation_section = f"Irrigation Status: {status}"
+        elif irrigation_analysis:
+            irrigation_section = f"Irrigation analysis available: {type(irrigation_analysis).__name__}"
 
         # Extract meaningful information from fertilizer analysis
         fertilizer_section = "No fertilizer data available"
@@ -296,20 +331,37 @@ class OrchestratorLLMService:
                 task_scheduler_section = f"Task scheduling data available: {type(task_scheduler_analysis).__name__}"
 
         rec_text = "\n".join(f"- {r}" for r in (recommendations or [])) if recommendations else "None"
+        
+        # Build conversational memory block
+        history_text = "No previous conversation."
+        if chat_history:
+            history_lines = []
+            for msg in chat_history:
+                role = "Farmer" if msg.get("role") == "user" else "FarmXpert"
+                content = msg.get("content", "").replace("\n", " ")
+                history_lines.append(f"{role}: {content}")
+            history_text = "\n".join(history_lines)
 
         return (
-            f"Farmer's Query: {query or 'N/A'}\n\n"
-            f"Analysis Results:\n"
+            f"--- RECENT CONVERSATION HISTORY ---\n"
+            f"{history_text}\n"
+            f"-----------------------------------\n\n"
+            f"Farmer's Latest Query: {query or 'N/A'}\n\n"
+            f"--- BEHIND-THE-SCENES AGENT ANALYSIS RESULTS ---\n"
             f"Weather: {weather_section}\n"
             f"Crop Growth: {growth_section}\n"
             f"Irrigation: {irrigation_section}\n"
             f"Fertilizer: {fertilizer_section}\n"
             f"Soil Health: {soil_health_section}\n"
             f"Market Intelligence: {market_intelligence_section}\n"
-            f"Task Schedule: {task_scheduler_section}\n\n"
-            f"Recommendations:\n{rec_text}\n\n"
-            "Generate a clear, helpful 2-3 sentence summary for the farmer in simple language. "
-            "Focus on the most important actionable advice. Be encouraging and practical."
+            f"Task Schedule: {task_scheduler_section}\n"
+            f"Recommendations:\n{rec_text}\n"
+            f"------------------------------------------------\n\n"
+            "INSTRUCTIONS:\n"
+            "You just received a new query from the farmer. Review the RECENT CONVERSATION HISTORY to maintain context and flow.\n"
+            "Do NOT just dump the BEHIND-THE-SCENES AGENT ANALYSIS RESULTS to the user. Instead, read them, synthesize them, and craft a brilliantly helpful, natural, and conversational response.\n"
+            "If the user is asking a follow-up question (e.g. 'what about xyz?'), make sure your answer flows naturally from your previous response in the history.\n"
+            "Sound like a genuine, hyper-intelligent farm advisor. Keep it engaging, authoritative, but incredibly accessible."
         )
 
     @staticmethod
@@ -317,10 +369,10 @@ class OrchestratorLLMService:
         """Call Gemini API for LLM summary generation"""
         try:
             if not GEMINI_API_KEY:
-                logger.warning("Gemini API key not configured")
+                logger.error("Gemini API key not configured. Check your .env file.")
                 return None
 
-            # Use specific model to avoid discovery issues
+            # Use Gemini 2.5 Flash as it has available quota and is state-of-the-art
             model_name = "models/gemini-2.5-flash"
             effective_system_prompt = system_prompt or SYSTEM_PROMPT
             
@@ -334,14 +386,20 @@ class OrchestratorLLMService:
                         "system_instruction": effective_system_prompt
                     }
                 )
-                if response.text:
+                if response and hasattr(response, 'text'):
                     return response.text.strip()
             else:
                 # Old package API
-                model = genai.GenerativeModel(
-                    model_name=model_name,
-                    system_instruction=effective_system_prompt
-                )
+                try:
+                    model = genai.GenerativeModel(
+                        model_name=model_name,
+                        system_instruction=effective_system_prompt
+                    )
+                except TypeError:
+                    # Fallback for older google-generativeai versions
+                    model = genai.GenerativeModel(model_name=model_name)
+                    prompt = f"SYSTEM INSTRUCTIONS:\n{effective_system_prompt}\n\nUSER PROMPT:\n{prompt}"
+                    
                 response = model.generate_content(prompt)
                 if getattr(response, "text", None):
                     return response.text.strip()
@@ -372,5 +430,5 @@ class OrchestratorLLMService:
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
-            logger.warning(f"OpenAI summary error: {e}")
+            logger.error(f"OpenAI summary error: {str(e)}")
             return None

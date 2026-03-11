@@ -34,22 +34,31 @@ Always provide accurate growth stage assessments with actionable monitoring reco
             }
         ]
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tools = {
+            "satellite_image_processing": SatelliteImageProcessingTool(),
+            "drone_image_processing": DroneImageProcessingTool(),
+            "growth_stage_prediction": GrowthStagePredictionTool(),
+            "crop": CropTool()
+        }
+
     async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Handle growth stage monitoring using dynamic tools and comprehensive analysis"""
         try:
-            # Get tools from inputs
-            tools = inputs.get("tools", {})
+            # Use self-initialized tools
+            tools = self.tools
             context = inputs.get("context", {})
             query = inputs.get("query", "")
             
             # Extract parameters
-            crop = self._extract_crop_from_query(query) or context.get("crop", "wheat")
-            location = context.get("farm_location", inputs.get("location", "unknown"))
-            planting_date = context.get("planting_date", inputs.get("planting_date", "2024-01-01"))
-            satellite_data = context.get("satellite_data", {})
-            drone_data = context.get("drone_data", {})
-            environmental_data = context.get("environmental_data", {})
-            historical_data = context.get("historical_data", {})
+            crop = self._extract_crop_from_query(query) or context.get("crop") or inputs.get("crop") or "wheat"
+            location = context.get("farm_location") or inputs.get("location") or "unknown"
+            planting_date = context.get("planting_date") or inputs.get("planting_date") or "2024-01-01"
+            satellite_data = context.get("satellite_data") or inputs.get("satellite_data") or {}
+            drone_data = context.get("drone_data") or inputs.get("drone_data") or {}
+            environmental_data = context.get("environmental_data") or inputs.get("environmental_data") or {}
+            historical_data = context.get("historical_data") or inputs.get("historical_data") or {}
             
             # Initialize data containers
             ndvi_analysis_data = {}

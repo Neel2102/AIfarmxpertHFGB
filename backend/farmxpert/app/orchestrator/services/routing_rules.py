@@ -50,8 +50,8 @@ class RoutingRules:
             "cold", "wind", "storm", "drought"
         }
         growth_keywords = {
-            "growth", "stage", "crop health", "plant", "seedling",
-            "flowering", "harvest", "disease", "pest"
+            "growth", "stage", "crop health", "seedling",
+            "flowering", "harvest", "disease", "pest", "sick", "monitor"
         }
         irrigation_keywords = {
             "irrigation", "irrigate", "watering", "sprinkler", "drip", 
@@ -69,11 +69,12 @@ class RoutingRules:
         market_intelligence_keywords = {
             "market", "price", "sell", "revenue", "profit", "cost", "income",
             "mandi", "apmc", "commodity", "trading", "business", "economics",
-            "investment", "return", "yield price", "crop price", "farm income"
+            "investment", "return", "yield price", "crop price", "farm income",
+            "profitable", "best crop"
         }
         task_scheduler_keywords = {
             "task", "schedule", "plan", "today", "tomorrow", "weekly", "daily",
-            "reminder", "reminder", "activity", "work", "job"
+            "reminder", "activity", "work", "job", "season", "sow", "plant", "upcoming"
         }
 
         # Use word boundaries for more precise matching

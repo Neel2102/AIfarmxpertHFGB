@@ -42,23 +42,25 @@ Always provide practical, science-based recommendations with clear implementatio
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        try:
-            from farmxpert.tools.crop_planning.soil_sensor import SoilSensorTool
-            self.iot_soil_tool = SoilSensorTool()
-        except ImportError:
-            self.iot_soil_tool = None
-            self.logger.warning("Could not import IoT SoilSensorTool")
+        self.tools = {
+            "soil": SoilTool(),
+            "amendment_recommendation": AmendmentRecommendationTool(),
+            "lab_test_analyzer": LabTestAnalyzerTool()
+        }
+        self.iot_soil_tool = SoilSensorTool()
 
     async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Handle soil health analysis using dynamic tools and comprehensive analysis with LLM reasoning."""
-        # Get tools from inputs
-        tools = inputs.get("tools", {})
+        # Use self-initialized tools
+        tools = self.tools
         context = inputs.get("context", {})
         query = inputs.get("query", "")
         session_id = inputs.get("session_id")
         
         # Get soil data from various sources
         soil_data = await self._get_soil_data(context, session_id)
+        if not soil_data and inputs.get("soil"):
+            soil_data = inputs.get("soil")
         location = context.get("farm_location", inputs.get("location", "unknown"))
         crop = self._extract_crop_from_query(query) or context.get("crop", "general")
         
@@ -76,13 +78,18 @@ Always provide practical, science-based recommendations with clear implementatio
                 tool_data["iot_readings"] = real_iot_data
                 
                 # Update basic soil_data if likely outdated or missing
-                if real_iot_data:
+                if real_iot_data and soil_data is not None:
+                    if not isinstance(soil_data, dict):
+                        soil_data = {}
                     soil_data["moisture"] = real_iot_data.get("moisture_percent", soil_data.get("moisture"))
                     soil_data["ph"] = real_iot_data.get("ph_level", soil_data.get("ph"))
-                    if "npk" not in soil_data: soil_data["npk"] = {}
-                    soil_data["npk"]["nitrogen"] = real_iot_data.get("nitrogen_mg_kg", soil_data["npk"].get("nitrogen"))
-                    soil_data["npk"]["phosphorus"] = real_iot_data.get("phosphorus_mg_kg", soil_data["npk"].get("phosphorus"))
-                    soil_data["npk"]["potassium"] = real_iot_data.get("potassium_mg_kg", soil_data["npk"].get("potassium"))
+                    if "npk" not in soil_data or not isinstance(soil_data["npk"], dict): 
+                        soil_data["npk"] = {}
+                    
+                    npk_data = soil_data["npk"]
+                    npk_data["nitrogen"] = real_iot_data.get("nitrogen_mg_kg", npk_data.get("nitrogen"))
+                    npk_data["phosphorus"] = real_iot_data.get("phosphorus_mg_kg", npk_data.get("phosphorus"))
+                    npk_data["potassium"] = real_iot_data.get("potassium_mg_kg", npk_data.get("potassium"))
                 
                 self.logger.info("Integrated IoT Soil Sensor data")
             except Exception as e:
@@ -121,13 +128,15 @@ Always provide practical, science-based recommendations with clear implementatio
                     tool_data["analysis_results"][name] = res
         
         # --- 3. INJECT INTO LLM CONTEXT ---
-        inputs["additional_data"] = inputs.get("additional_data", {})
+        if "additional_data" not in inputs:
+            inputs["additional_data"] = {}
         inputs["additional_data"]["soil_analysis_tool_results"] = tool_data
         
         # Ensure updated soil data is reflected in context
         inputs["soil"] = soil_data 
-        if "context" in inputs:
-            inputs["context"]["soil_data"] = soil_data
+        if isinstance(context, dict):
+            context["soil_data"] = soil_data
+            inputs["context"] = context
 
         # --- 4. EXECUTE WITH INTELLIGENT AGENT ---
         return await self._handle_with_llm(inputs)

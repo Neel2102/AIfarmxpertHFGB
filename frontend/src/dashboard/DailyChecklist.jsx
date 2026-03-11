@@ -17,7 +17,8 @@ const DailyChecklist = () => {
       setError(null);
     } catch (err) {
       console.error('Failed to fetch tasks:', err);
-      setError('Could not load your daily tasks.');
+      setTasks([]);
+      setError(null);
     } finally {
       setLoading(false);
     }

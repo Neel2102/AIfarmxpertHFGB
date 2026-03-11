@@ -118,69 +118,32 @@ def _safe_list_str(items: Any, max_items: int = 4) -> List[str]:
 
 
 def _build_farmer_response_text(agent_name: str, response_text: str, payload: Dict[str, Any]) -> str:
-    """Normalize agent responses into a consistent, farmer-friendly format.
+    """Pass through the agent's natural language response, appending real
+    recommendations / warnings only when they are meaningful and non-empty.
+    Does NOT wrap in boilerplate headers or hardcoded question prompts."""
 
-    This is deterministic (no extra LLM call) and reduces one-liner / repetitive outputs.
-    """
     base = (response_text or "").strip()
+    if not base:
+        base = "I can help with that. Could you share a bit more detail?"
 
-    # Collect potential reasons
-    reasons: List[str] = []
-    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
-    if isinstance(data, dict):
-        detailed = data.get("detailed_reasoning")
-        if isinstance(detailed, dict):
-            for k in ("weather_impact", "soil_impact", "water_impact", "market_impact", "fertilizer_impact"):
-                v = detailed.get(k)
-                if isinstance(v, str) and v.strip():
-                    reasons.append(v.strip())
+    parts: List[str] = [base]
 
-        for k in ("reasoning", "analysis_summary", "llm_explanation", "summary"):
-            v = data.get(k)
-            if isinstance(v, str) and v.strip():
-                reasons.append(v.strip())
-
-    reasons = [r for i, r in enumerate(reasons) if r and r not in reasons[:i]]
-
-    # Collect actions
-    recommendations = _safe_list_str(payload.get("recommendations"), max_items=4)
-    next_steps = _safe_list_str(payload.get("next_steps"), max_items=4)
+    # Append real recommendation bullets only when present
+    recommendations = _safe_list_str(payload.get("recommendations"), max_items=5)
+    next_steps = _safe_list_str(payload.get("next_steps"), max_items=5)
     actions = recommendations + [s for s in next_steps if s not in recommendations]
+    # Filter out trivially short or duplicate lines
+    actions = [a for a in actions if len(a) > 10]
 
-    warnings = _safe_list_str(payload.get("warnings"), max_items=4)
-
-    # Build a consistent message
-    parts: List[str] = []
-    if base:
-        parts.append("Direct Answer:\n" + base)
-    else:
-        parts.append("Direct Answer:\nI can help, but I need a bit more detail to give the best advice.")
-
-    if reasons:
-        parts.append("\nReasons:\n" + "\n".join([f"- {r}" for r in reasons[:3]]))
+    warnings = _safe_list_str(payload.get("warnings"), max_items=3)
+    warnings = [w for w in warnings if len(w) > 10]
 
     if actions:
-        parts.append("\nWhat to do now:\n" + "\n".join([f"- {a}" for a in actions[:4]]))
+        parts.append("\n**Recommended Actions:**\n" + "\n".join([f"- {a}" for a in actions[:5]]))
 
     if warnings:
-        parts.append("\nWarnings:\n" + "\n".join([f"- {w}" for w in warnings[:4]]))
+        parts.append("\n⚠️ **Warnings:**\n" + "\n".join([f"- {w}" for w in warnings[:3]]))
 
-    # A light clarifying question to reduce repetitive outputs next turn
-    follow_up = payload.get("follow_up_question")
-    if not isinstance(follow_up, str) or not follow_up.strip():
-        # Agent-specific defaults
-        if "crop" in agent_name:
-            follow_up = "Which state/district is your farm in, and what is your current season (Kharif/Rabi)?"
-        elif "soil" in agent_name:
-            follow_up = "Do you have pH and N-P-K values from a soil test or sensor?"
-        elif "weather" in agent_name:
-            follow_up = "What is your village/district (or share latitude/longitude) so I can localize the forecast?"
-        elif "market" in agent_name:
-            follow_up = "Which crop and which nearby mandi do you usually sell at?"
-        else:
-            follow_up = "What is your location and which crop are you referring to?"
-
-    parts.append("\nNext question:\n" + str(follow_up).strip())
     return "\n".join(parts).strip()
 
 
@@ -372,6 +335,9 @@ async def smoke_test_agents(body: Optional[Dict[str, Any]] = None) -> Dict[str, 
 async def invoke_agent(agent_name: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
     """Invoke a specific agent with the new core agent system"""
     try:
+        # Normalize hyphenated names: "crop-selector" → "crop_selector"
+        normalized_name = (agent_name or "").replace("-", "_").lower()
+
         # Extract query and context from inputs
         query = inputs.get("query") or inputs.get("user_input") or inputs.get("message", "")
         context = inputs.get("context", {})
@@ -384,14 +350,55 @@ async def invoke_agent(agent_name: str, inputs: Dict[str, Any]) -> Dict[str, Any
         # Call the new core agent system
         res = await process_farm_request(
             user_input=query,
-            agent_role=agent_name,
+            agent_role=normalized_name,
             context=context,
             session_id=session_id,
             user_id=user_id
         )
-        
+
         if not isinstance(res, dict):
-            return {"success": True, "response": res}
+            return {"success": True, "response": str(res)}
+
+        # ── Fallback to agent class _handle_traditional on rate-limit / LLM failure ──
+        # Detect rate-limited / error responses and use deterministic agent logic instead
+        _is_rate_limit_response = (
+            not res.get("success", True)
+            or "rate-limited" in str(res.get("response", "")).lower()
+            or "rate limit" in str(res.get("response", "")).lower()
+            or "couldn't generate" in str(res.get("response", "")).lower()
+        )
+        if _is_rate_limit_response:
+            try:
+                from farmxpert.agents.agronomy.crop_selector_agent import CropSelectorAgent
+                from farmxpert.agents.agronomy.seed_selection_agent import SeedSelectionAgent
+                from farmxpert.agents.agronomy.soil_health_agent import SoilHealthAgent
+                from farmxpert.agents.agronomy.fertilizer_advisor_agent import FertilizerAdvisorAgent
+                from farmxpert.agents.agronomy.growth_stage_monitor_agent import GrowthStageMonitorAgent
+                _AGENT_MAP = {
+                    "crop_selector": CropSelectorAgent,
+                    "seed_selection": SeedSelectionAgent,
+                    "soil_health": SoilHealthAgent,
+                    "fertilizer_advisor": FertilizerAdvisorAgent,
+                    "growth_stage_monitor": GrowthStageMonitorAgent,
+                }
+                AgentClass = _AGENT_MAP.get(normalized_name)
+                if AgentClass:
+                    agent_instance = AgentClass()
+                    fallback_res = await agent_instance._handle_traditional({
+                        "query": query,
+                        "context": context or {},
+                    })
+                    if isinstance(fallback_res, dict) and fallback_res.get("response"):
+                        # Tag it so the user can see it came from local logic
+                        fallback_text = fallback_res["response"]
+                        if not res.get("success"):
+                            fallback_text += "\n\n*(Note: AI model is busy — response generated from local knowledge base.)*"
+                        fallback_res["response"] = fallback_text
+                        res = fallback_res
+            except Exception as fallback_err:
+                # Never break the request because of a fallback error
+                import logging
+                logging.getLogger("agent_routes").warning(f"Agent fallback failed for {normalized_name}: {fallback_err}")
 
         success = bool(res.get("success", True)) and not bool(res.get("error"))
 
@@ -423,27 +430,27 @@ async def invoke_agent(agent_name: str, inputs: Dict[str, Any]) -> Dict[str, Any
                 ],
             )
 
-        # Last-resort fallback: provide a compact JSON snippet instead of a hardcoded placeholder.
+        # Last-resort fallback: show a brief structured summary (no truncation of real responses)
         if response_text is None and success and isinstance(data_for_ui, dict):
             try:
-                response_text = json.dumps(data_for_ui, ensure_ascii=False)[:800]
+                response_text = json.dumps(data_for_ui, ensure_ascii=False)
             except Exception:
-                response_text = str(data_for_ui)[:800]
+                response_text = str(data_for_ui)
 
         if response_text is None:
             response_text = "Response ready." if success else "Sorry, something went wrong."
 
-        # Farmer-friendly formatting for consistent UX
+        # Farmer-friendly formatting — keeps full LLM text, only appends real action list/warnings
         try:
             if isinstance(response_text, str):
-                response_text = _build_farmer_response_text(agent_name=agent_name, response_text=response_text, payload=res)
+                response_text = _build_farmer_response_text(agent_name=normalized_name, response_text=response_text, payload=res)
         except Exception:
             # Never fail the request due to formatting
             pass
             
         ui = _build_smart_chat_ui(
             answer_text=str(response_text) if isinstance(response_text, str) else "Response ready.",
-            agent_name=agent_name,
+            agent_name=normalized_name,
             success=success,
             data=data_for_ui,
             error=str(res.get("error")) if res.get("error") else None,

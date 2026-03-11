@@ -13,11 +13,19 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO")
 
     openai_api_key: Optional[str] = Field(default=None, validation_alias=AliasChoices("OPENAI_API_KEY", "openai_api_key"))
+    openai_model: str = Field(default="gpt-4o-mini", validation_alias=AliasChoices("OPENAI_MODEL", "openai_model"))
+    openai_max_output_tokens: int = Field(default=2048)
+    openai_temperature: float = Field(default=0.4)
+    openai_request_timeout: int = Field(default=30)
+
     mistral_api_key: Optional[str] = Field(default=None, validation_alias=AliasChoices("MISTRAL_API_KEY", "mistral_api_key"))
     gemini_api_key: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY", "GEMINIAPI", "gemini_api_key"),
     )
+
+    # "openai" or "gemini" — controls which LLM is tried first in core_agent
+    primary_llm: str = Field(default="openai", validation_alias=AliasChoices("PRIMARY_LLM", "primary_llm"))
 
     openweather_api_key: Optional[str] = Field(default=None, validation_alias=AliasChoices("OPENWEATHER_API_KEY", "openweather_api_key"))
     weatherapi_key: Optional[str] = Field(default=None, validation_alias=AliasChoices("WEATHERAPI_KEY", "weatherapi_key"))
@@ -27,10 +35,10 @@ class Settings(BaseSettings):
 
     blynk_token: Optional[str] = Field(default=None, validation_alias=AliasChoices("BLYNK_TOKEN", "blynk_token"))
     blynk_base_url: Optional[str] = Field(default=None, validation_alias=AliasChoices("BLYNK_BASE_URL", "blynk_base_url"))
-    gemini_model: str = Field(default="gemini-flash-latest")
+    gemini_model: str = Field(default="gemini-2.0-flash")
     gemini_temperature: float = Field(default=0.4)  # Lower for faster, more consistent responses
-    gemini_request_timeout: int = Field(default=20)  # Reduced timeout for faster failure detection
-    gemini_max_output_tokens: int = Field(default=1024)  # Keep outputs reasonably complete by default; can be overridden via .env
+    gemini_request_timeout: int = Field(default=30)  # Generous timeout for complete responses
+    gemini_max_output_tokens: int = Field(default=2048)  # Allow full detailed responses
     gemini_top_p: float = Field(default=0.8)  # Focus on most likely tokens
     gemini_top_k: int = Field(default=40)  # Limit vocabulary for speed
 
@@ -46,7 +54,7 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = Field(default=7)
 
     model_config = {
-        "env_file": str(Path(__file__).resolve().parents[1] / ".env"),
+        "env_file": str(Path(__file__).resolve().parents[3] / ".env"),
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }

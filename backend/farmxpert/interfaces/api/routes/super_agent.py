@@ -16,21 +16,26 @@ from farmxpert.core.utils.logger import get_logger
 from farmxpert.services.gemini_service import gemini_service
 from farmxpert.models.database import get_db, engine
 from sqlalchemy import text
+from farmxpert.interfaces.api.routes.auth_routes import get_current_user
+from farmxpert.models.user_models import User
 
 
 # ── DB-backed chat history helpers ─────────────────────────
 
-def _db_get_history(session_id: str) -> List[Dict[str, str]]:
-    """Get chat history for a session from DB."""
+def _db_get_history(session_id: str, user_id: Optional[int] = None) -> List[Dict[str, str]]:
+    """Get chat history for a session from DB, optionally scoped to user."""
     with engine.connect() as conn:
-        rows = conn.execute(
-            text("SELECT role, content FROM chat_messages WHERE session_id = :sid ORDER BY id ASC"),
-            {"sid": session_id}
-        ).fetchall()
+        query = "SELECT m.role, m.content FROM chat_messages m JOIN chat_sessions s ON m.session_id = s.id WHERE m.session_id = :sid"
+        params = {"sid": session_id}
+        if user_id:
+            query += " AND s.user_id = :uid"
+            params["uid"] = user_id
+        query += " ORDER BY m.id ASC"
+        rows = conn.execute(text(query), params).fetchall()
         return [{"role": r[0], "content": r[1]} for r in rows]
 
 
-def _db_save_message(session_id: str, role: str, content: str):
+def _db_save_message(session_id: str, role: str, content: str, user_id: Optional[int] = None):
     """Save a single chat message to DB. Creates session if needed."""
     with engine.connect() as conn:
         # Ensure session exists
@@ -40,8 +45,8 @@ def _db_save_message(session_id: str, role: str, content: str):
         if not existing:
             title = content[:40] + "..." if len(content) > 40 else content
             conn.execute(
-                text("INSERT INTO chat_sessions (id, title) VALUES (:sid, :title)"),
-                {"sid": session_id, "title": title}
+                text("INSERT INTO chat_sessions (id, title, user_id) VALUES (:sid, :title, :uid)"),
+                {"sid": session_id, "title": title, "uid": user_id}
             )
         else:
             conn.execute(
@@ -55,19 +60,26 @@ def _db_save_message(session_id: str, role: str, content: str):
         conn.commit()
 
 
-def _db_get_all_sessions() -> List[Dict[str, Any]]:
-    """Get all chat sessions for the sidebar."""
+def _db_get_all_sessions(user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Get all chat sessions for the sidebar, filtered by user_id if provided."""
     with engine.connect() as conn:
-        rows = conn.execute(
-            text("""
-                SELECT s.id, s.title, s.updated_at, COUNT(m.id) as msg_count
-                FROM chat_sessions s
-                LEFT JOIN chat_messages m ON m.session_id = s.id
-                GROUP BY s.id, s.title, s.updated_at
-                ORDER BY s.updated_at DESC
-                LIMIT 50
-            """)
-        ).fetchall()
+        query = """
+            SELECT s.id, s.title, s.updated_at, COUNT(m.id) as msg_count
+            FROM chat_sessions s
+            LEFT JOIN chat_messages m ON m.session_id = s.id
+        """
+        params = {}
+        if user_id:
+            query += " WHERE s.user_id = :uid "
+            params["uid"] = user_id
+            
+        query += """
+            GROUP BY s.id, s.title, s.updated_at
+            ORDER BY s.updated_at DESC
+            LIMIT 50
+        """
+        
+        rows = conn.execute(text(query), params).fetchall()
         return [
             {
                 "session_id": r[0],
@@ -485,8 +497,8 @@ async def process_user_query_ui_stream(request: QueryRequest):
                     answer_text = "Response ready."
                 
                 # Save to DB and in-memory cache
-                _db_save_message(session_id, "user", request.query)
-                _db_save_message(session_id, "assistant", answer_text)
+                _db_save_message(session_id, "user", request.query, user_id=int(request.user_id) if request.user_id else None)
+                _db_save_message(session_id, "assistant", answer_text, user_id=int(request.user_id) if request.user_id else None)
                 
                 if session_id not in CHAT_HISTORY_STORE:
                     CHAT_HISTORY_STORE[session_id] = []
@@ -612,8 +624,8 @@ async def process_user_query(request: QueryRequest):
         natural_language_response = result.natural_language or answer_text
 
         # Save to DB and in-memory cache
-        _db_save_message(session_id, "user", request.query)
-        _db_save_message(session_id, "assistant", natural_language_response)
+        _db_save_message(session_id, "user", request.query, user_id=int(request.user_id) if request.user_id else None)
+        _db_save_message(session_id, "assistant", natural_language_response, user_id=int(request.user_id) if request.user_id else None)
         
         if session_id not in CHAT_HISTORY_STORE:
             CHAT_HISTORY_STORE[session_id] = []
@@ -672,7 +684,10 @@ async def detect_language(request: LanguageDetectRequest):
 
 
 @router.get("/history")
-async def get_chat_history(session_id: Optional[str] = None):
+async def get_chat_history(
+    session_id: Optional[str] = None, 
+    current_user: User = Depends(get_current_user)
+):
     """
     Get chat history for the user.
     If session_id is provided, returns history for that session.
@@ -681,11 +696,11 @@ async def get_chat_history(session_id: Optional[str] = None):
     try:
         if session_id:
             # Return specific session history from DB
-            history = _db_get_history(session_id)
+            history = _db_get_history(session_id, user_id=current_user.id)
             return {"session_id": session_id, "messages": history}
         
         # Return all sessions from DB (for the sidebar)
-        sessions_list = _db_get_all_sessions()
+        sessions_list = _db_get_all_sessions(user_id=current_user.id)
         return {"sessions": sessions_list}
     except Exception as e:
         logger.error(f"Error fetching history: {e}")

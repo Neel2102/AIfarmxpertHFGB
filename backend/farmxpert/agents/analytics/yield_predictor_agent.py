@@ -1,122 +1,11 @@
 from __future__ import annotations
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from pathlib import Path
 import json
 
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
-
-try:
-    import numpy as np
-    import pandas as pd
-    from catboost import CatBoostRegressor
-except Exception:  # pragma: no cover
-    np = None
-    pd = None
-    CatBoostRegressor = None
-
-
-_CACHED_MODEL: Optional["CatBoostRegressor"] = None
-_CACHED_FEATURE_COLS: Optional[List[str]] = None
-_CACHED_CFG: Optional[Dict[str, Any]] = None
-_CACHED_DISTRICT_FREQ: Optional[Dict[str, float]] = None
-
-
-def _external_artifacts_dir() -> Path:
-    repo_root = Path(__file__).resolve().parents[3]
-    base = repo_root / "yield_predictor_agent" / "models"
-
-    for d in ("artifacts", "artifacts_raw", "artifacts_freq"):
-        cand = base / d
-        if (cand / "catboost_yield_model.cbm").exists() and (cand / "model_metadata.json").exists():
-            return cand
-    return base / "artifacts"
-
-
-def _load_model() -> None:
-    global _CACHED_MODEL, _CACHED_FEATURE_COLS, _CACHED_CFG, _CACHED_DISTRICT_FREQ
-    if _CACHED_MODEL is not None:
-        return
-
-    if CatBoostRegressor is None or pd is None or np is None:
-        raise RuntimeError("Yield predictor dependencies missing (catboost/pandas/numpy)")
-
-    artifacts_dir = _external_artifacts_dir()
-    meta_path = artifacts_dir / "model_metadata.json"
-    model_path = artifacts_dir / "catboost_yield_model.cbm"
-
-    with meta_path.open("r", encoding="utf-8") as f:
-        meta = json.load(f)
-
-    feature_cols = meta.get("feature_cols")
-    if not isinstance(feature_cols, list) or not feature_cols:
-        raise ValueError("model_metadata.json missing feature_cols")
-
-    model = CatBoostRegressor()
-    model.load_model(str(model_path))
-
-    _CACHED_MODEL = model
-    _CACHED_FEATURE_COLS = [str(x) for x in feature_cols]
-    _CACHED_CFG = meta.get("config") if isinstance(meta.get("config"), dict) else {}
-    _CACHED_DISTRICT_FREQ = meta.get("district_freq_map") if isinstance(meta.get("district_freq_map"), dict) else None
-
-
-def _normalize_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    required = ["State_Name", "District_Name", "Crop", "Season", "Crop_Year", "Area"]
-    missing = [k for k in required if k not in payload]
-    if missing:
-        raise ValueError(f"Missing required fields: {missing}")
-
-    out: Dict[str, Any] = {}
-    out["State_Name"] = str(payload.get("State_Name") or "Unknown")
-    out["District_Name"] = str(payload.get("District_Name") or "Unknown")
-    out["Crop"] = str(payload.get("Crop") or "Unknown")
-    out["Season"] = str(payload.get("Season") or "Unknown")
-    out["Crop_Year"] = int(payload.get("Crop_Year"))
-    out["Area"] = float(payload.get("Area"))
-    if out["Area"] <= 0:
-        raise ValueError("Area must be > 0")
-    if "Production" in payload:
-        raise ValueError("Production must not be provided as an input feature")
-    return out
-
-
-def _to_features_df(normalized: Dict[str, Any]) -> "pd.DataFrame":
-    _load_model()
-    assert _CACHED_FEATURE_COLS is not None
-
-    row = dict(normalized)
-    district_encoding = str((_CACHED_CFG or {}).get("district_encoding", "raw"))
-    if district_encoding == "freq":
-        freq_map = _CACHED_DISTRICT_FREQ or {}
-        row["District_Freq"] = float(freq_map.get(str(row.get("District_Name")), 0.0))
-
-    df = pd.DataFrame([row])
-    for c in ("State_Name", "District_Name", "Crop", "Season"):
-        if c in df.columns:
-            df[c] = df[c].astype("string").fillna("Unknown")
-
-    return df[_CACHED_FEATURE_COLS]
-
-
-def predict_yield(payload: Dict[str, Any]) -> Dict[str, Any]:
-    _load_model()
-    assert _CACHED_MODEL is not None
-
-    normalized = _normalize_payload(payload)
-    X = _to_features_df(normalized)
-    pred_fit = float(_CACHED_MODEL.predict(X)[0])
-
-    log_target = bool((_CACHED_CFG or {}).get("log_target", False))
-    pred = float(np.expm1(pred_fit)) if log_target else float(pred_fit)
-    if not np.isfinite(pred) or pred < 0:
-        pred = max(0.0, float(pred) if np.isfinite(pred) else 0.0)
-
-    return {
-        "predicted_yield": pred,
-        "yield_unit_note": "Yield is typically tonnes/hectare; for Coconut, dataset production appears to be nuts, so yield may be nuts/hectare.",
-        "inputs": normalized,
-    }
+from farmxpert.services.tools import YieldPredictorTool
+from farmxpert.services.gemini_service import gemini_service
 
 
 class YieldPredictorAgent(EnhancedBaseAgent):
@@ -125,49 +14,67 @@ class YieldPredictorAgent(EnhancedBaseAgent):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        try:
-            from farmxpert.tools.analytics.yield_engine import YieldEngineTool
-            self.yield_engine = YieldEngineTool()
-        except ImportError:
-            self.yield_engine = None
-            self.logger.warning("Could not import YieldEngineTool")
+        self.tools = {
+            "yield_predictor": YieldPredictorTool()
+        }
 
     async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Predict yield using YieldEngineTool (simulated ML) and reason with LLM."""
+        """Predict yield using YieldPredictorTool and reason with LLM."""
         context = inputs.get("context", {})
+        query = inputs.get("query", "")
         
         # Extract parameters
         crop = context.get("crop") or inputs.get("crop") or "Wheat"
-        area = context.get("area") or inputs.get("area") or 1.0
+        area = float(context.get("area") or inputs.get("area") or 1.0)
         
-        # Prepare inputs for engine
-        engine_inputs = {
-            "soil_data": context.get("soil_data") or context.get("soil", {}),
-            "weather_data": context.get("weather_data") or context.get("weather", {})
-        }
+        soil_data = context.get("soil_data") or context.get("soil", {})
+        weather_data = context.get("weather_data") or context.get("weather", {})
         
         tool_data = {}
-        if self.yield_engine:
+        if "yield_predictor" in self.tools:
             try:
-                # Use the new tool
-                result = self.yield_engine.predict_yield(str(crop), float(area), engine_inputs)
-                if result.get("success"):
-                    tool_data = result
-                    # Explicitly format for the LLM to see
-                    tool_data["summary"] = f"YieldEngine Prediction: {result.get('predicted_yield_tons')} tons of {crop} ({area} acres). Confidence: {result.get('confidence_score')}"
-                else:
-                    tool_data = {"error": "Yield prediction failed", "details": result.get("error")}
+                tool_data = await self.tools["yield_predictor"].predict_yield(str(crop), area, soil_data, weather_data)
             except Exception as e:
-                self.logger.error(f"YieldEngine failed: {e}")
-                tool_data = {"error": f"YieldEngine exception: {str(e)}"}
+                self.logger.error(f"YieldPredictorTool failed: {e}")
+                tool_data = {"error": f"Tool exception: {str(e)}"}
         
-        # INJECT TOOL DATA INTO LLM CONTEXT
-        # This is the critical step for "Context-Awareness"
-        inputs["additional_data"] = inputs.get("additional_data", {})
-        inputs["additional_data"]["yield_prediction_tool_result"] = tool_data
+        # Format the prompt with the tool output
+        prompt = f"""
+        You are a yield prediction expert. Based on the user's query and the tool's prediction data, provide a detailed explanation of the expected yield.
         
-        # Force LLM usage to generate the final response using the Persona
-        return await self._handle_with_llm(inputs)
+        User Query: "{query}"
+        Crop: {crop}
+        Area: {area} acres
+        Soil Data: {json.dumps(soil_data)}
+        Weather Data: {json.dumps(weather_data)}
+        
+        Tool Yield Prediction Data: {json.dumps(tool_data, indent=2)}
+        
+        Format your response nicely and incorporate the risk factors and recommendations provided by the tool.
+        """
+        
+        output_data = {}
+        try:
+            response = await gemini_service.generate_response(prompt, {"agent": self.name, "task": "yield_prediction_explanation"})
+            output_data = gemini_service._parse_json_response(response) if "{" in str(response) else {}
+        except Exception as e:
+            response = f"Based on the tool data, your predicted yield for {crop} is {tool_data.get('predicted_yield_tons', 'unknown')} tons."
+        
+        return {
+            "agent": self.name,
+            "success": True,
+            "response": response,
+            "data": {
+                "crop": crop,
+                "area": area,
+                "soil_data": soil_data,
+                "weather_data": weather_data,
+                "tool_data": tool_data,
+                "parsed_response": output_data
+            },
+            "recommendations": tool_data.get("recommendations", []),
+            "metadata": {"model": "gemini", "tools_used": list(self.tools.keys())}
+        }
     
     def _predict_crop_yield(self, crop: str, soil_data: Dict, weather: Dict, 
                            historical: List[float], field_conditions: Dict, 

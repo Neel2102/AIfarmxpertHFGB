@@ -82,7 +82,7 @@ class Settings(BaseSettings):
     dry_run: bool = Field(default=True, env="DRY_RUN")
     
     class Config:
-        env_file = PROJECT_ROOT / ".env"
+        env_file = [PROJECT_ROOT / ".env", PROJECT_ROOT.parents[0] / ".env"]
         env_file_encoding = "utf-8"
         case_sensitive = False
         extra = "allow"  # Allow extra fields from environment

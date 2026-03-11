@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { Cpu, History, LayoutDashboard, Map, MessageSquare, Mic, Settings, Users, TrendingUp } from "lucide-react";
+import { Cpu, History, LayoutDashboard, Map, MessageSquare, Mic, Settings, Users, TrendingUp, Plus } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useOrchestrator } from "../contexts/OrchestratorContext";
 import "../styles/Dashboard/Sidebar.css";
@@ -8,7 +8,7 @@ import "../styles/Dashboard/Sidebar.css";
 const Sidebar = ({ onLogout }) => {
   const navigate = useNavigate();
   useAuth();
-  const { chatHistory, loadSessionMessages } = useOrchestrator();
+  const { chatHistory, loadSessionMessages, resetSession } = useOrchestrator();
 
   const [isOpen, setIsOpen] = useState(true);
   const [theme, setTheme] = useState(() => {
@@ -363,17 +363,7 @@ const Sidebar = ({ onLogout }) => {
                   <span className="agent-status-sidebar active-sidebar"></span>
                 </NavLink>
 
-                <NavLink
-                  className={({ isActive }) =>
-                    `agent-item-sidebar ${isActive ? "active" : ""}`
-                  }
-                  to="/dashboard/market"
-                  onClick={() => handleNavigation("/dashboard/market")}
-                >
-                  <TrendingUp className="agent-icon-sidebar" size={20} />
-                  <span className="agent-name-sidebar">Market Prices</span>
-                  <span className="agent-status-sidebar active-sidebar"></span>
-                </NavLink>
+
 
                 <NavLink
                   className={({ isActive }) =>
@@ -411,14 +401,27 @@ const Sidebar = ({ onLogout }) => {
                   <History className="category-icon-sidebar" size={16} />
                   <span className="category-title-sidebar">Chat History</span>
                 </div>
-                <span
-                  className={`category-toggle-sidebar ${expandedCategories.history ? "expanded-sidebar" : ""
-                    }`}
-                >
-                  <svg viewBox="0 0 24 24" width="16" height="16">
-                    <path d="M7 10l5 5 5-5z" fill="currentColor" />
-                  </svg>
-                </span>
+                <div className="category-actions-sidebar">
+                  <button 
+                    className="new-chat-btn-sidebar" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      resetSession();
+                      handleNavigation("/dashboard/orchestrator");
+                    }}
+                    title="Start New Chat"
+                  >
+                    <Plus size={14} />
+                  </button>
+                  <span
+                    className={`category-toggle-sidebar ${expandedCategories.history ? "expanded-sidebar" : ""
+                      }`}
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16">
+                      <path d="M7 10l5 5 5-5z" fill="currentColor" />
+                    </svg>
+                  </span>
+                </div>
               </div>
 
               <div

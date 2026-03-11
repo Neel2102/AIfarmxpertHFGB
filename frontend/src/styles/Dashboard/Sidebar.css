@@ -477,6 +477,33 @@
   letter-spacing: 0.5px;
 }
 
+.category-actions-sidebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.new-chat-btn-sidebar {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.new-chat-btn-sidebar:hover {
+  background: var(--brand-primary);
+  color: white;
+  border-color: var(--brand-primary);
+  transform: scale(1.05);
+}
+
 .category-toggle-sidebar {
   transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   color: var(--text-secondary);

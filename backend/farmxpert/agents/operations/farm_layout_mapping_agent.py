@@ -9,10 +9,15 @@ from farmxpert.services.gemini_service import gemini_service
 class FarmLayoutMappingAgent(EnhancedBaseAgent):
     name = "farm_layout_mapping_agent"
     description = "Helps with field organization, plot allocation, crop rotation plans — all via logic-based planning, not imagery"
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tools = {
+            "field_mapping": FieldMappingTool()
+        }
 
     async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Generate farm layout and mapping using geospatial tools (simulated)"""
-        tools = inputs.get("tools", {})
+        tools = self.tools
         context = inputs.get("context", {})
         query = inputs.get("query", "")
 

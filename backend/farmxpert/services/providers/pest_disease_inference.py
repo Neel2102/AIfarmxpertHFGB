@@ -12,9 +12,9 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class InferenceResult:
     success: bool
+    provider: str
     diagnosis: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
-    provider: str
     confidence: float = 0.0
     severity: Optional[str] = None
     actions: Optional[list[str]] = None

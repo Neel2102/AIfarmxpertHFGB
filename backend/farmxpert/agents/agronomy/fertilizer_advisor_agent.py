@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Dict, Any, List, Optional
+import json
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
 from farmxpert.services.tools import FertilizerDatabaseTool, WeatherForecastTool, PlantGrowthSimulationTool, FertilizerTool
 from farmxpert.services.gemini_service import gemini_service
@@ -34,19 +35,28 @@ Always provide practical, cost-effective recommendations with clear implementati
             }
         ]
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tools = {
+            "fertilizer_database": FertilizerDatabaseTool(),
+            "weather_forecast": WeatherForecastTool(),
+            "plant_growth_simulation": PlantGrowthSimulationTool(),
+            "fertilizer": FertilizerTool()
+        }
+
     async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Handle fertilizer recommendations using dynamic tools and comprehensive analysis"""
         try:
-            # Get tools from inputs
-            tools = inputs.get("tools", {})
+            # Use self-initialized tools
+            tools = self.tools
             context = inputs.get("context", {})
             query = inputs.get("query", "")
             
             # Extract parameters
-            crop = self._extract_crop_from_query(query) or context.get("crop", "wheat")
-            growth_stage = context.get("growth_stage", "vegetative")
-            location = context.get("farm_location", inputs.get("location", "unknown"))
-            soil_data = context.get("soil_data", {})
+            crop = self._extract_crop_from_query(query) or context.get("crop") or inputs.get("crop") or "wheat"
+            growth_stage = context.get("growth_stage") or inputs.get("growth_stage") or "vegetative"
+            location = context.get("farm_location") or inputs.get("location") or "unknown"
+            soil_data = context.get("soil_data") or inputs.get("soil_data") or {}
             area_acres = context.get("area_acres", 1.0)
             
             # Initialize data containers

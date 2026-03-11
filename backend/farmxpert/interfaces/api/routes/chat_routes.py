@@ -13,6 +13,7 @@ import json
 import base64
 import logging
 import tempfile
+import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -29,18 +30,17 @@ from farmxpert.models.user_models import User
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 # ---------------------------------------------------------------------------
-# Gemini initialisation (reuse env key already loaded by settings)
+# Gemini initialisation
 # ---------------------------------------------------------------------------
 
-_GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
-if _GEMINI_KEY:
-    genai.configure(api_key=_GEMINI_KEY)
-
+from farmxpert.config.settings import settings
 
 def _get_gemini_model(model_name: str = "gemini-1.5-flash"):
     """Return a configured Gemini GenerativeModel."""
-    if not _GEMINI_KEY:
+    api_key = settings.gemini_api_key or os.environ.get("GEMINI_API_KEY", "")
+    if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set")
+    genai.configure(api_key=api_key)
     return genai.GenerativeModel(model_name)
 
 
@@ -97,7 +97,7 @@ async def _call_orchestrator(message: str, user_id: int, extra: Optional[Dict[st
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
-    user_id: Optional[int] = None
+    user_id: Optional[int] = None # This field is now optional as current_user.id is used
     context: Optional[Dict[str, Any]] = None
 
 
@@ -114,14 +114,40 @@ async def chat_orchestrate(
     """
     try:
         logger.info(f"[chat/orchestrate] user={current_user.id} message={request.message[:80]!r}")
+        
+        # Generate session ID if not provided
+        session_id = request.session_id or str(uuid.uuid4())
+        
         extra = {}
         if request.context:
             extra.update(request.context)
+            
+        # Extract chat history so we can pass it to the AI for conversational memory
+        try:
+            from farmxpert.interfaces.api.routes.super_agent import _db_get_history
+            chat_history = _db_get_history(session_id, user_id=current_user.id)
+            # Pass the last 10 turns
+            extra["chat_history"] = chat_history[-10:] if chat_history else []
+        except Exception as e:
+            logger.warning(f"Failed to fetch chat history context: {e}")
+            extra["chat_history"] = []
+                
         response = await _call_orchestrator(
             request.message,
             user_id=current_user.id,
             extra=extra or None,
         )
+        
+        # Save chat history
+        try:
+            from farmxpert.interfaces.api.routes.super_agent import _db_save_message
+            _db_save_message(session_id, "user", request.message, user_id=current_user.id)
+            _db_save_message(session_id, "assistant", response.get("response", ""), user_id=current_user.id)
+        except Exception as e:
+            logger.warning(f"Failed to save chat history: {e}")
+            
+        # Include session_id in the response so the frontend can track it
+        response["session_id"] = session_id
         return response
     except Exception as e:
         logger.error(f"[chat/orchestrate] error: {e}")
@@ -445,6 +471,6 @@ async def chat_health():
     return {
         "status": "ok",
         "endpoints": ["orchestrate", "vision", "voice", "document"],
-        "gemini_configured": bool(_GEMINI_KEY),
+        "gemini_configured": bool(settings.gemini_api_key or os.environ.get("GEMINI_API_KEY", "")),
         "timestamp": datetime.utcnow().isoformat(),
     }

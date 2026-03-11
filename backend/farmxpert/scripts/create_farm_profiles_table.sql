@@ -52,6 +52,10 @@ CREATE TABLE IF NOT EXISTS farm_profiles (
     -- Additional Information
     additional_info TEXT,
     
+    -- Farm Layout map data
+    farm_polygon JSONB,
+    farm_layout_data JSONB,
+    
     -- Metadata
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import ChatPanel from './ChatPanel';
 // import OfflineIndicator from '../components/OfflineIndicator';
+import { useOrchestrator } from '../contexts/OrchestratorContext';
 import { dataService } from '../services/apiService';
 import '../styles/Dashboard/DashboardLayout.css';
 import '../styles/components/OfflineIndicator.css';
@@ -14,8 +15,29 @@ const DashboardLayout = () => {
     size_acres: 15,
     weather: { temperature: 27, humidity: 85, condition: 'Partly Cloudy' }
   });
-  const [sessionId] = useState('session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
-  // const [isOffline, setIsOffline] = useState(false);
+  const { session, loadSessionMessages } = useOrchestrator();
+  const [sessionId, setSessionId] = useState(() => {
+    const saved = localStorage.getItem('farmxpert_session_id');
+    if (saved) return saved;
+    const newSession = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('farmxpert_session_id', newSession);
+    return newSession;
+  });
+
+  // On mount, load history for this session
+  useEffect(() => {
+    if (sessionId) {
+      loadSessionMessages(sessionId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (session?.id && session.id !== sessionId) {
+        setSessionId(session.id);
+        localStorage.setItem('farmxpert_session_id', session.id);
+    }
+  }, [session?.id, sessionId]);
 
   useEffect(() => {
     (async () => {

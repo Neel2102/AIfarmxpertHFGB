@@ -34,20 +34,29 @@ Always provide practical, data-driven recommendations with clear reasoning."""
             }
         ]
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tools = {
+            "genetic_database": GeneticDatabaseTool(),
+            "soil_suitability": SoilSuitabilityTool(),
+            "yield_prediction": YieldPredictionTool(),
+            "market": MarketTool()
+        }
+
     async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Handle seed selection using dynamic tools and comprehensive analysis"""
         try:
-            # Get tools from inputs
-            tools = inputs.get("tools", {})
+            # Use self-initialized tools
+            tools = self.tools
             context = inputs.get("context", {})
             query = inputs.get("query", "")
             
             # Extract parameters
-            crop = self._extract_crop_from_query(query) or context.get("crop", "wheat")
-            location = context.get("farm_location", inputs.get("location", "unknown"))
-            goals = context.get("preferences", {}).get("goal", "high_yield")
-            budget = context.get("preferences", {}).get("budget", "medium")
-            soil_data = context.get("soil_data", {})
+            crop = self._extract_crop_from_query(query) or context.get("crop") or "wheat"
+            location = context.get("farm_location") or context.get("location") or inputs.get("location") or "unknown"
+            goals = context.get("preferences", {}).get("goal") or inputs.get("goal") or "high_yield"
+            budget = context.get("preferences", {}).get("budget") or inputs.get("budget") or "medium"
+            soil_data = context.get("soil_data") or context.get("soil") or inputs.get("soil") or {}
             
             # Initialize data containers
             genetic_data = {}

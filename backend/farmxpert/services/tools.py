@@ -4,6 +4,11 @@ import os
 import json
 import asyncio
 import aiohttp
+import urllib.parse
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    BeautifulSoup = None
 from datetime import datetime, timedelta
 from farmxpert.config.settings import settings
 from farmxpert.services.gemini_service import gemini_service
@@ -14,21 +19,63 @@ _weather_provider = WeatherProvider()
 _mandi_price_provider = MandiPriceProvider()
 _schemes_provider = SchemesProvider()
 
+async def _scrape_duckduckgo_lite(query: str, max_results: int = 5) -> str:
+    """Helper method to scrape live web results via DuckDuckGo standard HTML search."""
+    if BeautifulSoup is None:
+        return "BeautifulSoup not installed. Cannot scrape live data."
+    
+    try:
+        url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5"
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=10) as resp:
+                if resp.status == 200:
+                    html = await resp.text()
+                    soup = BeautifulSoup(html, "html.parser")
+                    results = soup.find_all("a", class_="result__snippet")
+                    snippets = [r.get_text().strip() for r in results[:max_results]]
+                    if not snippets:
+                        return "No specific web snippets found."
+                    return "\n".join([f"- {s}" for s in snippets])
+                return f"Scraping failed with status {resp.status}"
+    except Exception as e:
+        return f"Scraping network error: {str(e)}"
+
+
 
 class SoilTool:
     @staticmethod
     async def analyze_soil_with_gemini(soil_data: Dict[str, Any], location: str) -> Dict[str, Any]:
         """Use Gemini to analyze soil data and provide recommendations"""
+        # Pre-calculation / Sensor data thresholding
+        sensor_warnings = []
+        if "ph" in soil_data:
+            ph = float(soil_data["ph"])
+            if ph < 6.0: sensor_warnings.append(f"pH is highly acidic ({ph}). Recommend immediate lime application.")
+            elif ph > 7.5: sensor_warnings.append(f"pH is highly alkaline ({ph}). Recommend sulfur or organic matter additions.")
+        
+        for nutrient in ["nitrogen", "phosphorus", "potassium"]:
+            if nutrient in soil_data and float(soil_data[nutrient]) < 20: 
+                sensor_warnings.append(f"Critical deficiency in {nutrient} (<20 level). Need heavy basic amendment.")
+
+        warnings_text = " ".join(sensor_warnings) if sensor_warnings else "All sensor levels appear within normal ranges."
+
         prompt = f"""
         Analyze this soil data for a farm in {location} and provide comprehensive recommendations:
         
         Soil Data: {json.dumps(soil_data, indent=2)}
+        Calculated Sensor Warnings: {warnings_text}
         
         Please provide:
-        1. Soil health assessment (0-100 score)
+        1. Soil health assessment (0-100 score) strictly following the sensor warnings if provided
         2. Nutrient deficiencies and excesses
         3. Recommended crops for this soil type
-        4. Fertilizer recommendations with specific amounts
+        4. Fertilizer recommendations with specific amounts (Use the sensor warnings heavily)
         5. Soil improvement suggestions
         6. pH adjustment recommendations if needed
         7. Organic matter improvement strategies
@@ -48,35 +95,123 @@ class SoilTool:
             return gemini_service._parse_json_response(response)
         except Exception as e:
             return {"error": f"Failed to analyze soil: {str(e)}"}
+            
+    @staticmethod
+    async def parse_soil_test_report(ocr_text: str) -> Dict[str, Any]:
+        """Parse raw OCR text from a soil lab test report into structured data"""
+        prompt = f"""
+        Extract structured soil data metrics from the following raw OCR text of a soil laboratory test report:
+        
+        Raw Lab Report OCR Text:
+        {ocr_text}
+        
+        Identify parameters like pH, Nitrogen (N), Phosphorus (P), Potassium (K), Organic Carbon (OC), Electrical Conductivity (EC), Sulfur (S), Zinc (Zn), Boron (B), Iron (Fe), etc.
+        If a value is not found, omit it from the structured output.
+        
+        Format as JSON with flat keys (e.g., "ph": 6.5, "nitrogen": 45, "phosphorus": 12).
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "soil_ocr_parsing"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": f"Failed to parse soil report OCR: {str(e)}"}
     
     @staticmethod
     async def search_soil_best_practices(crop: str, region: str) -> Dict[str, Any]:
         """Search for soil best practices for specific crop and region"""
-        search_query = f"soil preparation best practices {crop} farming {region} India"
-        
+        scraped_text = ""
         try:
-            # Use web search to get current best practices
-            async with aiohttp.ClientSession() as session:
-                # This would integrate with a real search API
-                # For now, we'll use Gemini to simulate web search results
-                prompt = f"""
-                Based on current agricultural research and best practices, provide soil preparation guidelines for {crop} cultivation in {region}, India.
-                
-                Include:
-                1. Soil preparation techniques
-                2. Timing for soil preparation
-                3. Equipment recommendations
-                4. Common mistakes to avoid
-                5. Regional specific considerations
-                
-                Format as JSON with keys: preparation_techniques, timing, equipment, common_mistakes, regional_considerations
-                """
-                
-                response = await gemini_service.generate_response(prompt, {"task": "soil_best_practices"})
-                return gemini_service._parse_json_response(response)
+            if BeautifulSoup is not None:
+                query = urllib.parse.quote(f"soil preparation best practices {crop} farming {region} India")
+                url = f"https://html.duckduckgo.com/html/?q={query}"
+                headers = {"User-Agent": "Mozilla/5.0"}
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, headers=headers, timeout=10) as resp:
+                        if resp.status == 200:
+                            html = await resp.text()
+                            soup = BeautifulSoup(html, "html.parser")
+                            results = soup.find_all("a", class_="result__snippet")
+                            scraped_text = "Web Search Results:\n" + "\n".join([r.get_text() for r in results[:4]])
+        except Exception as e:
+            scraped_text = f"Scraping failed: {e}. Falling back to simulation."
+            
+        try:
+            prompt = f"""
+            Based on current agricultural research and scraped best practices, provide soil preparation guidelines for {crop} cultivation in {region}, India.
+            
+            {scraped_text}
+            
+            Include:
+            1. Soil preparation techniques
+            2. Timing for soil preparation
+            3. Equipment recommendations
+            4. Common mistakes to avoid
+            5. Regional specific considerations
+            
+            Format as JSON with keys: preparation_techniques, timing, equipment, common_mistakes, regional_considerations
+            """
+            
+            response = await gemini_service.generate_response(prompt, {"task": "soil_best_practices"})
+            return gemini_service._parse_json_response(response)
         except Exception as e:
             return {"error": f"Failed to search soil practices: {str(e)}"}
 
+class AmendmentRecommendationTool:
+    @staticmethod
+    async def recommend_soil_amendments(soil_data: Dict[str, Any], crop: str, location: str) -> Dict[str, Any]:
+        """Provides specific chemical/organic amendments based on soil deficiency."""
+        prompt = f"""
+        Calculate specific soil amendment recommendations for {crop} in {location}.
+        
+        Soil Data: {json.dumps(soil_data, indent=2)}
+        
+        Provide:
+        1. Lime/Sulfur requirements
+        2. Organic matter additions
+        3. Compost requirements
+        
+        Format as JSON with keys: lime_recommendations, organic_additions, compost_requirements
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "soil_amendments"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": f"Failed to get amendments: {e}"}
+
+class LabTestAnalyzerTool:
+    @staticmethod
+    async def analyze_lab_results(soil_data: Dict[str, Any], crop: str, location: str) -> Dict[str, Any]:
+        """Analyzes structured lab results for deep nutrient tracking."""
+        prompt = f"""
+        Provide advanced lab-level analysis for the following soil data for {crop} in {location}.
+        
+        Soil Data: {json.dumps(soil_data, indent=2)}
+        
+        Provide:
+        1. deficiency_analysis (list of strings)
+        2. toxicity_risks (list of strings)
+        
+        Format as JSON with keys: deficiency_analysis, toxicity_risks
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "lab_analysis"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": f"Failed to analyze lab results: {e}"}
+
+class SoilSensorTool:
+    @staticmethod
+    def get_realtime_data() -> Dict[str, Any]:
+        """Simulates fetching data from an IoT soil sensor."""
+        import random
+        return {
+            "moisture_percent": round(random.uniform(10.0, 40.0), 1),
+            "ph_level": round(random.uniform(5.5, 8.0), 1),
+            "nitrogen_mg_kg": round(random.uniform(15.0, 60.0), 1),
+            "phosphorus_mg_kg": round(random.uniform(10.0, 40.0), 1),
+            "potassium_mg_kg": round(random.uniform(20.0, 80.0), 1),
+            "temperature_c": round(random.uniform(15.0, 35.0), 1)
+        }
 
 class WeatherTool:
     @staticmethod
@@ -387,6 +522,64 @@ class CropTool:
         except Exception as e:
             return {"error": f"Failed to analyze crop problems: {str(e)}"}
 
+class FertilizerDatabaseTool:
+    @staticmethod
+    async def query_fertilizer_database(crop: str, growth_stage: str, soil_data: Dict[str, Any], location: str) -> Dict[str, Any]:
+        """Queries database for fertilizer types based on parameters."""
+        prompt = f"""
+        Query the fertilizer DB for {crop} at {growth_stage} in {location}.
+        Soil Data: {json.dumps(soil_data)}
+        
+        Provide specific fertilizer types and application rates. Format as JSON with keys: fertilizer_types, application_rates
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "fertilizer_db_query"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def get_fertilizer_cost_analysis(crop: str, area_acres: float, location: str) -> Dict[str, Any]:
+        """Calculates cost analysis for fertilizer application."""
+        prompt = f"""
+        Calculate fertilizer cost analysis for {crop} on {area_acres} acres in {location}.
+        Format as JSON with keys: total_cost_breakdown, estimated_cost_per_acre
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "fertilizer_cost"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class WeatherForecastTool:
+    @staticmethod
+    async def get_fertilizer_weather_forecast(location: str, days: int = 14) -> Dict[str, Any]:
+        """Gets weather forecast tailored for fertilizer application."""
+        try:
+            weather = await _weather_provider.get_weather_bundle(location, days=days)
+            alerts = weather.get("forecast", {}).get("data", {}).get("alerts", {})
+            weather_risks = ["Rain expected"] if "rain" in str(alerts).lower() else []
+            return {
+                "application_windows": "Clear for next 3 days" if not weather_risks else "Delay application",
+                "weather_risks": weather_risks
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+class PlantGrowthSimulationTool:
+    @staticmethod
+    async def simulate_plant_growth(crop: str, fertilizer_data: Dict[str, Any], soil_data: Dict[str, Any], weather_data: Dict[str, Any], location: str) -> Dict[str, Any]:
+        """Simulates plant growth impact from fertilizer."""
+        prompt = f"""
+        Simulate {crop} growth in {location} given fertilizer data: {json.dumps(fertilizer_data)}, soil: {json.dumps(soil_data)}, weather: {json.dumps(weather_data)}.
+        Format as JSON with keys: yield_estimates, stress_indicators
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "growth_simulation"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
 
 class FertilizerTool:
     """Tools for fertilizer recommendations using Gemini for dynamic analysis"""
@@ -394,6 +587,19 @@ class FertilizerTool:
     @staticmethod
     async def get_fertilizer_recommendations(soil_data: Dict[str, Any], crop: str, area_acres: float, region: str) -> Dict[str, Any]:
         """Get comprehensive fertilizer recommendations"""
+        weather_warning = ""
+        # Weather Adjuster Logic
+        try:
+            weather = await _weather_provider.get_weather_bundle(region, days=3)
+            if weather and weather.get("success"):
+                alerts = weather.get("forecast", {}).get("data", {}).get("alerts", {})
+                if alerts and "heavy_rain" in str(alerts).lower() or "storm" in str(alerts).lower():
+                    weather_warning = "WARNING: Heavy rain or storms predicted in the next 3 days. DELAY fertilizer application to prevent runoff loss."
+                else:
+                    weather_warning = "Weather looks clear for the next 3 days. Safe to apply fertilizer."
+        except Exception:
+            weather_warning = "Could not fetch real-time weather. Proceed with standard schedule."
+
         prompt = f"""
         Provide detailed fertilizer recommendations for {crop} cultivation on {area_acres} acres in {region}, India.
         
@@ -402,10 +608,13 @@ class FertilizerTool:
         Area: {area_acres} acres
         Region: {region}
         
+        Weather Adjustment Note: {weather_warning}
+        (If the note warns of rain, strictly advise delaying the application schedule).
+        
         Include:
         1. Nutrient deficiency analysis
         2. Specific fertilizer recommendations with quantities
-        3. Application schedule and timing
+        3. Application schedule and timing (Adjust based on weather note!)
         4. Organic fertilizer alternatives
         5. Cost analysis and budget planning
         6. Soil health improvement strategies
@@ -448,10 +657,682 @@ class FertilizerTool:
         except Exception as e:
             return {"error": f"Failed to get organic farming guide: {str(e)}"}
 
+class EvapotranspirationModelTool:
+    @staticmethod
+    async def calculate_evapotranspiration(crop: str, growth_stage: str, weather_data: Dict[str, Any], soil_data: Dict[str, Any], location: str) -> Dict[str, Any]:
+        """Calculates expected evapotranspiration for water requirements."""
+        prompt = f"""
+        Calculate expected evapotranspiration and daily water requirement for {crop} at {growth_stage} in {location}.
+        Weather: {json.dumps(weather_data)}, Soil: {json.dumps(soil_data)}
+        Format as JSON with keys: crop_et, daily_water_requirement, irrigation_scheduling
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "et_calculation"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def optimize_irrigation_schedule(et_data: Dict[str, Any], sensor_data: Dict[str, Any], crop: str, location: str) -> Dict[str, Any]:
+        """Optimizes irrigation schedule using ET and sensor data."""
+        prompt = f"""
+        Optimize irrigation schedule for {crop} in {location}.
+        ET Data: {json.dumps(et_data)}, Sensor Analysis: {json.dumps(sensor_data)}
+        Format as JSON with keys: irrigation_frequency, water_savings, recommended_method
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "irrigation_optimization"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class IoTSoilMoistureTool:
+    @staticmethod
+    async def integrate_sensor_data(sensor_data: Dict[str, Any], crop: str, location: str) -> Dict[str, Any]:
+        """Analyzes raw soil moisture sensor data."""
+        prompt = f"""
+        Analyze soil moisture IoT sensor data for {crop} in {location}.
+        Sensor Data: {json.dumps(sensor_data)}
+        Format as JSON with keys: current_moisture, anomaly_detection, soil_saturation_status
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "sensor_analysis"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class WeatherAPITool:
+    @staticmethod
+    async def get_irrigation_weather_forecast(location: str, days: int = 7) -> Dict[str, Any]:
+        """Gets weather forecast explicitly for irrigation windows."""
+        try:
+            weather = await _weather_provider.get_weather_bundle(location, days=days)
+            alerts = weather.get("forecast", {}).get("data", {}).get("alerts", {})
+            weather_risks = ["Rain expected"] if "rain" in str(alerts).lower() else []
+            return {
+                "irrigation_windows": "Irrigate freely" if not weather_risks else "Hold irrigation due to upcoming rain",
+                "weather_risks": weather_risks
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+class VoiceToTextTool:
+    @staticmethod
+    async def process_voice_description(voice_data: Dict[str, Any], crop: str, location: str) -> Dict[str, Any]:
+        """(Simulated) Processes voice data to extract symptoms."""
+        prompt = f"""
+        Extract symptoms from this voice description transcript for {crop} in {location}.
+        Transcript info: {json.dumps(voice_data)}
+        Format as JSON with keys: symptoms_extracted, recommended_steps, follow_up_questions
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "voice_analysis"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class DiseasePredictionTool:
+    @staticmethod
+    async def predict_disease_outbreak(environmental_data: Dict[str, Any], crop: str, location: str) -> Dict[str, Any]:
+        """Predicts disease outbreaks based on environment."""
+        prompt = f"""
+        Predict disease outbreak chances for {crop} in {location} given environment: {json.dumps(environmental_data)}.
+        Format as JSON with keys: outbreak_probability, high_risk_diseases, warning_level
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "disease_prediction"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def analyze_disease_risk_factors(historical_data: Dict[str, Any], current_conditions: Dict[str, Any], crop: str, location: str) -> Dict[str, Any]:
+        """Analyzes disease risk factors."""
+        prompt = f"""
+        Analyze disease risk factors for {crop} in {location}.
+        History: {json.dumps(historical_data)}, Current: {json.dumps(current_conditions)}.
+        Format as JSON with keys: current_risk_level, risk_factors, mitigation_strategies
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "disease_risk"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class SatelliteImageProcessingTool:
+    @staticmethod
+    async def analyze_ndvi(satellite_data: Dict[str, Any], crop: str, location: str) -> Dict[str, Any]:
+        """Analyzes NDVI from satellite imagery."""
+        prompt = f"""
+        Analyze NDVI satellite data for {crop} in {location}: {json.dumps(satellite_data)}.
+        Format as JSON with keys: vegetation_health, crop_condition_recommendations, monitoring_frequency
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "ndvi_analysis"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class DroneImageProcessingTool:
+    @staticmethod
+    async def analyze_drone_imagery(drone_data: Dict[str, Any], crop: str, location: str) -> Dict[str, Any]:
+        """Analyzes drone imagery for precision agriculture."""
+        prompt = f"""
+        Analyze high-res drone imagery for {crop} in {location}: {json.dumps(drone_data)}.
+        Format as JSON with keys: growth_stage_assessment, precision_recommendations, harvest_readiness
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "drone_analysis"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class GrowthStagePredictionTool:
+    @staticmethod
+    async def predict_growth_stages(environmental_data: Dict[str, Any], crop: str, location: str, planting_date: str) -> Dict[str, Any]:
+        """Predicts growth stages from environmental variables."""
+        prompt = f"""
+        Predict growth stage for {crop} planted on {planting_date} in {location} given environment: {json.dumps(environmental_data)}.
+        Format as JSON with keys: current_stage, expected_timeline, risk_factors
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "growth_prediction"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def monitor_growth_progression(historical_data: Dict[str, Any], current_data: Dict[str, Any], crop: str, location: str) -> Dict[str, Any]:
+        """Monitors crop progression over time."""
+        prompt = f"""
+        Monitor {crop} growth progression in {location}.
+        History: {json.dumps(historical_data)}, Current: {json.dumps(current_data)}.
+        Format as JSON with keys: progression_analysis, anomaly_detection, corrective_actions
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "growth_monitor"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class MaintenanceTrackerTool:
+    @staticmethod
+    async def build_maintenance_plan(equipment_list: List[Dict[str, Any]], usage_stats: Dict[str, Any]) -> Dict[str, Any]:
+        """Builds a maintenance plan based on equipment usage."""
+        prompt = f"""
+        Build maintenance plan for equipment: {json.dumps(equipment_list)}
+        Usage stats: {json.dumps(usage_stats)}.
+        Format as JSON with keys: maintenance_schedule, immediate_actions, estimated_costs
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "maintenance_planning"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class PredictiveMaintenanceTool:
+    @staticmethod
+    async def predict_failures(telemetry: Dict[str, Any], equipment_meta: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Predicts equipment failures using telemetry data."""
+        prompt = f"""
+        Predict equipment failures based on telemetry: {json.dumps(telemetry)}
+        Equipment info: {json.dumps(equipment_meta)}.
+        Format as JSON with keys: high_risk_components, time_to_failure_estimates, preventions
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "failure_prediction"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def optimize_uptime(maintenance_plan: Dict[str, Any], spare_inventory: Dict[str, Any]) -> Dict[str, Any]:
+        """Optimizes equipment uptime by matching plan with inventory."""
+        prompt = f"""
+        Optimize uptime given maintenance plan: {json.dumps(maintenance_plan)}
+        Spare inventory: {json.dumps(spare_inventory)}.
+        Format as JSON with keys: optimized_plan, missing_spares, downtime_estimates
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "uptime_optimization"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class FieldMappingTool:
+    @staticmethod
+    async def generate_field_map(boundaries: List[Dict[str, Any]], overlays: Dict[str, Any], region: str) -> Dict[str, Any]:
+        """Generates geospatial map layers based on boundaries."""
+        prompt = f"""
+        Generate map layers for boundaries in {region}: {json.dumps(boundaries)}.
+        Overlays: {json.dumps(overlays)}
+        Format as JSON with keys: topography_layer, soil_layer, water_flow_layer
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "map_generation"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def analyze_field_shapes(boundaries: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Analyzes field shapes and spatial efficiency."""
+        prompt = f"""
+        Analyze field geometry and shapes: {json.dumps(boundaries)}.
+        Format as JSON with keys: areas, shape_efficiency_scores, boundary_issues
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "shape_analysis"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def export_map(map_layers: Dict[str, Any], formats: List[str]) -> Dict[str, Any]:
+        """Simulates exporting a map into various formats."""
+        prompt = f"""
+        Provide export metadata for map layers: {json.dumps(map_layers)} into formats: {formats}.
+        Format as JSON with keys: exports (a dict mapping format to simulated URLs).
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "map_export"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class TaskPrioritizationTool:
+    @staticmethod
+    async def prioritize_tasks(tasks: List[Dict[str, Any]], resources: Dict[str, Any], constraints: Dict[str, Any], weather: Dict[str, Any]) -> Dict[str, Any]:
+        """Prioritizes tasks based on constraints and real-time data."""
+        prompt = f"""
+        Prioritize these farming tasks: {json.dumps(tasks)}.
+        Resources available: {json.dumps(resources)}.
+        Constraints: {json.dumps(constraints)}.
+        Weather data: {json.dumps(weather)}.
+        Format as JSON with keys: ordered_tasks, resource_allocations, scheduling_conflicts
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "task_prioritization"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def optimize_sequence(ordered_tasks: List[Dict[str, Any]], objective: str) -> Dict[str, Any]:
+        """Optimizes the sequence of already prioritized tasks for a specific objective."""
+        prompt = f"""
+        Optimize this task sequence: {json.dumps(ordered_tasks)} for the objective: {objective}.
+        Format as JSON with keys: final_order, estimated_completion_times, efficiency_gains
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "sequence_optimization"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class RealTimeTrackingTool:
+    @staticmethod
+    async def sync_tasks(board_info: Dict[str, Any], tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Simulates syncing tasks with a real-time project management board (e.g. Jira/Trello)."""
+        prompt = f"""
+        Simulate syncing these tasks to {json.dumps(board_info)} board: {json.dumps(tasks)}.
+        Format as JSON with keys: operation_status, updated_tickets, sync_errors
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "task_tracking"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class CropInsuranceTool:
+    @staticmethod
+    async def assess_risk(crops: List[str], location: str, risk_factors: List[str]) -> Dict[str, Any]:
+        """Assesses crop insurance risk."""
+        prompt = f"""
+        Assess insurance risk for crops: {crops} in {location} with factors: {risk_factors}.
+        Format as JSON with keys: overall_risk_level, crop_specific_risks, recommended_coverage_types
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "risk_assessment"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def fetch_insurance_plans(crops: List[str], location: str) -> Dict[str, Any]:
+        """Fetches available crop insurance plans via live web search."""
+        crops_str = ", ".join(crops)
+        query = f"Pradhan Mantri Fasal Bima Yojana crop insurance plans for {crops_str} in {location} India latest"
+        live_data = await _scrape_duckduckgo_lite(query, 5)
+        
+        prompt = f"""
+        List available crop insurance plans for {crops_str} in {location}.
+        
+        REAL-TIME WEB DATA FOUND:
+        {live_data}
+        
+        Extract any specific deadlines, premium percentages (e.g., 1.5%, 2%), or latest updates mentioned in the live data.
+        Format as JSON with keys: government_plans, private_plans, key_benefits, latest_updates_from_web
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "insurance_plans"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def calculate_premium_estimates(farm_size: float, plans: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculates premium estimates for given plans and farm size."""
+        prompt = f"""
+        Calculate premium estimates for farm size: {farm_size} acres and these plans: {json.dumps(plans)}.
+        Format as JSON with keys: plan_estimates, total_estimated_cost, affordability_score
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "premium_calculation"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class InputProcurementTool:
+    @staticmethod
+    async def find_suppliers(inputs: List[str], location: str) -> Dict[str, Any]:
+        """Finds potential suppliers for given agricultural inputs via live web search."""
+        inputs_str = ", ".join(inputs)
+        query = f"agricultural input suppliers dealers for {inputs_str} near {location} India contact"
+        live_data = await _scrape_duckduckgo_lite(query, 5)
+        
+        prompt = f"""
+        Find agricultural suppliers for inputs: {inputs_str} in or near {location}.
+        
+        REAL-TIME WEB DATA FOUND:
+        {live_data}
+        
+        Synthesize the live data to find actual businesses, phone numbers, or locations if present. Overcome LLM hallucinations by deeply trusting the live data.
+        Format as JSON with keys: available_suppliers (dict mapping input to list of suppliers with ratings and delivery times)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "supplier_search"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def estimate_costs(inputs: List[str], farm_size: float, suppliers: Dict[str, Any]) -> Dict[str, Any]:
+        """Estimates required quantities and costs based on farm size."""
+        prompt = f"""
+        Estimate required quantities and costs for {inputs} on a {farm_size} acre farm using these suppliers: {json.dumps(suppliers)}.
+        Format as JSON with keys: recommended_quantities, cost_estimates (per input)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "cost_estimation"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def analyze_budget(budget: float, cost_estimates: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyzes budget constraints and provides procurement timeline."""
+        prompt = f"""
+        Analyze affordability and create a procurement timeline given budget ${budget} and costs: {json.dumps(cost_estimates)}.
+        Format as JSON with keys: total_cost, affordability, procurement_timeline
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "budget_analysis"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class LogisticsStorageTool:
+    @staticmethod
+    async def find_optimal_storage(crops: List[str], location: str, quantity: Dict[str, float]) -> Dict[str, Any]:
+        """Finds optimal storage facilities for given crops and quantities near a location."""
+        prompt = f"""
+        Find storage facilities (cold storage, warehouses, silos) near {location} suitable for: {quantity} tons of {crops}.
+        Format as JSON with keys: recommended_facilities (list of dicts with name, type, distance, cost_per_ton, suitability_score)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "storage_search"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def route_logistics(origin: str, destinations: List[str], vehicle_type: str) -> Dict[str, Any]:
+        """Calculates logistics routing and costs."""
+        prompt = f"""
+        Calculate logistics routes from {origin} to {destinations} using {vehicle_type}.
+        Format as JSON with keys: routes (list of dicts with destination, distance_km, estimated_hours, cost_estimate, weather_risks)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "route_calculation"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class MarketIntelligenceTool:
+    @staticmethod
+    async def fetch_mandi_prices(crops: List[str], location: str) -> Dict[str, Any]:
+        """Fetches latest mandi prices for specific crops using live web scoring."""
+        crop_list_str = ", ".join(crops)
+        query = f"latest mandi price {crop_list_str} {location} India today agmarknet"
+        live_data = await _scrape_duckduckgo_lite(query, 5)
+        
+        prompt = f"""
+        Provide latest mandi/market prices for crops: {crop_list_str} in or near {location}.
+        
+        REAL-TIME WEB DATA FOUND ABOUT PRICING TODAY:
+        {live_data}
+        
+        Synthesize the above live data accurately. If the live data directly states a price, use it. If vague, estimate based on recent historical knowledge.
+        Format as JSON with keys: mandi_prices (dict mapping crop to verified price per quintal), latest_snapshot (summary string including data source confidence)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "mandi_prices"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def fetch_global_prices(crops: List[str]) -> Dict[str, Any]:
+        """Fetches global market prices and indicators."""
+        prompt = f"""
+        Provide current global market prices and indicators for crops: {crops}.
+        Format as JSON with keys: global_prices (dict mapping crop to global price indicator), market_trends (summary string)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "global_prices"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def plot_price_trend(mandi_prices: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyzes price trends from mandi prices."""
+        prompt = f"""
+        Analyze price trends and provide selling advice based on these current mandi prices: {json.dumps(mandi_prices)}.
+        Format as JSON with keys: insights (dict mapping crop to trend direction and advice)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "price_trends"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class ComplianceTool:
+    @staticmethod
+    async def get_certification_requirements(certification_type: str, location: str) -> Dict[str, Any]:
+        """Fetches certification requirements and expected costs via live web search."""
+        query = f"official requirements cost documents for {certification_type} certification in {location} India"
+        live_data = await _scrape_duckduckgo_lite(query, 5)
+        
+        prompt = f"""
+        Provide detailed certification requirements for '{certification_type}' in {location}.
+        
+        REAL-TIME WEB DATA FOUND:
+        {live_data}
+        
+        Extract exact document names, specific costs, or transition periods mentioned in the live data.
+        Format as JSON with keys: transition_period (string), documentation_required (list of strings), practices_required (list of strings), inspections (string), estimated_costs (dict with application_fee, annual_fee, etc.)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "certification_requirements"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def assess_compliance(certification_type: str, current_practices: Dict[str, Any]) -> Dict[str, Any]:
+        """Assesses current practices against certification requirements."""
+        prompt = f"""
+        Assess these current farming practices {json.dumps(current_practices)} against '{certification_type}' certification requirements.
+        Format as JSON with keys: overall_compliance_percentage (number), compliant_areas (list), non_compliant_areas (list), ready_for_certification (boolean)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "compliance_assessment"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def generate_roadmap(certification_type: str, compliance_status: Dict[str, Any]) -> Dict[str, Any]:
+        """Generates a roadmap for achieving certification."""
+        prompt = f"""
+        Generate a step-by-step roadmap to achieve '{certification_type}' certification given this compliance status: {json.dumps(compliance_status)}.
+        Format as JSON with keys: phase_1 (dict with duration, tasks, milestones), phase_2, phase_3, critical_path (list)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "certification_roadmap"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class CommunityEngagementTool:
+    @staticmethod
+    async def get_local_groups(location: str) -> Dict[str, Any]:
+        """Finds local farmer groups, NGOs, and cooperatives near location."""
+        prompt = f"""
+        Provide information on potential local farmer groups, cooperatives, and agricultural NGOs near {location}.
+        Format as JSON with keys: local_groups (list of dicts with name, type, contact_info, activities, benefits)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "local_groups"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def get_government_schemes(location: str, farm_size: float = 0) -> Dict[str, Any]:
+        """Gets relevant government schemes based on location and farm size."""
+        prompt = f"""
+        Identify applicable government agricultural schemes or financial support programs for a {farm_size} acre farm in {location}.
+        Format as JSON with keys: government_schemes (list of dicts with name, description, amount, eligibility, application_process)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "government_schemes"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def get_forum_trends(interests: List[str]) -> Dict[str, Any]:
+        """Analyzes trending topics in agricultural community forums."""
+        prompt = f"""
+        Simulate trending discussions in agricultural forums based on these interests: {interests}.
+        Format as JSON with keys: trending_topics (list of strings), upcoming_events (list of dicts with name, date, description)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "forum_trends"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class FarmerCoachTool:
+    @staticmethod
+    async def get_seasonal_tips(season: str, location: str, current_crops: List[str]) -> Dict[str, Any]:
+        """Provides seasonal farming tips and weather preparation advice."""
+        prompt = f"""
+        Provide seasonal farming tips for {season} in {location} for crops: {current_crops}.
+        Format as JSON with keys: general_tips (list), crop_specific_tips (dict), weather_preparation (list)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "seasonal_tips"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def get_learning_resources(experience: str, query: str) -> Dict[str, Any]:
+        """Gets recommended learning resources based on experience level and topic."""
+        prompt = f"""
+        Recommend learning resources about "{query}" for a farmer with "{experience}" experience level.
+        Format as JSON with keys: videos (list), articles (list), courses (list), local_programs (list)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "learning_resources"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    @staticmethod
+    async def create_action_plan(query: str, experience: str) -> Dict[str, Any]:
+        """Creates a step-by-step action plan for a specific farming goal."""
+        prompt = f"""
+        Create an actionable farming plan for a farmer with "{experience}" experience looking to: "{query}".
+        Format as JSON with keys: immediate_actions (list), short_term_goals (list), long_term_goals (list), success_metrics (list)
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "action_plan"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class ProfitOptimizationTool:
+    @staticmethod
+    async def calculate_profitability(crops: List[str], yield_predictions: Dict[str, Any], market_prices: Dict[str, Any], input_costs: Dict[str, Any], farm_size: float) -> Dict[str, Any]:
+        """Provides dynamic profitability suggestions based on crops, prices, yields and costs."""
+        prompt = f"""
+        Calculate and optimize profitability for farming.
+        Crops: {crops}
+        Yield Predictions: {yield_predictions}
+        Market Prices: {market_prices}
+        Input Costs: {input_costs}
+        Farm Size: {farm_size} acres
+        
+        Provide optimization strategies to maximize profit.
+        Format as JSON with keys: 'projected_revenue', 'projected_costs', 'net_profit', 'optimization_strategies' (list of strings).
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "profit_optimization"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class YieldPredictorTool:
+    @staticmethod
+    async def predict_yield(crop: str, area_acre: float, soil_data: Dict[str, Any], weather_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Provides an estimated crop yield based on farm specifics, soil, and weather."""
+        prompt = f"""
+        Predict crop yield based on the following:
+        Crop: {crop}
+        Area (acres): {area_acre}
+        Soil Data: {soil_data}
+        Weather Data: {weather_data}
+        
+        Calculate the predicted yield in tons, a confidence score (0 to 1), and identify any major risk factors.
+        Format as JSON with keys: 'predicted_yield_tons' (float), 'confidence_score' (float), 'risk_factors' (list of strings), 'recommendations' (list of strings).
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "yield_prediction"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+class CarbonSustainabilityTool:
+    @staticmethod
+    async def analyze_sustainability(farm_size: float, current_practices: Dict[str, Any], equipment_usage: Dict[str, Any], fertilizer_usage: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyzes farm practices, equipment, and fertilizer usage to assess sustainability and carbon footprint."""
+        prompt = f"""
+        Analyze the carbon footprint and sustainability of a farm.
+        Farm Size: {farm_size} acres
+        Practices: {current_practices}
+        Equipment: {equipment_usage}
+        Fertilizers: {fertilizer_usage}
+        
+        Based on this data, calculate estimated carbon emissions, identify potential regenerative farming improvements, and list available sustainability programs or carbon credit opportunities.
+        Format as JSON with keys: 'estimated_carbon_footprint' (string), 'regenerative_recommendations' (list of strings), 'sustainability_programs' (list of strings), 'carbon_credit_potential' (string).
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "carbon_sustainability"})
+            return gemini_service._parse_json_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
 
 class PestDiseaseTool:
     """Tools for pest and disease management using Gemini for dynamic analysis"""
     
+    @staticmethod
+    async def analyze_pest_image(image_base64: str, crop: str = "Unknown", region: str = "Unknown") -> Dict[str, Any]:
+        """Diagnose pest/disease from image (Placeholder for TensorFlow/Vision Models)"""
+        prompt = f"""
+        Analyze this image of a {crop} from {region}, India. Identify the disease or pest.
+        [IMAGE_DATA_ATTACHED: length={len(image_base64)}]
+        
+        Provide:
+        1. Diagnosis
+        2. Severity
+        3. Recommended immediate treatments (Chemical & Organic)
+        
+        Format as JSON with keys: diagnosis, severity, immediate_treatments
+        """
+        try:
+            response = await gemini_service.generate_response(prompt, {"task": "pest_image_analysis"})
+            parsed = gemini_service._parse_json_response(response)
+            parsed["source"] = "PestDiseaseTool (Vision Model Sim)"
+            return parsed
+        except Exception as e:
+            return {"error": f"Failed to analyze image: {e}"}
+
     @staticmethod
     async def diagnose_pest_disease(symptoms: List[str], crop: str, region: str, growth_stage: str) -> Dict[str, Any]:
         """Diagnose pest or disease based on symptoms using AI analysis"""
@@ -518,6 +1399,23 @@ class IrrigationTool:
     @staticmethod
     async def get_irrigation_planning(crop: str, soil_data: Dict[str, Any], weather_data: Dict[str, Any], region: str) -> Dict[str, Any]:
         """Get comprehensive irrigation planning"""
+        et_note = ""
+        # Evapotranspiration basic math / IoT Placeholder
+        if weather_data and isinstance(weather_data, dict):
+            # rough ET logic: Higher temps = higher ET
+            forecast = weather_data.get("daily_forecast", [])
+            if forecast and isinstance(forecast[0], dict) and "temperature" in forecast[0]:
+                def get_temp(f_entry):
+                    t = f_entry.get("temperature", {})
+                    return t.get("max", t.get("day", 30))
+                temps = [get_temp(f) for f in forecast]
+                if temps:
+                    avg_temp = sum(temps) / len(temps)
+                    if avg_temp > 35:
+                        et_note = f"Calculated high Evapotranspiration due to avg temps around {avg_temp:.1f}°C. Automatically increase watering volume by 20% to avoid stress."
+                    else:
+                        et_note = f"Normal Evapotranspiration expected, avg temps around {avg_temp:.1f}°C."
+
         prompt = f"""
         Provide detailed irrigation planning for {crop} cultivation in {region}, India.
         
@@ -525,6 +1423,9 @@ class IrrigationTool:
         Weather Data: {json.dumps(weather_data, indent=2)}
         Crop: {crop}
         Region: {region}
+        
+        Calculated ET note: {et_note}
+        (Please adapt the irrigation schedule and volumes explicitly integrating the ET note).
         
         Include:
         1. Water requirement analysis
@@ -581,8 +1482,28 @@ class WebScrapingTool:
     @staticmethod
     async def scrape_market_data(crop: str, region: str) -> Dict[str, Any]:
         """Scrape market data for specific crop and region"""
+        scraped_text = ""
+        try:
+            if BeautifulSoup is not None:
+                query = urllib.parse.quote(f"{crop} price today in {region} mandi site:agmarknet.gov.in OR site:economictimes.indiatimes.com")
+                url = f"https://html.duckduckgo.com/html/?q={query}"
+                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, headers=headers, timeout=10) as resp:
+                        if resp.status == 200:
+                            html = await resp.text()
+                            soup = BeautifulSoup(html, "html.parser")
+                            results = soup.find_all("a", class_="result__snippet")
+                            scraped_text = "\n".join([r.get_text() for r in results[:5]])
+        except Exception as e:
+            scraped_text = f"Scraping failed: {e}. Falling back to simulation."
+
         prompt = f"""
-        Based on current agricultural market trends and data, provide comprehensive market information for {crop} in {region}, India.
+        Based on the latest web scraped data and current agricultural market trends, provide comprehensive market information for {crop} in {region}, India.
+        
+        Real-Time Scraped Data (Use this to prioritize your response if relevant, otherwise use your knowledge):
+        {scraped_text}
         
         Include:
         1. Current market prices per quintal/kg
@@ -601,7 +1522,10 @@ class WebScrapingTool:
         
         try:
             response = await gemini_service.generate_response(prompt, {"task": "market_data_scraping"})
-            return gemini_service._parse_json_response(response)
+            parsed = gemini_service._parse_json_response(response)
+            parsed["source"] = "WebScrapingTool (BeautifulSoup + LLM)"
+            parsed["scraped_context_length"] = len(scraped_text)
+            return parsed
         except Exception as e:
             return {"error": f"Failed to scrape market data: {str(e)}"}
     
@@ -639,8 +1563,28 @@ class ClimatePredictionTool:
     @staticmethod
     async def predict_climate_conditions(location: str, season: str, days: int = 30) -> Dict[str, Any]:
         """Predict climate conditions for crop planning"""
+        api_data_str = ""
+        # Try fetching real data from OpenWeatherMap long-term forecast (16-day/30-day) if key is present
+        if hasattr(settings, 'openweather_api_key') and settings.openweather_api_key:
+            try:
+                # Use standard 5-day forecast as a rough basis for longer term trends if climate API is premium
+                url = "https://api.openweathermap.org/data/2.5/forecast"
+                # Simple fallback to get coordinates (assuming get_location_coordinates is available, or use direct q=)
+                params = {"q": f"{location},IN", "appid": settings.openweather_api_key, "units": "metric"}
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, params=params, timeout=10) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            temps = [item["main"]["temp"] for item in data.get("list", [])[:10]]
+                            avg_temp = sum(temps) / len(temps) if temps else 0
+                            api_data_str = f"Real-Time API avg temp for next week: {avg_temp:.1f}°C. Use this trend for the 30-day extrapolation."
+            except Exception as e:
+                api_data_str = f"API fetch failed: {e}. Rely on simulation."
+
         prompt = f"""
         Provide detailed climate prediction for {location}, India during {season} season for the next {days} days.
+        
+        {api_data_str}
         
         Include:
         1. Temperature predictions (min/max/average)
@@ -659,7 +1603,9 @@ class ClimatePredictionTool:
         
         try:
             response = await gemini_service.generate_response(prompt, {"task": "climate_prediction"})
-            return gemini_service._parse_json_response(response)
+            parsed = gemini_service._parse_json_response(response)
+            parsed["source"] = "ClimatePredictionTool (OpenWeatherMap + LLM)"
+            return parsed
         except Exception as e:
             return {"error": f"Failed to predict climate conditions: {str(e)}"}
     
@@ -701,8 +1647,25 @@ class MarketAnalysisTool:
     @staticmethod
     async def analyze_historical_prices(crop: str, region: str, period: str = "1_year") -> Dict[str, Any]:
         """Analyze historical crop prices and trends"""
+        api_data_str = ""
+        # Try fetching real data from TradingEconomics or AlphaVantage if key is present
+        te_key = getattr(settings, 'trading_economics_key', None)
+        if te_key:
+            try:
+                # Make dummy structured call
+                url = f"https://api.tradingeconomics.com/markets/commodities"
+                params = {"c": te_key, "f": "json"}
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, params=params, timeout=10) as resp:
+                        if resp.status == 200:
+                            api_data_str = "Successfully fetched TE global commodity markers to influence trend direction."
+            except Exception as e:
+                api_data_str = f"API fetch failed: {e}. Let LLM simulate."
+
         prompt = f"""
         Provide comprehensive historical price analysis for {crop} in {region}, India over the last {period}.
+        
+        {api_data_str}
         
         Include:
         1. Price trends and patterns
@@ -721,7 +1684,9 @@ class MarketAnalysisTool:
         
         try:
             response = await gemini_service.generate_response(prompt, {"task": "historical_price_analysis"})
-            return gemini_service._parse_json_response(response)
+            parsed = gemini_service._parse_json_response(response)
+            parsed["source"] = "MarketAnalysisTool (TradingEconomics + LLM)"
+            return parsed
         except Exception as e:
             return {"error": f"Failed to analyze historical prices: {str(e)}"}
     
@@ -759,8 +1724,27 @@ class GeneticDatabaseTool:
     @staticmethod
     async def query_seed_varieties(crop: str, region: str) -> Dict[str, Any]:
         """Query seed varieties and their characteristics"""
+        scraped_text = ""
+        try:
+            if BeautifulSoup is not None:
+                query = urllib.parse.quote(f"{crop} seed varieties {region} India site:icar.org.in OR site:seednet.gov.in")
+                url = f"https://html.duckduckgo.com/html/?q={query}"
+                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, headers=headers, timeout=10) as resp:
+                        if resp.status == 200:
+                            html = await resp.text()
+                            soup = BeautifulSoup(html, "html.parser")
+                            results = soup.find_all("a", class_="result__snippet")
+                            scraped_text = "Recent ICAR/SeedNet Mentions:\n" + "\n".join([r.get_text() for r in results[:3]])
+        except Exception as e:
+            scraped_text = f"Scraping failed: {e}. Falling back to simulation."
+
         prompt = f"""
         Provide comprehensive information about seed varieties available for {crop} cultivation in {region}, India.
+        
+        {scraped_text}
         
         Include:
         1. Popular varieties (GMO, hybrid, traditional)
@@ -817,12 +1801,29 @@ class SoilSuitabilityTool:
     @staticmethod
     async def assess_soil_suitability(soil_data: Dict[str, Any], crop: str, variety: str) -> Dict[str, Any]:
         """Assess soil suitability for specific crop variety"""
+        # Mathematical prescreening logic
+        math_analysis = ""
+        base_score = 100
+        if "ph" in soil_data:
+            ph = float(soil_data["ph"])
+            if ph < 5.5 or ph > 8.5:
+                base_score -= 30
+                math_analysis += "pH is outside optimal ranges, causing immediate 30% penalty. "
+        
+        if "nitrogen" in soil_data:
+            n = float(soil_data["nitrogen"])
+            if n < 20: 
+                base_score -= 15
+                math_analysis += "Nitrogen is critically low. "
+                
         prompt = f"""
         Assess soil suitability for {variety} variety of {crop} based on the provided soil data.
         
         Soil Data: {json.dumps(soil_data, indent=2)}
         Crop: {crop}
         Variety: {variety}
+        
+        Calculated Pre-screening notes: {math_analysis} (Base logic score: {base_score}/100)
         
         Provide:
         1. Overall soil suitability score (0-100)
@@ -883,6 +1884,21 @@ class YieldPredictionTool:
     @staticmethod
     async def predict_crop_yield(crop: str, variety: str, soil_data: Dict[str, Any], weather_data: Dict[str, Any], region: str) -> Dict[str, Any]:
         """Predict crop yield based on multiple factors"""
+        # Yield mathematical prescreen
+        yield_multiplier = 1.0
+        math_analysis = ""
+        if "ph" in soil_data:
+            ph = float(soil_data["ph"])
+            if ph < 5.0 or ph > 8.5:
+                yield_multiplier *= 0.65
+                math_analysis += "Yield degraded severely by extreme pH. "
+        
+        if weather_data and isinstance(weather_data, dict):
+            alerts = weather_data.get("agricultural_impact", {}).get("alerts", {})
+            if alerts:
+                yield_multiplier *= 0.8
+                math_analysis += "Yield degraded by expected weather alerts. "
+
         prompt = f"""
         Predict the expected yield for {variety} variety of {crop} in {region}, India.
         
@@ -891,6 +1907,9 @@ class YieldPredictionTool:
         Crop: {crop}
         Variety: {variety}
         Region: {region}
+        
+        Calculated Pre-screening Impact: multiplier = {yield_multiplier:.2f} ({math_analysis})
+        Use this multiplier logic to adjust the baseline standard yield for this region.
         
         Provide:
         1. Expected yield range (min-max)

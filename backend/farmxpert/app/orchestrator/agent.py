@@ -102,6 +102,26 @@ class OrchestratorAgent:
                         .order_by(SensorReading.recorded_at.desc())
                         .first()
                     )
+                
+                # Fetch FarmProfile for detailed user context
+                from farmxpert.models.farm_profile_models import FarmProfile
+                farm_profile = db.query(FarmProfile).filter(FarmProfile.user_id == user_id).first()
+                if farm_profile:
+                    primary_crop = ""
+                    if farm_profile.primary_crops and isinstance(farm_profile.primary_crops, list) and len(farm_profile.primary_crops) > 0:
+                        primary_crop = farm_profile.primary_crops[0]
+                    user.onboarding_data = {
+                        "farmSize": farm_profile.farm_size,
+                        "state": farm_profile.state,
+                        "district": farm_profile.district,
+                        "specificCrop": farm_profile.specific_crop,
+                        "mainCropCategory": primary_crop,
+                        "soilType": farm_profile.soil_type,
+                        "irrigationMethod": farm_profile.irrigation_method,
+                    }
+                else:
+                    user.onboarding_data = {}
+                
                 return user, sensor_reading
             finally:
                 db.close()
@@ -113,10 +133,10 @@ class OrchestratorAgent:
     def _build_system_prompt(user: Optional[Any], sensor_reading: Optional[Any]) -> str:
         """Build a personalized system prompt from User onboarding_data and SensorReading data."""
         base = (
-            "You are FarmXpert, an expert agricultural AI assistant. "
-            "Summarize farming insights clearly and briefly. "
-            "Do not invent data. Use a calm, farmer-friendly tone. "
-            "Avoid emojis and exaggeration.\n\n"
+            "You are FarmXpert, an expert, friendly agricultural AI assistant guiding the farmer towards success. "
+            "Always respond in a helpful, conversational, and empathetic tone like a trusted advisor. "
+            "Summarize insights clearly and provide actionable, step-by-step guidance. "
+            "Do not invent data. Use a natural, farmer-friendly tone without excessive exaggeration.\n\n"
         )
 
         if not user or not hasattr(user, 'onboarding_data') or not user.onboarding_data:
@@ -198,15 +218,23 @@ class OrchestratorAgent:
                 enriched_request = request
 
             # Determine query type using routing rules
-            query_type = OrchestratorAgent._determine_query_type(enriched_request)
-            # Ensure query_type is a string, not a list
-            if isinstance(query_type, list):
-                query_type = query_type[0] if query_type else "conversational_query"
-            logger.info(f"Determined query type: {query_type}")
+            selected_agents = enriched_request.get("selected_agents", [])
+            if selected_agents and isinstance(selected_agents, list) and len(selected_agents) > 0:
+                # If explicit agents are selected from frontend, bypass mapping logic
+                query_type = "explicit_selection"
+                agents_to_call = selected_agents
+                logger.info(f"User explicitly selected agents: {agents_to_call}")
+            else:
+                # Determine query type using routing rules
+                query_type = OrchestratorAgent._determine_query_type(enriched_request)
+                # Ensure query_type is a string, not a list
+                if isinstance(query_type, list):
+                    query_type = query_type[0] if query_type else "conversational_query"
+                logger.info(f"Determined query type: {query_type}")
 
-            # Get agents to call based on query type
-            agents_to_call = OrchestratorAgent.QUERY_TYPE_MAP.get(query_type, [])
-            logger.info(f"Agents to call: {agents_to_call}")
+                # Get agents to call based on query type
+                agents_to_call = OrchestratorAgent.QUERY_TYPE_MAP.get(query_type, [])
+                logger.info(f"Agents to call: {agents_to_call}")
 
             # Execute agents in parallel
             results = await OrchestratorAgent._execute_agents(agents_to_call, enriched_request)
@@ -812,6 +840,9 @@ class OrchestratorAgent:
             market_intelligence_analysis = results.get("market_intelligence_agent", {}).get("data")
             task_scheduler_analysis = results.get("task_scheduler_agent", {}).get("data")
             
+            # Extract chat history context
+            chat_history = request.get("chat_history", [])
+            
             # Call LLM service (not async)
             summary = OrchestratorLLMService.generate_summary(
                 query=request.get("query"),
@@ -823,6 +854,7 @@ class OrchestratorAgent:
                 market_intelligence_analysis=market_intelligence_analysis,
                 task_scheduler_analysis=task_scheduler_analysis,
                 system_prompt=system_prompt,
+                chat_history=chat_history,
             )
             return summary or "Unable to generate summary"
         except Exception as e:

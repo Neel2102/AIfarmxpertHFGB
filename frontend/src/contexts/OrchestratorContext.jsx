@@ -13,6 +13,8 @@ const ACTIONS = {
     CLEAR_WORKFLOW: 'CLEAR_WORKFLOW',
     SET_SYSTEM_STATUS: 'SET_SYSTEM_STATUS',
     SET_HISTORY: 'SET_HISTORY',
+    CLEAR_MESSAGES: 'CLEAR_MESSAGES',
+    RESET_SESSION: 'RESET_SESSION',
 };
 
 // Initial state
@@ -67,7 +69,10 @@ function orchestratorReducer(state, action) {
             };
 
         case 'SET_MESSAGES':
-            return { ...state, messages: action.payload };
+            const newMessages = typeof action.payload === 'function' 
+                ? action.payload(state.messages) 
+                : action.payload;
+            return { ...state, messages: newMessages };
 
         case ACTIONS.SET_REASONING_TREE:
             return { ...state, reasoningTree: action.payload };
@@ -86,6 +91,19 @@ function orchestratorReducer(state, action) {
 
         case ACTIONS.SET_HISTORY:
             return { ...state, chatHistory: action.payload };
+
+        case ACTIONS.CLEAR_MESSAGES:
+            return { ...state, messages: [] };
+
+        case ACTIONS.RESET_SESSION:
+            return { 
+                ...state, 
+                session: null, 
+                messages: [],
+                currentWorkflow: null,
+                agentStatuses: {},
+                reasoningTree: null 
+            };
 
         default:
             return state;
@@ -177,7 +195,7 @@ export function OrchestratorProvider({ children }) {
             dispatch({ type: ACTIONS.SET_LOADING, payload: true });
 
             // Get history for this session specifically
-            const result = await apiService.request(`/api/super-agent/history?session_id=${sessionId}`);
+            const result = await apiService.request(`/super-agent/history?session_id=${sessionId}`);
 
             if (result && result.messages) {
                 // Convert simple text messages format to UI messages
@@ -297,12 +315,32 @@ export function OrchestratorProvider({ children }) {
         }
     };
 
+    const resetSession = () => {
+        const newSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('farmxpert_session_id', newSessionId);
+        dispatch({ type: ACTIONS.RESET_SESSION });
+        dispatch({ type: ACTIONS.SET_SESSION, payload: { id: newSessionId } });
+        return newSessionId;
+    };
+
+    const clearMessages = () => {
+        dispatch({ type: ACTIONS.CLEAR_MESSAGES });
+    };
+
     const clearError = () => {
         dispatch({ type: ACTIONS.SET_ERROR, payload: null });
     };
 
     const clearWorkflow = () => {
         dispatch({ type: ACTIONS.CLEAR_WORKFLOW });
+    };
+
+    const addMessage = (message) => {
+        dispatch({ type: ACTIONS.ADD_MESSAGE, payload: message });
+    };
+
+    const setMessages = (messages) => {
+        dispatch({ type: 'SET_MESSAGES', payload: messages });
     };
 
     const value = {
@@ -316,9 +354,13 @@ export function OrchestratorProvider({ children }) {
         cancelWorkflow,
         clearError,
         clearWorkflow,
+        addMessage,
+        setMessages,
         initializeSystem,
         loadHistory,
         loadSessionMessages,
+        resetSession,
+        clearMessages,
     };
 
     return (

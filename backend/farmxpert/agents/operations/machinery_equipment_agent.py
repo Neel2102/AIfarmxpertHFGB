@@ -12,17 +12,15 @@ class MachineryEquipmentAgent(EnhancedBaseAgent):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        try:
-            from farmxpert.tools.operations.machinery_tracker import MachineryTrackerTool
-            self.maintenance_tool = MachineryTrackerTool()
-        except ImportError:
-            self.maintenance_tool = None
-            self.logger.warning("Could not import MachineryTrackerTool")
+        self.tools = {
+            "maintenance_tracker": MaintenanceTrackerTool(),
+            "predictive_maintenance": PredictiveMaintenanceTool()
+        }
 
     async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Provide machinery recommendations using dynamic tools and predictive maintenance"""
         try:
-            tools = inputs.get("tools", {})
+            tools = self.tools
             context = inputs.get("context", {})
             query = inputs.get("query", "")
 
@@ -47,16 +45,7 @@ class MachineryEquipmentAgent(EnhancedBaseAgent):
             uptime_optimization = {}
 
             # --- REAL TOOL INTEGRATION ---
-            if self.maintenance_tool:
-                try:
-                    # In a real scenario, we'd get farm_id from context
-                    farm_id = context.get("farm_id") or 1 
-                    real_alerts = self.maintenance_tool.get_maintenance_alerts(farm_id)
-                    if real_alerts:
-                        maintenance_plan["real_time_alerts"] = real_alerts
-                        self.logger.info("Integrated MachineryTracker alerts")
-                except Exception as e:
-                    self.logger.warning(f"Failed to fetch maintenance alerts: {e}")
+            # Using our updated tool architecture above
             # -----------------------------
 
             if "maintenance_tracker" in tools:

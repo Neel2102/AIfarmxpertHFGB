@@ -10,7 +10,6 @@ import HandsFreeVoice from "./HandsFreeVoice";
 import AgentCatalog from "./AgentCatalog";
 import HardwareIoT from "./HardwareIoT";
 import SettingsPage from './SettingsPage';
-import MarketDashboard from './MarketDashboard';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/Dashboard/MainDashboard.css';
 
@@ -45,7 +44,6 @@ const MainDashboard = () => {
           <Route path="/profile" element={<Profile />} />
           <Route path="/orchestrator/*" element={<Ai />} />
           <Route path="/setting" element={<SettingsPage />} />
-          <Route path="/market" element={<MarketDashboard />} />
           <Route path="/" element={<Navigate to="/dashboard/today" replace />} />
           <Route path="*" element={<Navigate to="/dashboard/today" replace />} />
         </Routes>

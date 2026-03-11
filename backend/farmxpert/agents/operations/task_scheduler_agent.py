@@ -32,16 +32,15 @@ Provide clear, actionable schedules and priorities with reasoning."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        try:
-            from farmxpert.tools.operations.task_optimizer import TaskOptimizerTool
-            self.optimizer_tool = TaskOptimizerTool()
-        except ImportError:
-            self.optimizer_tool = None
-            self.logger.warning("Could not import TaskOptimizerTool")
+        self.tools = {
+            "task_prioritization": TaskPrioritizationTool(),
+            "real_time_tracking": RealTimeTrackingTool(),
+            "weather_api": WeatherAPITool()
+        }
 
     async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            tools = inputs.get("tools", {})
+            tools = self.tools
             context = inputs.get("context", {})
             query = inputs.get("query", "")
 
@@ -63,16 +62,7 @@ Provide clear, actionable schedules and priorities with reasoning."""
                     self.logger.warning(f"Failed to get weather for scheduling: {e}")
 
             # --- REAL TOOL INTEGRATION ---
-            if self.optimizer_tool and tasks:
-                try:
-                    # Use the greedy optimizer
-                    opt_result = self.optimizer_tool.optimize_schedule(tasks)
-                    if opt_result.get("success"):
-                        prioritization = {"ordered_tasks": opt_result.get("optimized_schedule")}
-                        optimization = {"final_order": opt_result.get("optimized_schedule")}
-                        self.logger.info("Tasks optimized using TaskOptimizerTool")
-                except Exception as e:
-                    self.logger.warning(f"Failed to optimize tasks with tool: {e}")
+            # Using initialized tools dictionary below
             # -----------------------------
 
             if "task_prioritization" in tools and not prioritization:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Any, List, Optional
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
-from farmxpert.services.tools import ImageRecognitionTool, VoiceToTextTool, DiseasePredictionTool, PestDiseaseTool
+from farmxpert.services.tools import VoiceToTextTool, DiseasePredictionTool, PestDiseaseTool
 from farmxpert.services.gemini_service import gemini_service
 from farmxpert.services.providers.pest_disease_inference import PestDiseaseInferenceProvider
 
@@ -35,11 +35,18 @@ Always provide accurate diagnoses with practical treatment solutions and prevent
             }
         ]
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tools = {
+            "voice_to_text": VoiceToTextTool(),
+            "disease_prediction": DiseasePredictionTool(),
+            "pest_disease": PestDiseaseTool()
+        }
+
     async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Handle pest and disease diagnosis using dynamic tools and comprehensive analysis"""
         try:
-            # Get tools from inputs
-            tools = inputs.get("tools", {})
+            tools = self.tools
             context = inputs.get("context", {})
             query = inputs.get("query", "")
             

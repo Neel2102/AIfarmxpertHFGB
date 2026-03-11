@@ -107,6 +107,7 @@ class ChatSession(Base):
     __tablename__ = "chat_sessions"
 
     id = Column(String(64), primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     title = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

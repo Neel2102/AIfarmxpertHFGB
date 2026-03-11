@@ -33,12 +33,19 @@ Always provide practical, water-efficient irrigation recommendations with clear 
                 "output": "For rice in the vegetative stage, you need approximately 25-30mm of water per week. With current soil moisture at 45%, I recommend applying 20mm of water over 3-4 hours using flood irrigation, preferably in the evening to minimize evaporation losses."
             }
         ]
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tools = {
+            "evapotranspiration_model": EvapotranspirationModelTool(),
+            "iot_soil_moisture": IoTSoilMoistureTool(),
+            "weather_api": WeatherAPITool(),
+            "irrigation": IrrigationTool()
+        }
 
     async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Handle irrigation planning using dynamic tools and comprehensive analysis"""
         try:
-            # Get tools from inputs
-            tools = inputs.get("tools", {})
+            tools = self.tools
             context = inputs.get("context", {})
             query = inputs.get("query", "")
             

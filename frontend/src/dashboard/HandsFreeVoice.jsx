@@ -269,7 +269,7 @@ export default function HandsFreeVoice() {
       const ai = new GoogleGenAI({ apiKey: API_KEY });
 
       const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        model: 'gemini-2.0-flash-exp',
         config: {
           responseModalities: [Modality.AUDIO],
           tools: [{ functionDeclarations: [getFarmStatusTool] }],

@@ -145,21 +145,25 @@ async def latest_soil_test(db: Session = Depends(get_db)):
 @router.get("/farm-info")
 async def get_farm_info(db: Session = Depends(get_db)):
     """Get the farmer's farm info (auto-populated from users table)."""
-    farm = db.query(Farm).first()
-    if not farm:
-        return {"has_farm": False}
-    return {
-        "has_farm": True,
-        "farm": {
-            "id": farm.id,
-            "name": farm.name,
-            "farmer_name": farm.farmer_name,
-            "farmer_phone": farm.farmer_phone,
-            "farmer_email": farm.farmer_email,
-            "location": farm.location,
-            "size_acres": farm.size_acres,
-        },
-    }
+    try:
+        farm = db.query(Farm).first()
+        if not farm:
+            return {"has_farm": False}
+        return {
+            "has_farm": True,
+            "farm": {
+                "id": farm.id,
+                "name": getattr(farm, "farm_name", None) or getattr(farm, "name", None) or "My Farm",
+                "farmer_name": getattr(farm, "farmer_name", None),
+                "farmer_phone": getattr(farm, "farmer_phone", None),
+                "farmer_email": getattr(farm, "farmer_email", None),
+                "location": getattr(farm, "location", None),
+                "size_acres": getattr(farm, "size_acres", None),
+            },
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch farm info: {e}")
+        return {"has_farm": False, "error": str(e)}
 
 
 @router.get("/user-live")

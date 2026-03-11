@@ -1,4 +1,3 @@
-
 import sys
 import os
 from datetime import datetime, timedelta
@@ -7,31 +6,96 @@ import random
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from farmxpert.models.database import SessionLocal
+from farmxpert.models.database import SessionLocal, engine, Base
 from farmxpert.models.farm_models import Farm, Field, SoilTest, Crop, Task, WeatherData, MarketPrice
+from farmxpert.models.user_models import User, AuthUser
 
 def seed_db():
-    print("Creating database tables...")
+    print("Creating missing database tables using SQLAlchemy...")
+    Base.metadata.create_all(bind=engine)
     
     db = SessionLocal()
     
     try:
-        # Check if farm exists
-        farm = db.query(Farm).filter(Farm.id == 1).first()
+        print("Seeding users...")
+        # 1. Add Users to both User and AuthUser tables
+        user1_data = {
+            "username": "farmer_john",
+            "email": "john@farmxpert.com",
+            "full_name": "John Doe",
+            "role": "farmer",
+            "is_active": True,
+            "is_verified": True
+        }
+        user2_data = {
+            "username": "admin_jane",
+            "email": "jane@farmxpert.com",
+            "full_name": "Jane Smith",
+            "role": "admin",
+            "is_active": True,
+            "is_verified": True
+        }
+
+        user1 = db.query(User).filter(User.username == user1_data["username"]).first()
+        if not user1:
+            user1 = User(**user1_data)
+            user1.set_password("password123")
+            db.add(user1)
+            
+        user2 = db.query(User).filter(User.username == user2_data["username"]).first()
+        if not user2:
+            user2 = User(**user2_data)
+            user2.set_password("password123")
+            db.add(user2)
+            
+        db.commit()
+        db.refresh(user1)
+        db.refresh(user2)
+
+        # Add corresponding AuthUsers
+        auth_user1 = db.query(AuthUser).filter(AuthUser.username == user1.username).first()
+        if not auth_user1:
+            auth_user1 = AuthUser(
+                farmer_id="FARMER-001",
+                email=user1.email,
+                username=user1.username,
+                name=user1.full_name,
+                password_hash=user1.hashed_password,
+                role=user1.role
+            )
+            db.add(auth_user1)
+            
+        auth_user2 = db.query(AuthUser).filter(AuthUser.username == user2.username).first()
+        if not auth_user2:
+            auth_user2 = AuthUser(
+                farmer_id="ADMIN-001",
+                email=user2.email,
+                username=user2.username,
+                name=user2.full_name,
+                password_hash=user2.hashed_password,
+                role=user2.role
+            )
+            db.add(auth_user2)
+            
+        db.commit()
+        db.refresh(auth_user1)
+
+        # 2. Add Farm (Requires auth_user)
+        farm = db.query(Farm).filter(Farm.farm_name == "Krishna Farm").first()
         if farm:
-            print("Farm ID 1 already exists. Skipping seed.")
+            print("Farm Krishna Farm already exists. Seed complete for users.")
             return
 
-        print("Seeding database...")
-        
-        # Create Farm
+        print("Seeding farm data...")
         farm = Farm(
-            name="Krishna Farm",
-            location="Ahmedabad, Gujarat",
-            size_acres=15.0,
-            farmer_name="Krishna Patel",
-            farmer_phone="+91-9876543210",
-            farmer_email="krishna.patel@example.com"
+            user_id=auth_user1.id,  # from AuthUser
+            farm_name="Krishna Farm",
+            state="Gujarat",
+            district="Ahmedabad",
+            village="Sanand",
+            soil_type="Loamy",
+            latitude=22.9868,
+            longitude=72.4334
         )
         db.add(farm)
         db.commit()
@@ -52,13 +116,11 @@ def seed_db():
                 farm_id=farm.id,
                 field_id=field.id,
                 test_date=datetime.now() - timedelta(days=random.randint(30, 180)),
-                ph_level=random.uniform(6.5, 7.5),
-                nitrogen_ppm=random.uniform(20, 50),
-                phosphorus_ppm=random.uniform(15, 40),
-                potassium_ppm=random.uniform(100, 200),
-                organic_matter_percent=random.uniform(0.5, 2.0),
-                soil_texture=field.soil_type,
-                test_lab="Gujarat State Lab",
+                soil_ph=random.uniform(6.5, 7.5),
+                nitrogen=random.uniform(20, 50),
+                phosphorus=random.uniform(15, 40),
+                potassium=random.uniform(100, 200),
+                source="lab",
                 notes="Standard annual test"
             )
             db.add(test)
@@ -125,7 +187,7 @@ def seed_db():
             db.add(price)
         db.commit()
 
-        print("Database seeded successfully with Krishna Farm data!")
+        print("Database seeded successfully with Users and Farm data!")
         
     except Exception as e:
         print(f"Error seeding database: {e}")

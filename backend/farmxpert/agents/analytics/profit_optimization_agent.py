@@ -11,6 +11,12 @@ class ProfitOptimizationAgent(EnhancedBaseAgent):
     name = "profit_optimization_agent"
     description = "Evaluates profitability across different crop strategies and input combinations. Suggests changes to increase margins"
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tools = {
+            "profit_optimization": ProfitOptimizationTool()
+        }
+
     async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Deterministic profit optimization (no LLM).
 
@@ -22,7 +28,7 @@ class ProfitOptimizationAgent(EnhancedBaseAgent):
         - market_prices: dict[str, float] (optional)
         """
 
-        tools = inputs.get("tools", {})
+        tools = self.tools
         context = inputs.get("context", {})
         query = inputs.get("query", "")
 

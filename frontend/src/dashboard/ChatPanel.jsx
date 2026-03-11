@@ -1,81 +1,95 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, Bot, BarChart3, Droplets, ThermometerSun, FlaskConical, Sprout, Calendar, Zap, Circle, Bug, Cloud, TrendingUp, Clock, Truck, MapPin, DollarSign, Leaf, Package, ShoppingCart, Shield, GraduationCap, Users, Camera, Mic, MicOff, Paperclip, X } from 'lucide-react';
+import { 
+  Bot, BarChart3, Droplets, ThermometerSun, FlaskConical, Sprout, 
+  Calendar, Circle, Bug, Cloud, TrendingUp, Clock, Truck, 
+  MapPin, Camera, Mic, MicOff, Paperclip, X, Check, Menu, Plus
+} from 'lucide-react';
 import { useOrchestrator } from '../contexts/OrchestratorContext';
 import '../styles/Dashboard/ChatPanel.css';
 import '../styles/Dashboard/ChatPanel-reasoning.css';
 
-// Fallback to localhost:8000 if the env variable isn't set yet
 const API_BASE_URL = '/api';
 
-/** Read the stored JWT and return an Authorization header object. */
 const getAuthHeaders = () => {
   const token = localStorage.getItem('access_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-const ChatPanel = ({ agent, farmData, sessionId }) => {
+const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
   const navigate = useNavigate();
-  const { messages: contextMessages } = useOrchestrator();
-  const [messages, setMessages] = useState([]);
+  const { 
+    messages: contextMessages, 
+    loadSessionMessages, 
+    resetSession,
+    session,
+    loading: contextLoading,
+    setMessages
+  } = useOrchestrator();
+
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
 
-  // ── Media state ──────────────────────────────────────────────────────────
-  const [attachedImage, setAttachedImage] = useState(null);   // { file, preview }
-  const [attachedFile, setAttachedFile]   = useState(null);   // { file }
-  const [isRecording, setIsRecording]     = useState(false);
-  const [audioBlob, setAudioBlob]         = useState(null);   // Blob
-  const imageInputRef  = useRef(null);
-  const fileInputRef   = useRef(null);
+  // Use the effective session ID from either props or context
+  const sessionId = propSessionId || session?.id;
+
+  // ── Multi-Agent State ──
+  const [selectedAgents, setSelectedAgents] = useState([]);
+  const [showAgentDrawer, setShowAgentDrawer] = useState(false);
+
+  // ── Media State ──
+  const [attachedImage, setAttachedImage] = useState(null);
+  const [attachedFile, setAttachedFile] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const imageInputRef = useRef(null);
+  const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
-  const audioChunksRef   = useRef([]);
+  const audioChunksRef = useRef([]);
+
+  // ── Media State ──
+
 
   useEffect(() => {
-    if (contextMessages && contextMessages.length > 0) {
-      setMessages(
-        contextMessages.map((m) => ({
-          ...m,
-          content: typeof m?.content === 'string'
-            ? m.content
-                .replace(/<[^>]*>/g, '')
-                .replace(/\b\w+">/g, '')
-                .replace(/\bclass="[^"]*"/g, '')
-            : m?.content,
-        }))
-      );
-    } else {
-      setMessages([{
-        id: Date.now(),
-        type: 'system',
-        content: `Welcome to ${getAgentDisplayName(agent)} !`,
-        timestamp: new Date().toISOString()
-      }]);
+    // Re-sync chat history when switching agents or sessions
+    if (sessionId && loadSessionMessages) {
+      loadSessionMessages(sessionId);
     }
-  }, [agent, contextMessages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, agent]);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (isDropdownOpen && !event.target.closest('.agent-dropdown')) {
-        setIsDropdownOpen(false);
-      }
-    };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isDropdownOpen]);
+
+  const handleNewChat = () => {
+    if (resetSession) resetSession();
+    // Clear local states if any
+    setAttachedImage(null);
+    setAttachedFile(null);
+    setAudioBlob(null);
+    setInputValue('');
+  };
+
+  // Process messages for display
+  const messages = contextMessages.length > 0 
+    ? contextMessages.map((m) => ({
+        ...m,
+        content: typeof m?.content === 'string'
+          ? m.content.replace(/<[^>]*>/g, '').replace(/\b\w+">/g, '').replace(/\bclass="[^"]*"/g, '')
+          : m?.content,
+      }))
+    : [{
+        id: 'welcome',
+        type: 'system',
+        content: `Welcome to FarmXpert! Ask me anything about your farm or select specialists for targeted assistance.`,
+        timestamp: new Date().toISOString()
+      }];
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -86,93 +100,57 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
   const getAgentDisplayName = (name) => {
     const map = {
       'super-agent': 'SuperAgent',
-      'crop_selector': 'Crop Selector Agent',
-      'seed_selection': 'Seed Selection Agent',
-      'soil_health': 'Soil Health Agent',
-      'fertilizer_advisor': 'Fertilizer Advisor Agent',
-      'irrigation_planner': 'Irrigation Planner Agent',
-      'pest_disease_diagnostic': 'Pest & Disease Diagnostic Agent',
-      'weather_watcher': 'Weather Watcher Agent',
-      'growth_stage_monitor': 'Growth Stage Monitor Agent',
-      'task_scheduler': 'Task Scheduler Agent',
-      'machinery_manager': 'Machinery & Equipment Agent',
-      'drone_commander': 'Drone Command Agent',
-      'layout_mapper': 'Farm Layout & Mapping Agent',
-      'yield_predictor': 'Yield Predictor Agent',
-      'profit_optimization': 'Profit Optimization Agent',
-      'sustainability_tracker': 'Carbon & Sustainability Agent',
-      'market_intelligence': 'Market Intelligence Agent'
+      'crop_selector': 'Crop Selector',
+      'seed_selection': 'Seed Selection',
+      'soil_health_agent': 'Soil Health',
+      'fertilizer_agent': 'Fertilizer Advisor',
+      'irrigation_agent': 'Irrigation Planner',
+      'pest_disease_diagnostic': 'Pest Diagnostic',
+      'weather_watcher': 'Weather Watcher',
+      'growth_stage_monitor': 'Growth Monitor',
+      'task_scheduler_agent': 'Task Scheduler',
+      'machinery_manager': 'Machinery Manager',
+      'layout_mapper': 'Layout Mapper',
+      'yield_predictor': 'Yield Predictor',
+      'market_intelligence_agent': 'Market Intel'
     };
     return map[name] || name;
   };
 
   const agentOptions = [
-    // Super Agent
-    { id: 'orchestrator', name: 'Super Agent', icon: Bot, path: '/dashboard/orchestrator' },
-
-    // Crop Planning & Growth
-    { id: 'crop-selector', name: 'Crop Selector', icon: Sprout, path: '/dashboard/orchestrator/crop-selector' },
-    { id: 'seed-selection', name: 'Seed Selection', icon: Circle, path: '/dashboard/orchestrator/seed-selection' },
-    { id: 'soil-health', name: 'Soil Health', icon: FlaskConical, path: '/dashboard/orchestrator/soil-health' },
-    { id: 'fertilizer-advisor', name: 'Fertilizer Advisor', icon: Droplets, path: '/dashboard/orchestrator/fertilizer-advisor' },
-    { id: 'irrigation-planner', name: 'Irrigation Planner', icon: ThermometerSun, path: '/dashboard/orchestrator/irrigation-planner' },
-    { id: 'pest-diagnostic', name: 'Pest & Disease Diagnostic', icon: Bug, path: '/dashboard/orchestrator/pest-diagnostic' },
-    { id: 'weather-watcher', name: 'Weather Watcher', icon: Cloud, path: '/dashboard/orchestrator/weather-watcher' },
-    { id: 'growth-monitor', name: 'Growth Stage Monitor', icon: TrendingUp, path: '/dashboard/orchestrator/growth-monitor' },
-
-    // Farm Operations & Automation
-    { id: 'task-scheduler', name: 'Task Scheduler', icon: Clock, path: '/dashboard/orchestrator/task-scheduler' },
-    { id: 'machinery-manager', name: 'Machinery & Equipment', icon: Truck, path: '/dashboard/orchestrator/machinery-manager' },
-    { id: 'drone-commander', name: 'Drone Command', icon: Zap, path: '/dashboard/orchestrator/drone-commander' },
-    { id: 'layout-mapper', name: 'Farm Layout & Mapping', icon: MapPin, path: '/dashboard/orchestrator/layout-mapper' },
-
-    // Analytics
-    { id: 'yield-predictor', name: 'Yield Predictor', icon: BarChart3, path: '/dashboard/orchestrator/yield-predictor' },
-    { id: 'profit-optimizer', name: 'Profit Optimization', icon: DollarSign, path: '/dashboard/orchestrator/profit-optimizer' },
-    { id: 'sustainability-tracker', name: 'Carbon & Sustainability', icon: Leaf, path: '/dashboard/orchestrator/sustainability-tracker' },
-    { id: 'market-intelligence', name: 'Market Intelligence', icon: Calendar, path: '/dashboard/orchestrator/market-intelligence' },
-
-    // Supply Chain & Market Access
-    { id: 'logistics-storage', name: 'Logistics & Storage', icon: Package, path: '/dashboard/orchestrator/logistics-storage' },
-    { id: 'input-procurement', name: 'Input Procurement', icon: ShoppingCart, path: '/dashboard/orchestrator/input-procurement' },
-    { id: 'crop-insurance-risk', name: 'Crop Insurance & Risk', icon: Shield, path: '/dashboard/orchestrator/crop-insurance-risk' },
-
-    // Farmer Support & Education
-    { id: 'farmer-coach', name: 'Farmer Coach', icon: GraduationCap, path: '/dashboard/orchestrator/farmer-coach' },
-    { id: 'compliance-certification', name: 'Compliance & Certification', icon: Shield, path: '/dashboard/orchestrator/compliance-certification' },
-    { id: 'community-engagement', name: 'Community Engagement', icon: Users, path: '/dashboard/orchestrator/community-engagement' }
+    { id: 'crop_selector', name: 'Crop Selector', icon: Sprout },
+    { id: 'seed_selection', name: 'Seed Selection', icon: Circle },
+    { id: 'soil_health_agent', name: 'Soil Health', icon: FlaskConical },
+    { id: 'fertilizer_agent', name: 'Fertilizer Advisor', icon: Droplets },
+    { id: 'irrigation_agent', name: 'Irrigation Planner', icon: ThermometerSun },
+    { id: 'pest_disease_diagnostic', name: 'Pest Diagnostic', icon: Bug },
+    { id: 'weather_watcher', name: 'Weather Watcher', icon: Cloud },
+    { id: 'growth_stage_monitor', name: 'Growth Monitor', icon: TrendingUp },
+    { id: 'task_scheduler_agent', name: 'Task Scheduler', icon: Clock },
+    { id: 'machinery_manager', name: 'Machinery', icon: Truck },
+    { id: 'layout_mapper', name: 'Farm Layout', icon: MapPin },
+    { id: 'yield_predictor', name: 'Yield Predictor', icon: BarChart3 },
+    { id: 'market_intelligence_agent', name: 'Market Intel', icon: Calendar },
   ];
 
-  const handleAgentChange = (selectedAgent) => {
-    navigate(selectedAgent.path);
-    setIsDropdownOpen(false);
-  };
-
-  const getCurrentAgentName = () => {
-    const currentAgent = agentOptions.find(option => option.id === agent);
-    return currentAgent ? currentAgent.name : getAgentDisplayName(agent);
+  const toggleAgent = (agentId) => {
+    setSelectedAgents(prev => {
+      if (prev.includes(agentId)) return prev.filter(id => id !== agentId);
+      return [...prev, agentId];
+    });
   };
 
   const cleanText = (text) => {
     if (!text) return '';
-    return text
-      .replace(/<[^>]*>/g, '')
-      .replace(/\b\w+">/g, '')
-      .replace(/\bclass="[^"]*"/g, '')
-      .replace(/^["']|["']$/g, '') 
-      .replace(/^\s*(-{1,}|—{1,})\s*$/gm, '')
-      .replace(/\n\s*\n\s*\n/g, '\n\n')
-      .replace(/\n\s*-\s*-\s*/g, '\n- ')
-      .replace(/\n\s*-\s*/g, '\n- ')
-      .replace(/\n\s*\*\s*/g, '\n- ')
-      .trim();
+    return text.replace(/<[^>]*>/g, '')
+               .replace(/\bclass="[^"]*"/g, '')
+               .trim();
   };
 
   const renderMarkdownText = (text) => {
     if (!text) return null;
-
-    const codeBlocks = [];
     let result = String(text);
+    const codeBlocks = [];
 
     result = result.replace(/```([\s\S]*?)```/g, (_m, code) => {
       const idx = codeBlocks.length;
@@ -180,160 +158,51 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
       return `__CODEBLOCK_${idx}__`;
     });
 
-    const renderInline = (raw) => {
-      const s = String(raw ?? '');
+    const renderInline = (s) => {
       const parts = [];
       const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
       let lastIndex = 0;
       let match;
       while ((match = pattern.exec(s)) !== null) {
-        const idx = match.index;
-        if (idx > lastIndex) {
-          parts.push(s.slice(lastIndex, idx));
-        }
+        if (match.index > lastIndex) parts.push(s.slice(lastIndex, match.index));
         const token = match[0];
         if (token.startsWith('`') && token.endsWith('`')) {
-          parts.push(<code key={`${idx}-code`} className="inline-code">{token.slice(1, -1)}</code>);
+          parts.push(<code key={match.index} className="inline">{token.slice(1, -1)}</code>);
         } else if (token.startsWith('**') && token.endsWith('**')) {
-          parts.push(<strong key={`${idx}-b`} className="bold-text">{token.slice(2, -2)}</strong>);
+          parts.push(<strong key={match.index}>{token.slice(2, -2)}</strong>);
         } else if (token.startsWith('*') && token.endsWith('*')) {
-          parts.push(<em key={`${idx}-i`} className="italic-text">{token.slice(1, -1)}</em>);
+          parts.push(<em key={match.index}>{token.slice(1, -1)}</em>);
         } else {
           parts.push(token);
         }
-        lastIndex = idx + token.length;
+        lastIndex = match.index + token.length;
       }
-      if (lastIndex < s.length) {
-        parts.push(s.slice(lastIndex));
-      }
-      return parts;
+      if (lastIndex < s.length) parts.push(s.slice(lastIndex));
+      return parts.length ? parts : s;
     };
 
     const lines = result.split('\n');
-    return lines.map((line, lineIndex) => {
-      const codeMatch = line.match(/__CODEBLOCK_(\d+)__/);
-      if (codeMatch) {
-        const idx = Number(codeMatch[1]);
-        const code = codeBlocks[idx] || '';
-        return (
-          <pre key={lineIndex} className="code-block">
-            {code}
-          </pre>
-        );
-      }
-
-      if (line.trim() === '') {
-        return <div key={lineIndex} className="text-line empty-line"></div>;
-      }
-
-      if (line.trim().startsWith('#### ')) {
-        const title = line.trim().slice(5);
-        return (
-          <h4 key={lineIndex} className="markdown-header">
-            {renderInline(title)}
-          </h4>
-        );
-      }
-
-      if (line.trim().startsWith('### ')) {
-        const title = line.trim().slice(4);
-        return (
-          <h4 key={lineIndex} className="markdown-header">
-            {renderInline(title)}
-          </h4>
-        );
-      }
-
-      if (line.trim().startsWith('## ')) {
-        const title = line.trim().slice(3);
-        return (
-          <h3 key={lineIndex} className="markdown-header">
-            {renderInline(title)}
-          </h3>
-        );
-      }
-
-      if (line.trim().startsWith('# ')) {
-        const title = line.trim().slice(2);
-        return (
-          <h2 key={lineIndex} className="markdown-header">
-            {renderInline(title)}
-          </h2>
-        );
-      }
-
-      if (line.trim().endsWith(':')) {
-        return (
-          <div key={lineIndex} className="text-line section-header">
-            <span>{renderInline(line)}</span>
-          </div>
-        );
-      }
-      if (line.trim().startsWith('-') || line.trim().startsWith('*')) {
-        const cleanLine = line.replace(/^[\s]*[-*]\s*/, '');
-        return (
-          <div key={lineIndex} className="text-line bullet-point">
-            <span>{renderInline(cleanLine)}</span>
-          </div>
-        );
-      }
-      if (/^\d+\.\s/.test(line.trim())) {
-        return (
-          <div key={lineIndex} className="text-line numbered-point">
-            <span>{renderInline(line)}</span>
-          </div>
-        );
-      }
-      return (
-        <div key={lineIndex} className="text-line regular-text">
-          <span>{renderInline(line)}</span>
-        </div>
-      );
-    });
+    return (
+      <div className="farm-markdown">
+        {lines.map((line, lineIndex) => {
+          const codeMatch = line.match(/__CODEBLOCK_(\d+)__/);
+          if (codeMatch) {
+            const code = codeBlocks[Number(codeMatch[1])] || '';
+            return <pre key={lineIndex} className="code-block"><code>{code}</code></pre>;
+          }
+          if (line.trim() === '') return <br key={lineIndex} />;
+          if (line.trim().startsWith('#### ')) return <h4 key={lineIndex}>{renderInline(line.trim().slice(5))}</h4>;
+          if (line.trim().startsWith('### ')) return <h3 key={lineIndex}>{renderInline(line.trim().slice(4))}</h3>;
+          if (line.trim().startsWith('## ')) return <h2 key={lineIndex}>{renderInline(line.trim().slice(3))}</h2>;
+          if (line.trim().startsWith('# ')) return <h1 key={lineIndex}>{renderInline(line.trim().slice(2))}</h1>;
+          if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+            return <li key={lineIndex}>{renderInline(line.trim().slice(2))}</li>;
+          }
+          return <p key={lineIndex}>{renderInline(line)}</p>;
+        })}
+      </div>
+    );
   };
-
-  const renderStructuredText = (text) => {
-    const cleanedText = cleanText(text);
-    return renderMarkdownText(cleanedText);
-  };
-
-  const getDataSourcesFromToolsUsed = (toolsUsed) => {
-    const tools = Array.isArray(toolsUsed) ? toolsUsed : [];
-    const sources = [];
-
-    if (tools.includes('market') || tools.includes('mandi')) {
-      sources.push('APMC / Mandi market prices');
-    }
-    if (tools.includes('weather')) {
-      sources.push('Weather API');
-    }
-    if (tools.includes('soil')) {
-      sources.push('Soil analysis');
-    }
-    if (tools.includes('crop')) {
-      sources.push('Crop planning database/tools');
-    }
-    if (tools.includes('fertilizer')) {
-      sources.push('Fertilizer recommendations');
-    }
-    if (tools.includes('irrigation')) {
-      sources.push('Irrigation planning');
-    }
-    if (tools.includes('iot')) {
-      sources.push('IoT sensor readings');
-    }
-    if (tools.includes('web_search')) {
-      sources.push('Web search');
-    }
-
-    return sources;
-  };
-
-  const formatTime = (timestamp) => new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-  // ==========================================
-  // MEDIA HELPER FUNCTIONS
-  // ==========================================
 
   const handleImageSelect = (e) => {
     const file = e.target.files?.[0];
@@ -341,7 +210,6 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
     const reader = new FileReader();
     reader.onload = (ev) => setAttachedImage({ file, preview: ev.target.result });
     reader.readAsDataURL(file);
-    // Clear file attachment if switching
     setAttachedFile(null);
     setAudioBlob(null);
   };
@@ -358,8 +226,8 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
     setAttachedImage(null);
     setAttachedFile(null);
     setAudioBlob(null);
-    if (imageInputRef.current)  imageInputRef.current.value = '';
-    if (fileInputRef.current)   fileInputRef.current.value = '';
+    if (imageInputRef.current) imageInputRef.current.value = '';
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const startRecording = async () => {
@@ -390,37 +258,32 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
     }
   };
 
-  // ==========================================
-  // UNIFIED API ROUTING LOGIC
-  // ==========================================
   const sendMessage = async () => {
     const text = inputValue.trim();
-    const hasAudio   = !!audioBlob;
-    const hasImage   = !!attachedImage;
-    const hasFile    = !!attachedFile;
+    const hasAudio = !!audioBlob;
+    const hasImage = !!attachedImage;
+    const hasFile = !!attachedFile;
 
     if (!text && !hasAudio && !hasImage && !hasFile) return;
     if (isLoading) return;
 
-    // 1. Add User Message (with attachment label)
     let userContent = text;
-    if (hasImage)   userContent = `[📷 Image: ${attachedImage.file.name}] ${text}`;
-    if (hasFile)    userContent = `[📎 ${attachedFile.file.name}] ${text}`;
-    if (hasAudio)   userContent = `[🎤 Voice message] ${text}`;
+    if (hasImage) userContent = `[📷 Image: ${attachedImage.file.name}] ${text}`;
+    if (hasFile) userContent = `[📎 ${attachedFile.file.name}] ${text}`;
+    if (hasAudio) userContent = `[🎤 Voice message] ${text}`;
 
     const userMessage = { id: Date.now(), type: 'user', content: userContent, timestamp: new Date().toISOString() };
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setIsLoading(true);
 
-    // 2. Add Streaming Placeholder
     const assistantMessageId = Date.now() + 1;
-    setMessages((prev) => [...prev, { id: assistantMessageId, type: 'assistant', content: '', timestamp: new Date().toISOString(), isStreaming: true }]);
+    setMessages((prev) => [...prev, { id: assistantMessageId, type: 'assistant', content: '', timestamp: '', isStreaming: true }]);
 
     try {
       let data = null;
 
-      // ── Voice: audio blob → /api/chat/voice ──────────────────────────────
+      // Voice processing
       if (hasAudio) {
         const formData = new FormData();
         formData.append('file', audioBlob, 'recording.webm');
@@ -429,11 +292,10 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
         const response = await fetch(`${API_BASE_URL}/chat/voice`, { method: 'POST', body: formData, headers: getAuthHeaders() });
         if (!response.ok) throw new Error(`Voice error: ${response.status}`);
 
-        // Response is MP3 audio
         const audioArrayBuffer = await response.arrayBuffer();
         const audioUrl = URL.createObjectURL(new Blob([audioArrayBuffer], { type: 'audio/mpeg' }));
-        const transcript  = decodeURIComponent(response.headers.get('X-Transcript') || '');
-        const textAnswer  = decodeURIComponent(response.headers.get('X-Text-Response') || '');
+        const transcript = decodeURIComponent(response.headers.get('X-Transcript') || '');
+        const textAnswer = decodeURIComponent(response.headers.get('X-Text-Response') || '');
 
         setMessages((prev) => prev.map(msg =>
           msg.id === assistantMessageId
@@ -444,7 +306,7 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
         return;
       }
 
-      // ── Image: → /api/chat/vision ─────────────────────────────────────────
+      // Image processing
       if (hasImage) {
         const formData = new FormData();
         formData.append('file', attachedImage.file);
@@ -463,7 +325,7 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
         return;
       }
 
-      // ── Document: → /api/chat/document ───────────────────────────────────
+      // Document processing
       if (hasFile) {
         const formData = new FormData();
         formData.append('file', attachedFile.file);
@@ -482,13 +344,16 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
         return;
       }
 
-      // ── Text chat: → /api/chat/orchestrate ───────────────────────────────
+      // Standard Text Orchestrator
       const response = await fetch(`${API_BASE_URL}/chat/orchestrate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ message: text, session_id: sessionId }),
+        body: JSON.stringify({ 
+          message: text, 
+          session_id: sessionId,
+          context: { selected_agents: selectedAgents }
+        }),
       });
-
       if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
       data = await response.json();
 
@@ -501,9 +366,13 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
 
     } catch (e) {
       console.error('Chat error:', e);
+      let errorMessage = e.message || 'Could not connect to AI. Ensure backend is running.';
+      if (e.message?.includes('429')) errorMessage = "Experiencing heavy traffic (API rate limit). Please wait a moment and try your query again. 🌱";
+      if (e.message?.includes('500') || e.message?.includes('503')) errorMessage = "The farm orchestrator is currently unavailable. We're working on getting it back online! 🚜";
+
       setMessages((prev) => prev.map(msg =>
         msg.id === assistantMessageId
-          ? { ...msg, content: `Error: ${e.message || 'Could not connect to AI. Ensure backend is running.'}`, isStreaming: false }
+          ? { ...msg, content: errorMessage, isStreaming: false }
           : msg
       ));
     } finally {
@@ -519,36 +388,36 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
     }
   };
 
-  const setSuggestionText = (text) => {
-    setInputValue(text);
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  };
-
-  // ==========================================
-  // VISION DIAGNOSTIC CARD RENDERER
-  // ==========================================
   const renderVisionCard = (visionResult) => {
     if (!visionResult) return null;
     const confidence = Math.round((parseFloat(visionResult.confidence) || 0) * 100);
-    const severity = visionResult.severity || 'unknown';
-    const severityColor = { none: '#22c55e', mild: '#eab308', moderate: '#f97316', severe: '#ef4444', unknown: '#94a3b8' }[severity] || '#94a3b8';
+    const severityColor = { none: '#10b981', mild: '#eab308', moderate: '#f97316', severe: '#ef4444', unknown: '#94a3b8' }[visionResult.severity || 'unknown'] || '#94a3b8';
     return (
-      <div style={{ background: 'linear-gradient(135deg,#0f172a,#1e293b)', border: '1px solid #334155', borderRadius: '12px', padding: '16px', marginTop: '10px', color: '#e2e8f0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-          <span style={{ fontSize: '20px' }}>🔬</span>
-          <span style={{ fontWeight: 700, fontSize: '15px', color: '#f8fafc' }}>Pest & Disease Diagnosis</span>
-        </div>
-        <div style={{ display: 'grid', gap: '8px' }}>
-          <div><span style={{ color: '#94a3b8', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Diagnosis</span><div style={{ fontWeight: 600, color: '#f8fafc', marginTop: '2px' }}>{visionResult.diagnosis || 'Unknown'}</div></div>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <div><span style={{ color: '#94a3b8', fontSize: '11px', textTransform: 'uppercase' }}>Confidence</span><div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}><div style={{ flex: 1, height: '6px', background: '#334155', borderRadius: '3px', minWidth: '80px' }}><div style={{ width: `${confidence}%`, height: '100%', background: '#22c55e', borderRadius: '3px' }}></div></div><span style={{ fontSize: '12px', fontWeight: 600 }}>{confidence}%</span></div></div>
-            <div><span style={{ color: '#94a3b8', fontSize: '11px', textTransform: 'uppercase' }}>Severity</span><div style={{ marginTop: '4px', display: 'inline-block', padding: '2px 10px', borderRadius: '20px', background: severityColor + '22', border: `1px solid ${severityColor}`, color: severityColor, fontSize: '12px', fontWeight: 600, textTransform: 'capitalize' }}>{severity}</div></div>
+      <div className="farm-vision-card">
+        <div className="farm-vision-title"><Bug size={16} /> Pest & Disease Diagnosis</div>
+        <div className="farm-vision-grid">
+          <div>
+            <div className="farm-vision-label">Diagnosis</div>
+            <div className="farm-vision-value">{visionResult.diagnosis || 'Unknown'}</div>
           </div>
-          {visionResult.description && <div><span style={{ color: '#94a3b8', fontSize: '11px', textTransform: 'uppercase' }}>Observation</span><div style={{ color: '#cbd5e1', fontSize: '13px', marginTop: '2px' }}>{visionResult.description}</div></div>}
+          <div className="farm-vision-inline">
+            <div>
+              <div className="farm-vision-label">Confidence: {confidence}%</div>
+              <div className="farm-vision-bar-bg"><div className="farm-vision-bar-fill" style={{ width: `${confidence}%` }}></div></div>
+            </div>
+            <div>
+              <div className="farm-vision-label">Severity</div>
+              <div className="farm-vision-severity" style={{ color: severityColor }}>{visionResult.severity || 'unknown'}</div>
+            </div>
+          </div>
+          {visionResult.description && <div><div className="farm-vision-label">Observation</div><div className="farm-vision-value">{visionResult.description}</div></div>}
           {visionResult.recommended_treatment?.length > 0 && (
-            <div><span style={{ color: '#94a3b8', fontSize: '11px', textTransform: 'uppercase' }}>Recommended Treatment</span><ul style={{ margin: '4px 0 0 0', padding: '0 0 0 16px', color: '#cbd5e1', fontSize: '13px' }}>{visionResult.recommended_treatment.map((t, i) => <li key={i}>{t}</li>)}</ul></div>
+            <div>
+              <div className="farm-vision-label">Recommended Treatment</div>
+              <ul className="farm-vision-list">
+                {visionResult.recommended_treatment.map((t, i) => <li key={i}>{t}</li>)}
+              </ul>
+            </div>
           )}
         </div>
       </div>
@@ -556,156 +425,157 @@ const ChatPanel = ({ agent, farmData, sessionId }) => {
   };
 
   return (
-    <div className="communication-panel">
-      <h3>{agent === 'super-agent' ? 'Farm Orchestrator Chat' : `${getAgentDisplayName(agent)} Chat`}</h3>
-      <div className="message-container">
-        {messages.map((m) => (
-          <div key={m.id} className="message" data-type={m.type}>
-            <div className="message-header">
-              <span className="message-agent">{m.type === 'user' ? 'You' : (agent === 'super-agent' ? 'Farm Orchestrator' : getAgentDisplayName(agent))}</span>
-              <span className="message-time">{formatTime(m.timestamp)}</span>
+    <div className="farm-chat-layout">
+
+      {/* ── Main Chat Area ── */}
+      <main className="farm-chat-main">
+        <header className="farm-chat-header">
+          <h2><span>🚜</span> Farm Orchestrator</h2>
+        </header>
+
+        <div className="farm-messages-container">
+          {messages.length === 1 && messages[0].type === 'system' && (
+            <div className="farm-welcome">
+              <div className="farm-welcome-icon"><Bot size={32} /></div>
+              <h2>How can I help you today?</h2>
+              <p>Type a question or select specialists from the menu below.</p>
             </div>
-            <div className="message-content">
-              {m.type === 'assistant' ? (
-                <div>
-                  {renderStructuredText(m.content)}
-                  {m.isStreaming && (
-                    <div className="typing-indicator"><span></span><span></span><span></span></div>
+          )}
+
+          {messages.map((m) => (
+            <div key={m.id} className={`farm-message-row ${m.type}`}>
+              <div className="farm-message-inner">
+                {m.type !== 'system' && (
+                  <div className={`farm-avatar ${m.type === 'user' ? 'user-bg' : 'assistant-bg'}`}>
+                    {m.type === 'user' ? 'U' : <Bot size={18} />}
+                  </div>
+                )}
+                
+                <div className="farm-message-content">
+                  {m.type !== 'system' && <span className="farm-message-author">{m.type === 'user' ? 'You' : 'Farm Orchestrator'}</span>}
+                  
+                  {m.type === 'assistant' ? (
+                    <>
+                      {renderMarkdownText(cleanText(m.content))}
+                      
+                      {m.isStreaming && <div className="farm-typing"><span></span><span></span><span></span></div>}
+                      
+                      {m.visionResult && !m.isStreaming && renderVisionCard(m.visionResult)}
+                      
+                      {m.audioUrl && !m.isStreaming && (
+                        <div style={{ marginTop: '12px', background: 'rgba(15,23,42,0.5)', padding: '12px', borderRadius: '8px' }}>
+                          <audio controls autoPlay src={m.audioUrl} style={{ width: '100%', height: '36px' }} />
+                          {m.transcript && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '8px', fontStyle: 'italic' }}>🎤 Heard: "{m.transcript}"</div>}
+                        </div>
+                      )}
+
+                      {!m.isStreaming && m.agent_responses && m.agent_responses.length > 0 && (
+                        <div className="farm-context-block">
+                          <div className="farm-context-header"><Check size={14} color="#10b981" /> Sources Consulted</div>
+                          <div className="farm-context-chips">
+                            {m.agent_responses.map((a, i) => (
+                              <span key={i} className={`farm-context-chip ${a.success ? 'success' : 'error'}`}>{getAgentDisplayName(a.agent_name)}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : m.type === 'system' ? (
+                     <div className="farm-system-text">{m.content}</div>
+                  ) : (
+                    m.content
                   )}
-                  {/* Vision Diagnostic Card */}
-                  {m.visionResult && !m.isStreaming && renderVisionCard(m.visionResult)}
-                  {/* Audio playback for voice responses */}
-                  {m.audioUrl && !m.isStreaming && (
-                    <div style={{ marginTop: '10px' }}>
-                      <audio controls autoPlay src={m.audioUrl} style={{ width: '100%', borderRadius: '8px' }} />
-                      {m.transcript && <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>🎤 Heard: "{m.transcript}"</div>}
+                </div>
+              </div>
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* ── Input Area ── */}
+        <div className="farm-input-area">
+          <div className="farm-input-container">
+            
+            {/* Agent Drawer Controls */}
+            <div className="farm-agent-selector">
+              <button className={`farm-agent-toggle ${selectedAgents.length > 0 ? 'active' : ''}`} onClick={() => setShowAgentDrawer(!showAgentDrawer)}>
+                {selectedAgents.length === 0 ? '✨ Auto-Route (SuperAgent) ▼' : `👥 ${selectedAgents.length} Agent(s) Selected ▼`}
+              </button>
+            </div>
+            
+            {showAgentDrawer && (
+              <div className="farm-agent-drawer">
+                <div className="farm-agent-drawer-header"><span>Pick specific agents to handle your query exclusively:</span></div>
+                <div className="farm-agent-pill-list">
+                  {agentOptions.map(opt => (
+                    <button key={opt.id} className={`farm-agent-pill ${selectedAgents.includes(opt.id) ? 'selected' : ''}`} onClick={() => toggleAgent(opt.id)}>
+                      <opt.icon size={13} /> {opt.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="farm-input-box">
+              {/* Attachments Preview */}
+              {(attachedImage || attachedFile || audioBlob) && (
+                <div className="farm-input-attachments">
+                  {attachedImage && (
+                    <div className="farm-attachment-pill">
+                      <img src={attachedImage.preview} alt="preview" />
+                      <span>{attachedImage.file.name}</span>
+                      <button className="farm-attachment-close" onClick={clearAttachments}><X size={14} /></button>
                     </div>
                   )}
-                  {/* Agent chips */}
-                  {m.agent_responses?.length > 0 && !m.isStreaming && (
-                    <div className="consulted-agents-row" style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '11px', color: '#9ca3af', alignSelf: 'center', fontWeight: 500 }}>INPUTS FROM:</span>
-                      {m.agent_responses.filter(a => a.success).map((agentR, i) => (
-                        <span key={i} style={{ fontSize: '11px', background: '#f8fafc', color: '#64748b', padding: '4px 10px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}>
-                          ⚡ {getAgentDisplayName(agentR.agent_name)}
-                        </span>
-                      ))}
+                  {attachedFile && (
+                    <div className="farm-attachment-pill">
+                      <Paperclip size={14} /> <span>{attachedFile.file.name}</span>
+                      <button className="farm-attachment-close" onClick={clearAttachments}><X size={14} /></button>
+                    </div>
+                  )}
+                  {audioBlob && (
+                    <div className="farm-attachment-pill">
+                      <Mic size={14} color="#3b82f6" /> <span>Voice recording prepared</span>
+                      <button className="farm-attachment-close" onClick={clearAttachments}><X size={14} /></button>
                     </div>
                   )}
                 </div>
-              ) : (
-                m.content
               )}
+
+              <div className="farm-input-row">
+                <button className="farm-tool-btn" onClick={() => imageInputRef.current?.click()} disabled={isLoading || isRecording}><Camera size={18} /></button>
+                <button className={`farm-tool-btn ${isRecording ? 'recording' : audioBlob ? 'has-audio' : ''}`} onClick={isRecording ? stopRecording : startRecording} disabled={isLoading}>
+                  {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
+                </button>
+                <button className="farm-tool-btn" onClick={() => fileInputRef.current?.click()} disabled={isLoading || isRecording}><Paperclip size={18} /></button>
+                
+                <textarea
+                  ref={textareaRef}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Message Farm Orchestrator..."
+                  disabled={isLoading}
+                  className="farm-textarea"
+                  rows={1}
+                />
+
+                <button className={`farm-send-btn ${isLoading ? 'loading' : ''} ${inputValue.trim() || attachedImage || attachedFile || audioBlob ? 'active' : ''}`} onClick={sendMessage} disabled={isLoading || (!inputValue.trim() && !attachedImage && !attachedFile && !audioBlob)}>
+                  {isLoading ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg> : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>}
+                </button>
+              </div>
+            </div>
+            
+            <div className="farm-input-footer">
+               Farm Orchestrator may make mistakes. Always verify critical decisions with an agronomist. 
             </div>
           </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-      {/* Hidden file inputs */}
-      <input ref={imageInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleImageSelect} />
-      <input ref={fileInputRef}  type="file" accept=".pdf,.csv,.txt,.docx" style={{ display: 'none' }} onChange={handleFileSelect} />
-
-      <div className="chat-input-container">
-        <div className="agent-selector-container">
-          <div className="agent-dropdown">
-            <button className="agent-dropdown-button" onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
-              <Bot size={16} />
-              <span>{getCurrentAgentName()}</span>
-              <ChevronDown size={16} className={`dropdown-arrow ${isDropdownOpen ? 'open' : ''}`} />
-            </button>
-            {isDropdownOpen && (
-              <div className="agent-dropdown-menu">
-                {agentOptions.map((option, index) => {
-                  const Icon = option.icon;
-                  const isGroupSeparator = index === 1 || index === 9 || index === 13;
-                  const isCurrentAgent = option.id === agent || (agent === 'super-agent' && option.id === 'orchestrator');
-                  return (
-                    <button key={option.id} className={`agent-dropdown-item ${isGroupSeparator ? 'group-separator' : ''} ${isCurrentAgent ? 'active' : ''}`} onClick={() => handleAgentChange(option)}>
-                      <Icon size={16} />
-                      <span>{option.name}</span>
-                      {isCurrentAgent && <span className="current-indicator">✓</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* ── Attachment Preview ─────────────────────────────────────────── */}
-        {(attachedImage || attachedFile || audioBlob) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: '#1e293b', borderRadius: '8px', marginBottom: '6px', border: '1px solid #334155' }}>
-            {attachedImage && <img src={attachedImage.preview} alt="preview" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '6px' }} />}
-            <span style={{ fontSize: '13px', color: '#cbd5e1', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {attachedImage ? attachedImage.file.name : attachedFile ? attachedFile.file.name : '🎤 Voice message ready'}
-            </span>
-            <button onClick={clearAttachments} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}><X size={14} /></button>
-          </div>
-        )}
-
-        {/* ── Input Row ─────────────────────────────────────────────────── */}
-        <div className="chat-input-wrapper" style={{ alignItems: 'flex-end' }}>
-          {/* Media buttons left of textarea */}
-          <div style={{ display: 'flex', gap: '4px', padding: '6px 4px' }}>
-            {/* Camera / Image upload */}
-            <button
-              title="Upload crop photo"
-              onClick={() => imageInputRef.current?.click()}
-              disabled={isLoading || isRecording}
-              style={{ background: attachedImage ? '#166534' : 'none', border: '1px solid #334155', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: attachedImage ? '#4ade80' : '#94a3b8', display: 'flex', alignItems: 'center' }}
-            >
-              <Camera size={17} />
-            </button>
-            {/* Microphone / Record */}
-            <button
-              title={isRecording ? 'Stop recording' : 'Record voice message'}
-              onClick={isRecording ? stopRecording : startRecording}
-              disabled={isLoading}
-              style={{ background: isRecording ? '#7f1d1d' : audioBlob ? '#1e3a5f' : 'none', border: `1px solid ${isRecording ? '#ef4444' : '#334155'}`, borderRadius: '8px', padding: '7px', cursor: 'pointer', color: isRecording ? '#ef4444' : audioBlob ? '#60a5fa' : '#94a3b8', display: 'flex', alignItems: 'center' }}
-            >
-              {isRecording ? <MicOff size={17} /> : <Mic size={17} />}
-            </button>
-            {/* File / Document upload */}
-            <button
-              title="Attach PDF, CSV, or TXT"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading || isRecording}
-              style={{ background: attachedFile ? '#1e3a5f' : 'none', border: '1px solid #334155', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: attachedFile ? '#60a5fa' : '#94a3b8', display: 'flex', alignItems: 'center' }}
-            >
-              <Paperclip size={17} />
-            </button>
-          </div>
-
-          <textarea
-            ref={textareaRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder={attachedImage ? 'Describe the issue or add context...' : attachedFile ? 'What would you like to know about this document?' : audioBlob ? 'Add text context (optional)...' : 'Ask me anything about farming...'}
-            rows="1"
-            disabled={isLoading}
-            style={{ flex: 1 }}
-          />
-          <button
-            className={`send-button ${isLoading ? 'loading' : ''}`}
-            onClick={sendMessage}
-            disabled={isLoading || (!inputValue.trim() && !attachedImage && !attachedFile && !audioBlob)}
-            aria-label="Send message"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="22" y1="2" x2="11" y2="13"></line>
-              <polygon points="22,2 15,22 11,13 2,9"></polygon>
-            </svg>
-          </button>
-        </div>
-
-        <div className="input-suggestions">
-          <span className="suggestion-label">Try asking:</span>
-          <button className="suggestion-chip" onClick={() => setSuggestionText("What crops should I plant this season?")}>Crop recommendations</button>
-          <button className="suggestion-chip" onClick={() => setSuggestionText("How can I improve my soil health?")}>Soil health</button>
-          <button className="suggestion-chip" onClick={() => setSuggestionText("What's the weather forecast for my area?")}>Weather forecast</button>
-        </div>
-      </div>
+        {/* Hidden File Inputs */}
+        <input ref={imageInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleImageSelect} />
+        <input ref={fileInputRef} type="file" accept=".pdf,.csv,.txt,.docx" style={{ display: 'none' }} onChange={handleFileSelect} />
+      </main>
     </div>
   );
 };

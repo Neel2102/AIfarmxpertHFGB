@@ -1,55 +1,48 @@
 from __future__ import annotations
 from typing import Dict, Any, List
 import math
-from farmxpert.core.base_agent.base_agent import BaseAgent
+import json
+
+from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.services.tools import CarbonSustainabilityTool
+from farmxpert.services.gemini_service import gemini_service
 
 
-class CarbonSustainabilityAgent(BaseAgent):
+class CarbonSustainabilityAgent(EnhancedBaseAgent):
     name = "carbon_sustainability_agent"
     description = "Recommends regenerative farming practices and tracks eligibility for carbon credits and sustainability programs"
 
-    async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze farm sustainability and provide carbon credit recommendations"""
-        current_practices = inputs.get("current_practices", {})
-        farm_size = inputs.get("farm_size", 0)
-        soil_data = inputs.get("soil_data", {})
-        crop_history = inputs.get("crop_history", [])
-        equipment_usage = inputs.get("equipment_usage", {})
-        fertilizer_usage = inputs.get("fertilizer_usage", {})
-        
-        # Calculate current carbon footprint
-        carbon_footprint = self._calculate_carbon_footprint(
-            current_practices, farm_size, equipment_usage, fertilizer_usage
-        )
-        
-        # Assess current sustainability practices
-        sustainability_assessment = self._assess_sustainability_practices(current_practices)
-        
-        # Generate regenerative farming recommendations
-        regenerative_recommendations = self._generate_regenerative_recommendations(
-            current_practices, farm_size, soil_data
-        )
-        
-        # Calculate carbon credit potential
-        carbon_credit_potential = self._calculate_carbon_credit_potential(
-            regenerative_recommendations, farm_size, current_practices
-        )
-        
-        # Identify sustainability programs
-        sustainability_programs = self._identify_sustainability_programs(
-            current_practices, farm_size, carbon_footprint
-        )
-        
-        return {
-            "agent": self.name,
-            "carbon_footprint": carbon_footprint,
-            "sustainability_assessment": sustainability_assessment,
-            "regenerative_recommendations": regenerative_recommendations,
-            "carbon_credit_potential": carbon_credit_potential,
-            "sustainability_programs": sustainability_programs,
-            "implementation_roadmap": self._create_implementation_roadmap(regenerative_recommendations),
-            "financial_benefits": self._calculate_financial_benefits(carbon_credit_potential, sustainability_programs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tools = {
+            "carbon_sustainability": CarbonSustainabilityTool()
         }
+
+    async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze farm sustainability and provide carbon credit recommendations using LLM and tools"""
+        context = inputs.get("context", {})
+        query = inputs.get("query", "")
+        
+        current_practices = context.get("current_practices", {}) or inputs.get("current_practices", {})
+        farm_size = float(context.get("farm_size") or inputs.get("farm_size") or 10.0)
+        equipment_usage = context.get("equipment") or inputs.get("equipment_usage", {})
+        fertilizer_usage = context.get("fertilizers") or inputs.get("fertilizer_usage", {})
+        
+        tool_data = {}
+        if "carbon_sustainability" in self.tools:
+            try:
+                tool_data = await self.tools["carbon_sustainability"].analyze_sustainability(
+                    farm_size, current_practices, equipment_usage, fertilizer_usage
+                )
+            except Exception as e:
+                self.logger.error(f"CarbonSustainabilityTool failed: {e}")
+                tool_data = {"error": str(e)}
+        
+        # Inject tool data into context for LLM synthesis
+        inputs["additional_data"] = inputs.get("additional_data", {})
+        inputs["additional_data"]["sustainability_tool_result"] = tool_data
+        
+        return await self._handle_with_llm(inputs)
     
     def _calculate_carbon_footprint(self, practices: Dict, farm_size: float, 
                                   equipment: Dict, fertilizer: Dict) -> Dict[str, Any]:
