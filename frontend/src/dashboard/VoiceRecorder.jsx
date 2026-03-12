@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Mic, Loader, Volume2, AlertCircle, Square, Check } from 'lucide-react';
+import { Mic, MicOff, Play, Square, Loader2, AlertCircle, Check, User, Bot } from 'lucide-react';
 import '../styles/Dashboard/VoiceRecorder.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
@@ -368,17 +368,26 @@ export default function VoiceRecorder() {
       <div className="voice-recorder-conversation-container">
         {conversations.length === 0 ? (
           <div className="voice-recorder-empty-state">
-            <Mic className="voice-recorder-empty-icon" />
-            <h2 className="voice-recorder-empty-title">FarmXpert Voice Agent</h2>
-            <p className="voice-recorder-empty-subtitle">
-              Ask about weather, soil health, pest control, or any farming advice by tapping the microphone below.
-            </p>
-          </div>
+        <img 
+          src="/voice-agent-graphic.png" 
+          alt="AI Farming Assistant" 
+          className="voice-recorder-empty-icon" 
+          style={{ opacity: 0.8, width: '280px', height: 'auto', marginBottom: '1rem' }}
+        />
+        <h2 className="voice-recorder-empty-title">AI Farming Assistant</h2>
+        <p className="voice-recorder-empty-subtitle">
+          I'm ready to listen. Ask me about crop suggestions, soil health, or weather updates.
+        </p>
+      </div>
         ) : (
           conversations.map((msg, idx) => (
             <div key={idx} className={`voice-recorder-msg ${msg.role}`}>
               <div className="voice-recorder-msg-label">
-                {msg.role === 'user' ? '🎙 You' : '🤖 FarmXpert AI'}
+                {msg.role === 'user' ? (
+                  <><User size={14} className="mr-1" /> You</>
+                ) : (
+                  <><Bot size={14} className="mr-1" /> FarmXpert AI</>
+                )}
               </div>
               {msg.text}
 

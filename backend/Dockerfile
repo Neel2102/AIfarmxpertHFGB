@@ -27,7 +27,7 @@ COPY alembic/ ./alembic/
 COPY alembic.ini .
 
 # Expose the API port
-EXPOSE 8000
+EXPOSE 8080
 
-# Command to run the application using uvicorn
-CMD ["uvicorn", "farmxpert.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Command to run the application using uvicorn with dynamic port detection
+CMD ["sh", "-c", "uvicorn farmxpert.app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
