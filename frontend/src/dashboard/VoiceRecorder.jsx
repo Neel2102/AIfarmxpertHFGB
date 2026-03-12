@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Mic, MicOff, Play, Square, Loader2, AlertCircle, Check, User, Bot } from 'lucide-react';
+import { Mic, MicOff, Play, Square, Loader, Loader2, Volume2, AlertCircle, Check, User, Bot } from 'lucide-react';
 import '../styles/Dashboard/VoiceRecorder.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
