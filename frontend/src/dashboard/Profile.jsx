@@ -1,25 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { User, Phone, MapPin, Calendar, Edit, Save, X, Shield, FileText, Key, Activity } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 import '../styles/Dashboard/Profile/profile.css';
 
 const Profile = () => {
-  const [activeTab, setActiveTab] = useState('profile');
+  const { user, updateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [activeTab, setActiveTab] = useState('profile');
+  const [saving, setSaving] = useState(false);
+
+  // Initialize with user data from context
   const [profileData, setProfileData] = useState({
-    name: 'John Farmer',
-    email: 'john.farmer@example.com',
-    phone: '+1 (555) 123-4567',
-    location: 'Ahmedabad, Gujarat',
-    joinDate: 'January 15, 2024',
-    farmSize: '15 acres',
-    experience: '5 years',
-    role: 'User',
-    emailVerification: 'Pending',
-    mobileVerification: 'Active',
-    status: 'Active'
+    name: user?.full_name || user?.name || 'Krishna Patel',
+    email: user?.email || 'krishna.p@farmxpert.ai',
+    phone: user?.phone || '+91 98765 43210',
+    location: user?.location || 'Ahmedabad, Gujarat',
+    joinDate: 'Joined March 2024',
+    farmingType: 'Organic Cotton & Wheat',
+    experience: '12 Years',
+    preferredLanguage: 'Gujarati / English'
   });
 
   const [editData, setEditData] = useState(profileData);
+
+  useEffect(() => {
+    if (user) {
+      const newData = {
+        ...profileData,
+        name: user.full_name || user.name || profileData.name,
+        email: user.email || profileData.email,
+        phone: user.phone || profileData.phone,
+      };
+      setProfileData(newData);
+      setEditData(newData);
+    }
+  }, [user]);
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
@@ -37,10 +53,29 @@ const Profile = () => {
     setActiveTab('edit');
   };
 
-  const handleSave = () => {
-    setProfileData(editData);
-    setIsEditing(false);
-    setActiveTab('profile');
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await updateProfile({
+        name: editData.name,
+        email: editData.email,
+        phone: editData.phone,
+        location: editData.location,
+      });
+
+      if (res.success) {
+        setProfileData(editData);
+        setIsEditing(false);
+        setActiveTab('profile');
+        toast.success('Profile updated successfully!');
+      } else {
+        toast.error(res.error || 'Failed to update profile');
+      }
+    } catch (error) {
+      toast.error('An unexpected error occurred');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancel = () => {

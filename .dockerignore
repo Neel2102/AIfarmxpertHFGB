@@ -1,0 +1,51 @@
+# Git
+.git
+.gitignore
+
+# Node modules (frontend has its own)
+node_modules
+
+# Python caches
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+backend_logs.txt
+
+# Test files
+test_*.py
+test_*.js
+tests/
+*.test.*
+
+# Documentation
+*.md
+docs/
+
+# Temp / scratch
+tmp/
+scratchpad/
+
+# Environment (loaded via env_file, not COPY)
+.env
+.env.*
+!.env.example
+
+# Docker files (no need to copy into context)
+docker-compose*.yml
+Dockerfile*
+.dockerignore

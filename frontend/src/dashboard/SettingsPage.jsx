@@ -62,6 +62,7 @@ const SettingsPage = () => {
         name: form.name,
         email: form.email,
         phone: form.phone,
+        location: form.location,
       };
 
       const res = await updateProfile(payload);
@@ -154,11 +155,15 @@ const SettingsPage = () => {
                 </div>
                 <div className="input-group">
                   <label>Email Address</label>
-                  <input value={form.email} onChange={handleChange('email')} disabled />
+                  <input value={form.email} onChange={handleChange('email')} placeholder="email@example.com" />
                 </div>
                 <div className="input-group">
                   <label>Phone Number</label>
                   <input value={form.phone} onChange={handleChange('phone')} placeholder="+91..." />
+                </div>
+                <div className="input-group">
+                  <label>Location</label>
+                  <input value={form.location} onChange={handleChange('location')} placeholder="City, State" />
                 </div>
               </div>
             </div>

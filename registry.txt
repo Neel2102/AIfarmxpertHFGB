@@ -1,0 +1,26 @@
+        agent_name         | agent_type | requires_image | requires_sensor_data 
+---------------------------+------------+----------------+----------------------
+ Crop Selector             | analysis   | f              | t
+ Seed Recommender          | analysis   | f              | f
+ Growth Stage Monitor      | monitoring | t              | t
+ Yield Predictor           | analysis   | f              | t
+ Fertilizer Advisor        | analysis   | f              | t
+ Irrigation Scheduler      | monitoring | f              | t
+ Weather Watcher           | api        | f              | f
+ Pest & Disease Detector   | vision     | t              | f
+ Farm Equipment Manager    | monitoring | f              | f
+ Soil Health Analyzer      | analysis   | f              | t
+ Crop Health Vision        | vision     | t              | f
+ Water Resource Optimizer  | analysis   | f              | t
+ Farm Analytics Dashboard  | analysis   | f              | t
+ Carbon Footprint Tracker  | analysis   | f              | t
+ Market Intelligence       | api        | f              | f
+ Supply Chain Optimizer    | analysis   | f              | f
+ Mandi Price Predictor     | api        | f              | f
+ Cold Storage Advisor      | analysis   | f              | f
+ Farm Coach                | analysis   | f              | f
+ Voice Assistant           | analysis   | f              | f
+ Government Scheme Advisor | api        | f              | f
+ Loan & Insurance Advisor  | analysis   | f              | f
+(22 rows)
+

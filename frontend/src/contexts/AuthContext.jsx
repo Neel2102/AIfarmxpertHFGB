@@ -202,7 +202,6 @@ export const AuthProvider = ({ children }) => {
     // Force reload to clear any remaining state
     window.location.replace('/login');
   };
-
   const updateProfile = async (profileData) => {
     try {
       const tokenVal = localStorage.getItem('access_token');
@@ -211,6 +210,7 @@ export const AuthProvider = ({ children }) => {
         ...profileData,
         full_name: profileData.full_name || profileData.name,
         name: profileData.name || profileData.full_name,
+        location: profileData.location,
       };
       const response = await fetch(`${API_BASE_URL}/auth/profile`, {
         method: 'PUT',
@@ -222,6 +222,9 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (!response.ok) {
+        if (response.status === 404) {
+          console.error('404 Error: The profile update endpoint was not found at', `${API_BASE_URL}/auth/profile`);
+        }
         const error = await response.json();
         throw new Error(error.detail || 'Profile update failed');
       }
@@ -364,7 +367,7 @@ export const AuthProvider = ({ children }) => {
   const updateFarmProfile = async (profileData) => {
     try {
       const tokenVal = localStorage.getItem('access_token');
-      const response = await fetch(`${API_BASE_URL}/api/auth/farm-profile`, {
+      const response = await fetch(`${API_BASE_URL}/auth/farm-profile`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${tokenVal}`,

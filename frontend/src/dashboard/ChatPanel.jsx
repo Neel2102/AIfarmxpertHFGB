@@ -461,9 +461,9 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
                       {m.visionResult && !m.isStreaming && renderVisionCard(m.visionResult)}
                       
                       {m.audioUrl && !m.isStreaming && (
-                        <div style={{ marginTop: '12px', background: 'rgba(15,23,42,0.5)', padding: '12px', borderRadius: '8px' }}>
-                          <audio controls autoPlay src={m.audioUrl} style={{ width: '100%', height: '36px' }} />
-                          {m.transcript && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '8px', fontStyle: 'italic' }}>🎤 Heard: "{m.transcript}"</div>}
+                        <div className="farm-audio-block">
+                          <audio controls autoPlay src={m.audioUrl} className="farm-audio-player" />
+                          {m.transcript && <div className="farm-audio-transcript">🎤 Heard: "{m.transcript}"</div>}
                         </div>
                       )}
 
