@@ -26,4 +26,5 @@ loguru>=0.7.0
 openai>=1.0.0
 litellm>=1.0.0
 pgvector==0.2.5
-gTTS>=2.5.0
+gTTS>=2.5.0
+faster-whisper>=1.0.0

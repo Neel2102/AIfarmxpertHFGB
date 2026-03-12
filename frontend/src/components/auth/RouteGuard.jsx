@@ -2,6 +2,46 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
+const styles = {
+  authLoadingContainer: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    background: 'rgba(255, 255, 255, 0.95)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  authLoadingSpinner: {
+    textAlign: 'center',
+  },
+  spinner: {
+    border: '4px solid #f3f3f3',
+    borderTop: '4px solid #3498db',
+    borderRadius: '50%',
+    width: '40px',
+    height: '40px',
+    animation: 'spin 1s linear infinite',
+    margin: '0 auto 20px',
+  }
+};
+
+// Add CSS animation for spinner
+const styleElement = document.createElement('style');
+styleElement.textContent = `
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
+if (!document.head.querySelector('style[data-auth-spinner]')) {
+  styleElement.setAttribute('data-auth-spinner', 'true');
+  document.head.appendChild(styleElement);
+}
+
 const RouteGuard = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -72,41 +112,11 @@ const RouteGuard = ({ children }) => {
   // Show loading spinner while checking authentication
   if (loading || isChecking) {
     return (
-      <div className="auth-loading-container">
-        <div className="auth-loading-spinner">
-          <div className="spinner"></div>
+      <div style={styles.authLoadingContainer}>
+        <div style={styles.authLoadingSpinner}>
+          <div style={styles.spinner}></div>
           <p>Verifying authentication...</p>
         </div>
-        <style jsx>{`
-          .auth-loading-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(255, 255, 255, 0.95);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-          }
-          .auth-loading-spinner {
-            text-align: center;
-          }
-          .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-          }
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}</style>
       </div>
     );
   }

@@ -6,7 +6,7 @@ import Profile from './Profile';
 import Sidebar from './Sidebar';
 import Ai from "./SmartChatLayout"
 import FarmMap from "./FarmMap";
-import HandsFreeVoice from "./HandsFreeVoice";
+import VoiceRecorder from "./VoiceRecorder";
 import AgentCatalog from "./AgentCatalog";
 import HardwareIoT from "./HardwareIoT";
 import SettingsPage from './SettingsPage';
@@ -38,7 +38,7 @@ const MainDashboard = () => {
           <Route path="/today" element={<TodayDashboard />} />
           <Route path="/farm-information" element={<FarmInformation />} />
           <Route path="/farm-map" element={<FarmMap />} />
-          <Route path="/voice" element={<HandsFreeVoice />} />
+          <Route path="/voice" element={<VoiceRecorder />} />
           <Route path="/agents" element={<AgentCatalog />} />
           <Route path="/hardware-iot" element={<HardwareIoT />} />
           <Route path="/profile" element={<Profile />} />

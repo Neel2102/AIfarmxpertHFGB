@@ -36,6 +36,11 @@ function decodeBase64(base64) {
 
 const API_KEY = process.env.REACT_APP_API_KEY || process.env.API_KEY;
 
+// Debug: Check if API key is available
+console.log('Voice API Key available:', !!API_KEY);
+console.log('REACT_APP_API_KEY:', process.env.REACT_APP_API_KEY ? 'SET' : 'NOT SET');
+console.log('API_KEY:', process.env.API_KEY ? 'SET' : 'NOT SET');
+
 export async function sendMessageToOrchestrator(message, history, targetAgentId = null, image = null) {
   if (!navigator.onLine) {
     return {
@@ -260,6 +265,13 @@ export default function HandsFreeVoice() {
     try {
       setStatus('connecting');
       setErrorMessage('');
+
+      // Check if API key is available
+      if (!API_KEY) {
+        setStatus('error');
+        setErrorMessage('Google AI API key is missing. Please check VOICE_SETUP.md for instructions.');
+        return;
+      }
 
       const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
       inputContextRef.current = new AudioContextCtor({ sampleRate: 16000 });
