@@ -88,9 +88,14 @@ class SensorIngestRequest(BaseModel):
 # ── Endpoints ──────────────────────────────────────────────
 
 @router.get("/check-device", response_model=CheckDeviceResponse)
-async def check_device(db: Session = Depends(get_db)):
+async def check_device(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Check if any active Blynk device exists."""
-    device = db.query(BlynkDevice).filter(BlynkDevice.is_active == True).first()
+    # BlynkDevice.farm_id is a logical reference (no FK). We scope by the authenticated user.
+    device = (
+        db.query(BlynkDevice)
+        .filter(BlynkDevice.farm_id == current_user.id, BlynkDevice.is_active == True)
+        .first()
+    )
     if device:
         return CheckDeviceResponse(
             blynk_required=False,
@@ -109,32 +114,11 @@ async def check_device(db: Session = Depends(get_db)):
 
 
 @router.post("/register-device", response_model=RegisterDeviceResponse)
-async def register_device(req: RegisterDeviceRequest, db: Session = Depends(get_db)):
+async def register_device(req: RegisterDeviceRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Register a new Blynk device. Farm is resolved server-side."""
     try:
-        # Resolve farm — server-side, never from frontend
-        farm = db.query(Farm).first()
-        
-        # If no farm exists, auto-create one
-        if not farm:
-            farm = Farm(
-                name="My Farm",
-                location="Not set",
-                size_acres=0,
-                farmer_name="Farmer",
-                farmer_phone=None,
-                farmer_email=None,
-            )
-            db.add(farm)
-            db.commit()
-            db.refresh(farm)
-            logger.info(f"Auto-created farm: id={farm.id}")
-
-        farm_id = farm.id
-
-        # Defensive validation — farm_id must NEVER be None
-        if farm_id is None:
-            raise HTTPException(status_code=500, detail="Critical: farm_id resolved to NULL")
+        # BlynkDevice.farm_id is a logical reference (no FK). Use the authenticated user id.
+        farm_id = current_user.id
 
         # Check for duplicate active device
         existing = (
@@ -288,16 +272,21 @@ async def get_latest_reading(farm_id: Optional[int] = None, db: Session = Depend
 
 
 @router.delete("/delete-device")
-async def delete_device(db: Session = Depends(get_db)):
-    """Delete/deactivate all active Blynk devices so user can register a new one."""
+async def delete_device(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Delete/deactivate all active Blynk devices for the current user."""
     try:
-        devices = db.query(BlynkDevice).filter(BlynkDevice.is_active == True).all()
+        # Delete devices for this user's logical farm_id only
+        devices = (
+            db.query(BlynkDevice)
+            .filter(BlynkDevice.farm_id == current_user.id, BlynkDevice.is_active == True)
+            .all()
+        )
         count = 0
         for device in devices:
             db.delete(device)
             count += 1
         db.commit()
-        logger.info(f"Deleted {count} active Blynk device(s)")
+        logger.info(f"Deleted {count} active Blynk device(s) for user={current_user.id}")
         return {"success": True, "message": f"Deleted {count} device(s).", "deleted": count}
     except Exception as e:
         db.rollback()

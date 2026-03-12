@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Cpu, Wifi, AlertCircle, Loader2, Trash2 } from "lucide-react";
 import "../styles/Dashboard/HardwareIoT.css";
+import { useAuth } from "../contexts/AuthContext";
 
 const BLYNK_CLOUD_URL = "https://blr1.blynk.cloud/external/api/get";
-const API_BASE_URL = process.env.REACT_APP_API_URL || "";
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 const SENSORS = [
   { label: "Air Temperature", pin: "V0", unit: "°C", color: "#FF6B6B" },
@@ -57,9 +58,12 @@ const toPercent = (pin, n) => {
 };
 
 export default function HardwareIoT() {
-  // Token state — check localStorage first, then API
-  const [blynkToken, setBlynkToken] = useState(() => localStorage.getItem("blynk_token") || "");
-  const [hasDevice, setHasDevice] = useState(!!localStorage.getItem("blynk_token"));
+  const { user } = useAuth();
+  const blynkTokenStorageKey = user?.id ? `blynk_token_${user.id}` : null;
+
+  // Token state — scoped per-user (prevents token leaking across logins)
+  const [blynkToken, setBlynkToken] = useState("");
+  const [hasDevice, setHasDevice] = useState(false);
   const [checkingDevice, setCheckingDevice] = useState(true);
 
   // Onboarding form state
@@ -79,13 +83,19 @@ export default function HardwareIoT() {
 
     // Delete from backend DB
     try {
-      await fetch(`${API_BASE_URL}/api/blynk/delete-device`, { method: "DELETE" });
+      const token = localStorage.getItem('access_token');
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      
+      await fetch(`${API_BASE_URL}/api/blynk/delete-device`, { 
+        method: "DELETE",
+        headers
+      });
     } catch (e) {
       console.warn("Backend delete skipped:", e);
     }
 
     // Reset all frontend state
-    localStorage.removeItem("blynk_token");
+    if (blynkTokenStorageKey) localStorage.removeItem(blynkTokenStorageKey);
     setBlynkToken("");
     setHasDevice(false);
     setCheckingDevice(false);
@@ -96,31 +106,53 @@ export default function HardwareIoT() {
     setDeviceNameInput("");
   };
 
+  // Sync token when user changes
+  useEffect(() => {
+    if (!user) {
+      setBlynkToken("");
+      setHasDevice(false);
+      setCheckingDevice(false);
+      return;
+    }
+
+    const stored = blynkTokenStorageKey ? localStorage.getItem(blynkTokenStorageKey) : "";
+    setBlynkToken(stored || "");
+    setSensorData({});
+    setLoading(true);
+    setError(null);
+    setTokenInput("");
+    setDeviceNameInput("");
+    setCheckingDevice(true);
+  }, [user, blynkTokenStorageKey]);
+
   // Check if farmer already has a Blynk device registered
   useEffect(() => {
     const checkDevice = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/blynk/check-device`);
+        // Get auth token from localStorage
+        const token = localStorage.getItem('access_token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        
+        const res = await fetch(`${API_BASE_URL}/api/blynk/check-device`, { headers });
         const contentType = res.headers.get('content-type') || '';
         if (res.ok && contentType.includes('application/json')) {
           const data = await res.json();
           if (!data.blynk_required && data.device) {
             setHasDevice(true);
-          } else if (!blynkToken) {
+          } else {
             setHasDevice(false);
           }
-        } else if (!blynkToken) {
+        } else {
           setHasDevice(false);
         }
       } catch {
-        // If API fails but we have a local token, still show dashboard
-        if (blynkToken) setHasDevice(true);
+        setHasDevice(false);
       } finally {
         setCheckingDevice(false);
       }
     };
     checkDevice();
-  }, [blynkToken]);
+  }, [user]);
 
   // Fetch sensor data when we have a token
   const fetchData = useCallback(async () => {
@@ -142,9 +174,15 @@ export default function HardwareIoT() {
 
       // Auto-save to soil_tests table (every fetch cycle)
       try {
+        const token = localStorage.getItem('access_token');
+        const headers = {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        };
+        
         await fetch(`${API_BASE_URL}/api/soil-tests/save`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({
             air_temperature: parseNumeric(newData.V0),
             air_humidity: parseNumeric(newData.V1),
@@ -183,14 +221,26 @@ export default function HardwareIoT() {
       return;
     }
 
+    if (!blynkTokenStorageKey) {
+      setRegisterError("Please log in again and try.");
+      return;
+    }
+
     setIsRegistering(true);
     setRegisterError(null);
 
     try {
+      // Get auth token from localStorage
+      const token = localStorage.getItem('access_token');
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      };
+      
       // Register with backend
       const res = await fetch(`${API_BASE_URL}/api/blynk/register-device`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           auth_token: tokenInput.trim(),
           device_name: deviceNameInput.trim() || "My Blynk Device",
@@ -205,7 +255,7 @@ export default function HardwareIoT() {
       if (!res.ok) throw new Error(data.detail || "Registration failed");
 
       // Save token locally and activate dashboard
-      localStorage.setItem("blynk_token", tokenInput.trim());
+      localStorage.setItem(blynkTokenStorageKey, tokenInput.trim());
       setBlynkToken(tokenInput.trim());
       setHasDevice(true);
     } catch (err) {

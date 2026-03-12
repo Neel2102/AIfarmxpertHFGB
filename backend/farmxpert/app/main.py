@@ -17,6 +17,8 @@ from farmxpert.interfaces.api.middleware.logging_middleware import RequestLoggin
 import farmxpert.models.user_models  # noqa: F401
 import farmxpert.models.farm_models  # noqa: F401
 import farmxpert.models.admin_models  # noqa: F401
+import farmxpert.models.blynk_models  # noqa: F401
+from farmxpert.models.database import Base, engine
 from farmxpert.app.orchestrator.router import router as orchestrator_router
 
 app = FastAPI(
@@ -58,6 +60,11 @@ app.include_router(orchestrator_router, prefix="/api/orchestrator")
 app.include_router(chat_routes.router, prefix="/api")
 app.include_router(market_routes.router, prefix="/api")
 app.include_router(task_routes.router, prefix="/api")
+
+
+@app.on_event("startup")
+async def _ensure_tables_exist():
+    Base.metadata.create_all(bind=engine)
 
 @app.get("/")
 async def root():

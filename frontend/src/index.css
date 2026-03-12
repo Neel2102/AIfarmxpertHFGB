@@ -394,6 +394,17 @@ code {
   .container {
     padding: 0 0.5rem;
   }
+
+  /* Prevent fixed sidebar toggle button from overlapping page headers on small screens */
+  .main-dashboard-content {
+    padding-top: 4rem;
+  }
+
+  /* Avoid horizontal scroll / overlap caused by wide children */
+  .main-dashboard-layout,
+  .main-dashboard-content {
+    overflow-x: hidden;
+  }
 }
 
 /* Global sidebar toggle button fix to prevent overlap with navbar */
