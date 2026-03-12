@@ -41,7 +41,7 @@ function ResponsiveChartContainer({ selectedChart }) {
   }, [])
 
   return (
-    <div ref={containerRef} style={{ width: "100%", height: dimensions.height }}>
+    <div ref={containerRef} className="responsive-chart-container" style={{ height: dimensions.height }}>
       {selectedChart === "moisture" && <MoistureSVGChart width={dimensions.width} height={dimensions.height} />}
       {selectedChart === "temperature" && <TemperatureSVGChart width={dimensions.width} height={dimensions.height} />}
       {selectedChart === "ph" && <PhSVGChart width={dimensions.width} height={dimensions.height} />}
@@ -234,18 +234,17 @@ export default function FarmerDashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          style={{ display: "flex", flexDirection: "column", gap: "2rem" }}
+          className="flex-col-gap-2rem"
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div className="flex-col-gap-1rem">
             <div className="dashboard-header-farminformation">
               <h1 className="dashboard-title-farminformation">Farmer Dashboard</h1>
               <p className="dashboard-subtitle-farminformation">Monitor your soil conditions and get personalized recommendations.</p>
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div className="flex-row-justify-end">
               <button onClick={refreshData} disabled={isLoading} className="btn-farminformation btn-primary-farminformation">
                 <RefreshCw
                   className={isLoading ? "animate-rotate-farminformation" : ""}
-                  style={{ marginRight: "8px", width: "16px", height: "16px" }}
                 />
                 {isLoading ? "Refreshing..." : "Refresh Data"}
               </button>
@@ -263,15 +262,14 @@ export default function FarmerDashboard() {
                   <div className="stat-title-farminformation">Soil Moisture</div>
                   <Droplets className="stat-icon-farminformation" />
                 </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div className="flex-row-space-between">
                   <div>
                     <div className="stat-value-farminformation">{fmt1(soilData.moisture)}%</div>
                     <div
-                      className={`stat-status-farminformation ${
-                        isNum(soilData.moisture)
-                          ? getStatusColor(soilData.moisture, "moisture")
-                          : "status-warning-farminformation"
-                      }`}
+                      className={`stat-status-farminformation ${isNum(soilData.moisture)
+                        ? getStatusColor(soilData.moisture, "moisture")
+                        : "status-warning-farminformation"
+                        }`}
                     >
                       {isNum(soilData.moisture)
                         ? soilData.moisture < 40
@@ -299,15 +297,14 @@ export default function FarmerDashboard() {
                   <div className="stat-title-farminformation">Soil Temperature</div>
                   <ThermometerSun className="stat-icon-farminformation" />
                 </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div className="flex-row-space-between">
                   <div>
                     <div className="stat-value-farminformation">{fmt1(soilData.temperature)}°C</div>
                     <div
-                      className={`stat-status-farminformation ${
-                        isNum(soilData.temperature)
-                          ? getStatusColor(soilData.temperature, "temperature")
-                          : "status-warning-farminformation"
-                      }`}
+                      className={`stat-status-farminformation ${isNum(soilData.temperature)
+                        ? getStatusColor(soilData.temperature, "temperature")
+                        : "status-warning-farminformation"
+                        }`}
                     >
                       {isNum(soilData.temperature)
                         ? soilData.temperature < 18
@@ -335,13 +332,12 @@ export default function FarmerDashboard() {
                   <div className="stat-title-farminformation">Soil pH</div>
                   <Flask className="stat-icon-farminformation" />
                 </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div className="flex-row-space-between">
                   <div>
                     <div className="stat-value-farminformation">{fmt1(soilData.ph)} pH</div>
                     <div
-                      className={`stat-status-farminformation ${
-                        isNum(soilData.ph) ? getStatusColor(soilData.ph, "ph") : "status-warning-farminformation"
-                      }`}
+                      className={`stat-status-farminformation ${isNum(soilData.ph) ? getStatusColor(soilData.ph, "ph") : "status-warning-farminformation"
+                        }`}
                     >
                       {isNum(soilData.ph)
                         ? soilData.ph < 5.5
@@ -410,7 +406,7 @@ export default function FarmerDashboard() {
                 <div className="chart-title-farminformation">Recommendations & Alerts</div>
                 <div className="chart-description-farminformation">Based on your current soil conditions</div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div className="suggestions-list-farminformation">
                 {suggestions.map((suggestion, index) => (
                   <motion.div
                     key={index}
@@ -419,9 +415,9 @@ export default function FarmerDashboard() {
                     transition={{ duration: 0.3, delay: 0.1 * index }}
                   >
                     <div className={`alert-farminformation alert-${suggestion.type}-farminformation`}>
-                      <suggestion.icon style={{ width: "16px", height: "16px" }} />
+                      <suggestion.icon className="alert-icon-farminformation" />
                       <div>
-                        <div style={{ fontWeight: "600", marginBottom: "4px" }}>{suggestion.title}</div>
+                        <div className="alert-title-farminformation">{suggestion.title}</div>
                         <div>{suggestion.description}</div>
                       </div>
                     </div>
