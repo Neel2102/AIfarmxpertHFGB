@@ -5,6 +5,31 @@
   animation: fadeIn 0.4s ease-out;
 }
 
+@media (max-width: 768px) {
+  .market-dashboard {
+    padding: 16px;
+  }
+  .market-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .market-header h2 {
+    font-size: 24px;
+  }
+  .price-card {
+    padding: 20px;
+    border-radius: 16px;
+  }
+  .price-display .amount {
+    font-size: 48px;
+  }
+  .price-display .currency {
+    font-size: 24px;
+  }
+}
+
 .market-header {
   display: flex;
   justify-content: space-between;
@@ -113,6 +138,7 @@
   letter-spacing: -2px;
   background: linear-gradient(135deg, var(--text-color) 0%, var(--primary-color) 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 

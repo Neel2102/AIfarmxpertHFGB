@@ -427,6 +427,20 @@ code {
   
   /* When sidebar is open, move toggle button to right of sidebar */
   body:has(.sidebar-sidebar.sidebar-open-sidebar) .sidebar-toggle-btn-sidebar {
-    left: calc(11.625% + 1rem);
+    left: calc(15.625% + 1rem);
+  }
+}
+
+/* Tablet specific fixes */
+@media (min-width: 769px) and (max-width: 1024px) {
+  /* Remove extra padding on tablet since sidebar is closed by default */
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) .main-dashboard-content,
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) .navbar,
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) header,
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) .header,
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) .top-nav,
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) .main-header,
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) .dashboard-header {
+    padding-left: 3rem !important;
   }
 }

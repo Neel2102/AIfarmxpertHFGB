@@ -7,6 +7,27 @@
   color: var(--text, #e2e8f0);
 }
 
+@media (max-width: 768px) {
+  .sandbox-page {
+    padding: 16px;
+  }
+  .sandbox-hero {
+    padding: 20px;
+    border-radius: 16px;
+    margin-bottom: 20px;
+  }
+  .sandbox-title {
+    font-size: 1.5rem;
+  }
+  .sandbox-grid {
+    gap: 16px;
+  }
+  .sandbox-card {
+    padding: 16px;
+    border-radius: 12px;
+  }
+}
+
 /* Hero */
 .sandbox-hero {
   display: flex;

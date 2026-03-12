@@ -101,6 +101,42 @@
   align-items: start;
 }
 
+@media (max-width: 1024px) {
+  .profile-content {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  .profile-left {
+    max-width: 400px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .container-profile {
+    padding: 1rem;
+  }
+  .profile-content {
+    gap: 1.5rem;
+  }
+  .profile-left {
+    padding: 1rem;
+  }
+  .tab-content {
+    padding: 1.5rem;
+  }
+  .page-title {
+    font-size: 2rem;
+  }
+  .tab-navigation {
+    padding: 0 0.5rem;
+  }
+  .tab-button {
+    padding: 1rem 1rem;
+    font-size: 0.85rem;
+  }
+}
+
 .profile-left {
   display: flex;
   flex-direction: column;

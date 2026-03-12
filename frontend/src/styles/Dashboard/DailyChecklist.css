@@ -8,6 +8,30 @@
   animation: fadeIn 0.4s ease-out;
 }
 
+@media (max-width: 768px) {
+  .daily-checklist {
+    padding: 16px;
+    border-radius: 16px;
+    margin-bottom: 16px;
+  }
+  .checklist-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .checklist-header h3 {
+    font-size: 18px;
+  }
+  .empty-state {
+    padding: 32px 16px;
+  }
+  .task-item {
+    padding: 12px;
+    border-radius: 12px;
+  }
+}
+
 .checklist-header {
   display: flex;
   justify-content: space-between;
