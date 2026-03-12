@@ -72,8 +72,8 @@ RUN mkdir -p /var/log/supervisor
 # Copy supervisor configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Expose ports
-EXPOSE 80 8000
+# Expose the Railway port
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \

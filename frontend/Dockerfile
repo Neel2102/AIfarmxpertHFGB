@@ -28,8 +28,8 @@ COPY --from=builder /app/build /usr/share/nginx/html
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Expose port
-EXPOSE 3000
+# Expose port for Railway
+EXPOSE 8080
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]
