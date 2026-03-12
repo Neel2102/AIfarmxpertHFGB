@@ -4,7 +4,7 @@ import TodayDashboard from './TodayDashboard';
 import FarmInformation from './FarmInformation';
 import Profile from './Profile';
 import Sidebar from './Sidebar';
-import Ai from "./DashboardLayout"
+import Ai from "./SmartChatLayout"
 import FarmMap from "./FarmMap";
 import HandsFreeVoice from "./HandsFreeVoice";
 import AgentCatalog from "./AgentCatalog";

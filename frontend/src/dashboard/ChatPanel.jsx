@@ -58,8 +58,7 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
       loadSessionMessages(sessionId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, agent]);
-
+  }, [sessionId, agent, session?.id]);
 
 
   const handleNewChat = () => {
@@ -79,12 +78,11 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
           ? m.content.replace(/<[^>]*>/g, '').replace(/\b\w+">/g, '').replace(/\bclass="[^"]*"/g, '')
           : m?.content,
       }))
-    : [{
-        id: 'welcome',
-        type: 'system',
-        content: `Welcome to FarmXpert! Ask me anything about your farm or select specialists for targeted assistance.`,
-        timestamp: new Date().toISOString()
-      }];
+    : [];
+
+  // Debug: log messages to see if they are loaded
+  console.log('[ChatPanel] contextMessages length:', contextMessages.length, contextMessages);
+  console.log('[ChatPanel] processed messages length:', messages.length, messages);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

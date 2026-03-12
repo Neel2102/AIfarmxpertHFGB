@@ -18,6 +18,8 @@ from farmxpert.services.gemini_service import gemini_service
 from farmxpert.models.database import get_db, engine
 from sqlalchemy import text
 from farmxpert.app.orchestrator.agent import OrchestratorAgent
+from farmxpert.interfaces.api.routes.auth_routes import get_current_user
+from farmxpert.models.user_models import User
 
 logger = get_logger("super_agent_routes")
 
@@ -850,3 +852,41 @@ async def health_check() -> Dict[str, Any]:
             "error": str(e),
             "timestamp": datetime.utcnow().isoformat()
         }
+
+
+def delete_session(session_id: str, user_id: int) -> bool:
+    """Delete a chat session and its messages, ensuring it belongs to the user."""
+    with engine.connect() as conn:
+        # First delete messages for this session (only if belongs to user)
+        del_msg = conn.execute(
+            text("DELETE FROM chat_messages WHERE session_id = :sid AND session_id IN (SELECT id FROM chat_sessions WHERE user_id = :uid)"),
+            {"sid": session_id, "uid": user_id}
+        )
+        # Then delete the session (only if belongs to user)
+        del_sess = conn.execute(
+            text("DELETE FROM chat_sessions WHERE id = :sid AND user_id = :uid"),
+            {"sid": session_id, "uid": user_id}
+        )
+        conn.commit()
+        # If session was not found for this user, return False
+        return del_sess.rowcount > 0
+
+
+@router.delete("/history/{session_id}")
+async def delete_session_history(session_id: str, current_user: User = Depends(get_current_user)):
+    """
+    Delete a specific chat session and all its messages for the authenticated user.
+    """
+    try:
+        # Delete session from DB (only if it belongs to the current user)
+        success = delete_session(session_id=session_id, user_id=current_user.id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Session not found or access denied")
+        # Also clear from in-memory cache if exists
+        CHAT_HISTORY_STORE.pop(session_id, None)
+        return {"message": "Session deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete session: {str(e)}")

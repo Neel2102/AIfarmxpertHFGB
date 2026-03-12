@@ -395,3 +395,27 @@ code {
     padding: 0 0.5rem;
   }
 }
+
+/* Global sidebar toggle button fix to prevent overlap with navbar */
+@media (min-width: 769px) {
+  /* When sidebar is closed, move toggle button to far left corner */
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) .sidebar-toggle-btn-sidebar {
+    left: 0.5rem;
+  }
+  
+  /* Add padding to main dashboard content when sidebar is closed */
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) .main-dashboard-content,
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) .navbar,
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) header,
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) .header,
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) .top-nav,
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) .main-header,
+  body:has(.sidebar-sidebar:not(.sidebar-open-sidebar)) .dashboard-header {
+    padding-left: 4rem !important;
+  }
+  
+  /* When sidebar is open, move toggle button to right of sidebar */
+  body:has(.sidebar-sidebar.sidebar-open-sidebar) .sidebar-toggle-btn-sidebar {
+    left: calc(11.625% + 1rem);
+  }
+}

@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
-import { Cpu, History, LayoutDashboard, Map, MessageSquare, Mic, Settings, Users, TrendingUp, Plus } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import {
+  LayoutDashboard, MessageSquare, Map, Mic, Users, Cpu, Settings,
+  History, Plus, Sun, Moon, X, ChevronRight, Trash2
+} from 'lucide-react';
+import { useOrchestrator } from '../contexts/OrchestratorContext';
+import apiService from '../services/api';
 import { useAuth } from "../contexts/AuthContext";
-import { useOrchestrator } from "../contexts/OrchestratorContext";
-import "../styles/Dashboard/Sidebar.css";
+import '../styles/Dashboard/Sidebar.css';
 
 const Sidebar = ({ onLogout }) => {
   const navigate = useNavigate();
-  useAuth();
-  const { chatHistory, loadSessionMessages, resetSession } = useOrchestrator();
+  const { chatHistory, session, loadSessionMessages, resetSession, loadHistory } = useOrchestrator();
+  const { } = useAuth();
 
   const [isOpen, setIsOpen] = useState(true);
   const [theme, setTheme] = useState(() => {
@@ -16,8 +20,9 @@ const Sidebar = ({ onLogout }) => {
   });
   const [expandedCategories, setExpandedCategories] = useState({
     main_menu: true,
-    history: false,
+    history: true,
   });
+
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [animationKeys, setAnimationKeys] = useState({
     main_menu: 0,
@@ -122,6 +127,40 @@ const Sidebar = ({ onLogout }) => {
   const closeSidebar = () => {
     setIsOpen(false);
   };
+
+  const handleDeleteChatHistory = async (sessionId, e) => {
+    e.stopPropagation();
+    console.log('[Sidebar] Attempting to delete session:', sessionId);
+    const confirmed = window.confirm('Are you sure you want to delete this chat history?');
+    if (!confirmed) return;
+    try {
+      console.log('[Sidebar] Sending DELETE request to:', `/super-agent/history/${sessionId}`);
+      const result = await apiService.request(`/super-agent/history/${sessionId}`, { method: 'DELETE' });
+      console.log('[Sidebar] DELETE success:', result);
+      // Refresh history after deletion
+      if (loadHistory) {
+        console.log('[Sidebar] Reloading history...');
+        await loadHistory();
+      }
+      // If deleted session was active, reset to new session
+      if (session?.id === sessionId) {
+        console.log('[Sidebar] Deleted session was active, resetting');
+        resetSession();
+        handleNavigation('/dashboard/orchestrator');
+      }
+    } catch (error) {
+      console.error('[Sidebar] Failed to delete chat history:', error);
+      alert(`Failed to delete chat history: ${error.message || 'Unknown error'}`);
+    }
+  };
+
+  const sortedChatHistory = Array.isArray(chatHistory)
+    ? [...chatHistory].sort((a, b) => {
+      const ta = a?.updated_at ? Date.parse(a.updated_at) : 0;
+      const tb = b?.updated_at ? Date.parse(b.updated_at) : 0;
+      return tb - ta;
+    })
+    : [];
 
   return (
     <>
@@ -329,8 +368,7 @@ const Sidebar = ({ onLogout }) => {
 
                 <NavLink
                   className={({ isActive }) =>
-                    `agent-item-sidebar ${isActive ? "active" : ""}`
-                  }
+                    `agent-item-sidebar ${isActive ? "active" : ""}`}
                   to="/dashboard/farm-map"
                   onClick={() => handleNavigation("/dashboard/farm-map")}
                 >
@@ -341,8 +379,7 @@ const Sidebar = ({ onLogout }) => {
 
                 <NavLink
                   className={({ isActive }) =>
-                    `agent-item-sidebar ${isActive ? "active" : ""}`
-                  }
+                    `agent-item-sidebar ${isActive ? "active" : ""}`}
                   to="/dashboard/voice"
                   onClick={() => handleNavigation("/dashboard/voice")}
                 >
@@ -353,8 +390,7 @@ const Sidebar = ({ onLogout }) => {
 
                 <NavLink
                   className={({ isActive }) =>
-                    `agent-item-sidebar ${isActive ? "active" : ""}`
-                  }
+                    `agent-item-sidebar ${isActive ? "active" : ""}`}
                   to="/dashboard/agents"
                   onClick={() => handleNavigation("/dashboard/agents")}
                 >
@@ -363,12 +399,9 @@ const Sidebar = ({ onLogout }) => {
                   <span className="agent-status-sidebar active-sidebar"></span>
                 </NavLink>
 
-
-
                 <NavLink
                   className={({ isActive }) =>
-                    `agent-item-sidebar ${isActive ? "active" : ""}`
-                  }
+                    `agent-item-sidebar ${isActive ? "active" : ""}`}
                   to="/dashboard/hardware-iot"
                   onClick={() => handleNavigation("/dashboard/hardware-iot")}
                 >
@@ -379,8 +412,7 @@ const Sidebar = ({ onLogout }) => {
 
                 <NavLink
                   className={({ isActive }) =>
-                    `agent-item-sidebar ${isActive ? "active" : ""}`
-                  }
+                    `agent-item-sidebar ${isActive ? "active" : ""}`}
                   to="/dashboard/setting"
                   onClick={() => handleNavigation("/dashboard/setting")}
                 >
@@ -429,23 +461,46 @@ const Sidebar = ({ onLogout }) => {
                   }`}
                 key={`history_${animationKeys.history}`}
               >
-                {chatHistory && chatHistory.length > 0 ? (
-                  chatHistory.map((session) => (
+                {sortedChatHistory.length > 0 ? (
+                  sortedChatHistory.map((s) => (
                     <div
-                      key={session.session_id}
-                      className="agent-item-sidebar"
-                      onClick={() => {
-                        loadSessionMessages(session.session_id);
+                      key={s.session_id}
+                      className={`agent-item-sidebar ${session?.id === s.session_id ? "active" : ""}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('[Sidebar] Clicked history session:', s.session_id, s.title);
+                        await loadSessionMessages(s.session_id);
+                        console.log('[Sidebar] loadSessionMessages completed, navigating to orchestrator');
                         handleNavigation("/dashboard/orchestrator");
+                      }}
+                      onKeyDown={async (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log('[Sidebar] Clicked history session:', s.session_id, s.title);
+                          await loadSessionMessages(s.session_id);
+                          console.log('[Sidebar] loadSessionMessages completed, navigating to orchestrator');
+                          handleNavigation("/dashboard/orchestrator");
+                        }
                       }}
                     >
                       <MessageSquare className="agent-icon-sidebar" size={18} />
                       <div className="agent-info-container-sidebar">
-                        <span className="agent-name-sidebar">{session.title}</span>
+                        <span className="agent-name-sidebar">{s.title || "New chat"}</span>
                         <span className="agent-meta-sidebar">
-                          {session.message_count} messages
+                          {(typeof s.message_count === 'number' ? s.message_count : 0)} messages
                         </span>
                       </div>
+                      <button
+                        className="chat-history-delete-btn"
+                        onClick={(e) => handleDeleteChatHistory(s.session_id, e)}
+                        title="Delete chat history"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   ))
                 ) : (

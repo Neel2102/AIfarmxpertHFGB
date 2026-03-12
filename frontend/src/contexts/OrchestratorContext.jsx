@@ -171,6 +171,8 @@ export function OrchestratorProvider({ children }) {
                 }
             });
 
+            await loadHistory();
+
             return response;
         } catch (error) {
             dispatch({ type: ACTIONS.SET_ERROR, payload: error.message });
@@ -181,8 +183,11 @@ export function OrchestratorProvider({ children }) {
     const loadHistory = async () => {
         try {
             const result = await apiService.getHistory();
-            dispatch({ type: ACTIONS.SET_HISTORY, payload: result.sessions || [] });
-            return result.sessions;
+            const sessions = Array.isArray(result)
+                ? result
+                : (result?.sessions || []);
+            dispatch({ type: ACTIONS.SET_HISTORY, payload: sessions });
+            return sessions;
         } catch (error) {
             console.error('Failed to load history:', error);
             // Don't throw to not disrupt the main flow
@@ -191,39 +196,58 @@ export function OrchestratorProvider({ children }) {
     };
 
     const loadSessionMessages = async (sessionId) => {
+        console.log('[OrchestratorContext] loadSessionMessages called with sessionId:', sessionId);
         try {
             dispatch({ type: ACTIONS.SET_LOADING, payload: true });
 
+            dispatch({
+                type: ACTIONS.SET_SESSION,
+                payload: { id: sessionId }
+            });
+
+            localStorage.setItem('farmxpert_session_id', sessionId);
+            console.log('[OrchestratorContext] session id saved to localStorage:', sessionId);
+
             // Get history for this session specifically
             const result = await apiService.request(`/super-agent/history?session_id=${sessionId}`);
+            console.log('[OrchestratorContext] API result for session messages:', result);
+            console.log('[OrchestratorContext] typeof result:', typeof result, 'Array.isArray?', Array.isArray(result));
 
-            if (result && result.messages) {
+            // Handle different response structures
+            let messagesData = null;
+            if (Array.isArray(result)) {
+                messagesData = result;
+            } else if (result && result.messages && Array.isArray(result.messages)) {
+                messagesData = result.messages;
+            } else if (result && result.data && Array.isArray(result.data)) {
+                messagesData = result.data;
+            }
+
+            console.log('[OrchestratorContext] messagesData extracted:', messagesData);
+
+            if (messagesData && messagesData.length > 0) {
                 // Convert simple text messages format to UI messages
-                const formattedMessages = result.messages.map((m, idx) => ({
+                const formattedMessages = messagesData.map((m, idx) => ({
                     id: Date.now() + idx,
                     type: m.role === 'user' ? 'user' : 'assistant',
-                    content: m.content,
+                    content: m.content || m.message || String(m),
                     timestamp: new Date().toISOString()
                 }));
 
-                // Keep the 'Welcome to Farm Orchestrator' message if we want, or clear
-                dispatch({
-                    type: ACTIONS.SET_SESSION,
-                    payload: { id: sessionId }
-                });
-
-                dispatch({
-                    type: ACTIONS.ADD_MESSAGE, // We update state.messages below
-                    payload: formattedMessages
-                });
-
-                // Set the exact messages list
                 dispatch({ type: 'SET_MESSAGES', payload: formattedMessages });
+                dispatch({ type: ACTIONS.SET_LOADING, payload: false });
+                console.log('[OrchestratorContext] messages loaded and dispatched:', formattedMessages.length);
+                return formattedMessages;
             }
+
+            dispatch({ type: 'SET_MESSAGES', payload: [] });
             dispatch({ type: ACTIONS.SET_LOADING, payload: false });
+            console.log('[OrchestratorContext] no messages found for session:', sessionId);
+            return [];
         } catch (error) {
-            console.error('Failed to load session messages:', error);
+            console.error('[OrchestratorContext] Failed to load session messages:', error);
             dispatch({ type: ACTIONS.SET_LOADING, payload: false });
+            return [];
         }
     };
 

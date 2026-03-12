@@ -4,10 +4,10 @@ import ChatPanel from './ChatPanel';
 // import OfflineIndicator from '../components/OfflineIndicator';
 import { useOrchestrator } from '../contexts/OrchestratorContext';
 import { dataService } from '../services/apiService';
-import '../styles/Dashboard/DashboardLayout.css';
+import '../styles/Dashboard/SmartChatLayout.css';
 import '../styles/components/OfflineIndicator.css';
 
-const DashboardLayout = () => {
+const SmartChatLayout = () => {
   const location = useLocation();
   const [farmData, setFarmData] = useState({
     farm_name: 'Krishna farm',
@@ -38,6 +38,14 @@ const DashboardLayout = () => {
         localStorage.setItem('farmxpert_session_id', session.id);
     }
   }, [session?.id, sessionId]);
+
+  // When context session changes, ensure we reload messages in ChatPanel via sessionId update
+  useEffect(() => {
+    if (session?.id && loadSessionMessages) {
+      loadSessionMessages(session.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id]);
 
   useEffect(() => {
     (async () => {
@@ -152,6 +160,6 @@ const DashboardLayout = () => {
   );
 };
 
-export default DashboardLayout;
+export default SmartChatLayout;
 
 

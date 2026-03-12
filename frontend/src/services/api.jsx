@@ -13,16 +13,28 @@ class ApiService {
         };
     }
 
+    getAuthHeaders() {
+        const token = localStorage.getItem('access_token');
+        return token ? { Authorization: `Bearer ${token}` } : {};
+    }
+
     /**
      * Generic API request method
      */
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
+        const headers = {
+            ...this.defaultHeaders,
+            ...this.getAuthHeaders(),
+            ...options.headers,
+        };
+
+        if (typeof FormData !== 'undefined' && options.body instanceof FormData) {
+            delete headers['Content-Type'];
+        }
+
         const config = {
-            headers: {
-                ...this.defaultHeaders,
-                ...options.headers,
-            },
+            headers,
             ...options,
         };
 
@@ -308,3 +320,4 @@ export const api = {
 };
 
 export default apiService;
+export { apiService };
