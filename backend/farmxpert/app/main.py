@@ -97,6 +97,16 @@ async def _ensure_tables_exist():
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables verified successfully.")
         _db_status = "connected"
+        
+        # Raw psycopg2 connectivity test
+        try:
+            import psycopg2
+            conn = psycopg2.connect(settings.database_url)
+            logger.info("Psycopg2: Database connected successfully")
+            conn.close()
+        except Exception as py_e:
+            logger.error(f"Psycopg2: Database connection failed: {py_e}")
+            
     except Exception as e:
         _startup_error = str(e)
         _db_status = "failed"
