@@ -64,7 +64,7 @@ COPY backend/alembic.ini .
 COPY --from=frontend-builder /frontend/build /usr/share/nginx/html
 
 # Copy nginx configuration
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY frontend/nginx.conf /etc/nginx/nginx.conf
 
 # Create supervisor log directory
 RUN mkdir -p /var/log/supervisor
