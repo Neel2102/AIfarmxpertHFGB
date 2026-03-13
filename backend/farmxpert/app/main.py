@@ -5,6 +5,10 @@ Updated to use the new core agent system
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import logging
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 # Import the new core agent system instead of old scattered agents
 from farmxpert.core.core_agent_updated import process_farm_request
@@ -66,7 +70,20 @@ app.include_router(voice_router, prefix="/api")
 
 @app.on_event("startup")
 async def _ensure_tables_exist():
-    Base.metadata.create_all(bind=engine)
+    # Log database host for debugging (obfuscated)
+    try:
+        db_host = engine.url.host
+        logger.info(f"Connecting to database host: {db_host}")
+    except Exception as e:
+        logger.warning(f"Could not log database host: {e}")
+        
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables verified.")
+    except Exception as e:
+        logger.error(f"Failed to create/verify database tables: {e}")
+        # On Railway, failing here is fatal for the app
+        raise e
 
 @app.get("/")
 async def root():

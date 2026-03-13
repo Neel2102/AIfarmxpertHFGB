@@ -1,7 +1,10 @@
 from pydantic_settings import BaseSettings
-from pydantic import Field, AliasChoices
+from pydantic import Field, AliasChoices, field_validator
 from pathlib import Path
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -45,6 +48,14 @@ class Settings(BaseSettings):
     low_llm_mode: bool = Field(default=False)
 
     database_url: str = Field(default="postgresql://postgres:password@localhost:5432/farmxpert")
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_postgres_url(cls, v: str) -> str:
+        if v and v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql://", 1)
+        return v
+
     redis_url: str = Field(default="redis://localhost:6379/0")
     static_data_dir: str = Field(default="data/static")
     
