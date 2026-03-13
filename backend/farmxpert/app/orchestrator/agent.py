@@ -32,7 +32,7 @@ from farmxpert.agents.agronomy.soil_health_agent import SoilHealthAgent
 try:
     from farmxpert.models.database import SessionLocal
     from farmxpert.models.user_models import User
-    from farmxpert.models.farm_models import Farm
+    from farmxpert.models.farm_models import Farm, Field
     from farmxpert.models.blynk_models import BlynkDevice, SensorReading
     DB_CONTEXT_AVAILABLE = True
 except ImportError:
@@ -81,8 +81,8 @@ class OrchestratorAgent:
     }
 
     @staticmethod
-    def _fetch_user_context(user_id: int) -> Tuple[Optional[Any], Optional[Any]]:
-        """Fetch User onboarding_data and latest SensorReading for a user. Returns (user, sensor_reading)."""
+    def _fetch_user_context(user_id: int) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
+        """Fetch User, Farm, Fields, and latest SensorReading for a user. Returns (user, context_dict)."""
         if not DB_CONTEXT_AVAILABLE:
             return None, None
         try:
@@ -92,37 +92,65 @@ class OrchestratorAgent:
                 if not user:
                     return None, None
                 
-                # To get SoilTelemetry (SensorReading), we need Farm -> BlynkDevice
-                sensor_reading = None
-                farm = db.query(Farm).filter(Farm.farmer_name == user.username).first()
+                context = {
+                    "username": user.username,
+                    "farm_name": "Unknown Farm",
+                    "fields": [],
+                    "telemetry": {},
+                    "profile": {}
+                }
+
+                # Fetch Farm details
+                farm = db.query(Farm).filter(Farm.user_id == user_id).first()
+                if not farm:
+                    # Fallback lookup by username if user_id link is missing in Farm table
+                    farm = db.query(Farm).filter(Farm.farmer_name == user.username).first()
+                if not farm:
+                    # Second fallback: lookup by farm name if current user is linked to it via username
+                    farm = db.query(Farm).filter(Farm.farm_name == user.username).first()
+                
                 if farm:
+                    context["farm_name"] = farm.farm_name
+                    
+                    # Fetch Fields
+                    fields = db.query(Field).filter(Field.farm_id == farm.id).all()
+                    context["fields"] = [
+                        {"name": f.name, "size": f.size_acres, "soil": f.soil_type} 
+                        for f in fields
+                    ]
+
+                    # Fetch Telemetry (Latest SensorReading)
                     sensor_reading = (
                         db.query(SensorReading)
                         .filter(SensorReading.farm_id == farm.id)
                         .order_by(SensorReading.recorded_at.desc())
                         .first()
                     )
+                    if sensor_reading:
+                        context["telemetry"] = {
+                            "air_temp": float(sensor_reading.air_temperature) if sensor_reading.air_temperature else None,
+                            "air_humid": float(sensor_reading.air_humidity) if sensor_reading.air_humidity else None,
+                            "soil_moist": float(sensor_reading.soil_moisture) if sensor_reading.soil_moisture else None,
+                            "soil_ph": float(sensor_reading.soil_ph) if sensor_reading.soil_ph else None,
+                            "nitrogen": float(sensor_reading.nitrogen) if sensor_reading.nitrogen else None,
+                            "phosphorus": float(sensor_reading.phosphorus) if sensor_reading.phosphorus else None,
+                            "potassium": float(sensor_reading.potassium) if sensor_reading.potassium else None,
+                        }
                 
-                # Fetch FarmProfile for detailed user context
+                # Fetch FarmProfile for additional context
                 from farmxpert.models.farm_profile_models import FarmProfile
                 farm_profile = db.query(FarmProfile).filter(FarmProfile.user_id == user_id).first()
                 if farm_profile:
-                    primary_crop = ""
-                    if farm_profile.primary_crops and isinstance(farm_profile.primary_crops, list) and len(farm_profile.primary_crops) > 0:
-                        primary_crop = farm_profile.primary_crops[0]
-                    user.onboarding_data = {
+                    context["profile"] = {
                         "farmSize": farm_profile.farm_size,
                         "state": farm_profile.state,
                         "district": farm_profile.district,
-                        "specificCrop": farm_profile.specific_crop,
-                        "mainCropCategory": primary_crop,
+                        "crop": farm_profile.specific_crop or (farm_profile.primary_crops[0] if farm_profile.primary_crops else "their crop"),
                         "soilType": farm_profile.soil_type,
-                        "irrigationMethod": farm_profile.irrigation_method,
+                        "irrigation": farm_profile.irrigation_method
                     }
-                else:
-                    user.onboarding_data = {}
                 
-                return user, sensor_reading
+                return user, context
             finally:
                 db.close()
         except Exception as e:
@@ -130,54 +158,60 @@ class OrchestratorAgent:
             return None, None
 
     @staticmethod
-    def _build_system_prompt(user: Optional[Any], sensor_reading: Optional[Any]) -> str:
-        """Build a personalized system prompt from User onboarding_data and SensorReading data."""
+    def _build_system_prompt(user: Optional[Any], context: Optional[Dict[str, Any]]) -> str:
+        """Build a personalized system prompt from User context data."""
         base = (
             "You are FarmXpert, an expert, friendly agricultural AI assistant guiding the farmer towards success. "
             "Always respond in a helpful, conversational, and empathetic tone like a trusted advisor. "
-            "Summarize insights clearly and provide actionable, step-by-step guidance. "
-            "Do not invent data. Use a natural, farmer-friendly tone without excessive exaggeration.\n\n"
+            "Summarize insights clearly and provide actionable, step-by-step guidance.\n\n"
         )
 
-        if not user or not hasattr(user, 'onboarding_data') or not user.onboarding_data:
+        if not user or not context:
             return base + "Provide general farming advice."
 
         # Build personalized context
-        profile = getattr(user, 'onboarding_data', {})
-        if not isinstance(profile, dict):
-            profile = {}
-            
+        profile = context.get("profile", {})
+        farm_name = context.get("farm_name", "your farm")
+        
         parts = []
-        farm_size = profile.get('farmSize') or "unknown"
-        state = profile.get('state') or "an unknown state"
-        crop = profile.get('specificCrop') or profile.get('mainCropCategory') or "their crop"
+        parts.append(f"You are speaking to the owner of '{farm_name}'.")
+        
+        if profile.get("state"):
+            location = f" in {profile.get('state')}"
+            if profile.get("district"):
+                location += f" ({profile.get('district')})"
+            parts.append(f"The farm is located{location}.")
 
-        parts.append(f"You are speaking to a farmer in {state} with {farm_size} of {crop}")
+        if profile.get("crop"):
+            parts.append(f"The primary focus is on {profile.get('crop')}")
+            if profile.get("farmSize"):
+                parts[len(parts)-1] += f" across {profile.get('farmSize')}"
 
-        if profile.get('soilType'):
-            parts.append(f"soil type is {profile.get('soilType')}")
-        if profile.get('irrigationMethod'):
-            parts.append(f"irrigation method is {profile.get('irrigationMethod')}")
+        if context.get("fields"):
+            field_list = ", ".join([f"{f['name']} ({f['size']} acres)" for f in context["fields"]])
+            parts.append(f"Mapped fields: {field_list}.")
 
-        context_str = ". ".join(parts) + "."
+        context_str = " ".join(parts)
 
+        # Soil & Telemetry
         soil_str = ""
-        if sensor_reading:
-            soil_parts = []
-            if sensor_reading.soil_ph is not None:
-                soil_parts.append(f"pH {float(sensor_reading.soil_ph):.1f}")
-            if sensor_reading.soil_moisture is not None:
-                soil_parts.append(f"moisture {float(sensor_reading.soil_moisture):.0f}%")
-            if sensor_reading.nitrogen is not None:
-                soil_parts.append(f"N={float(sensor_reading.nitrogen):.0f} mg/kg")
-            if sensor_reading.phosphorus is not None:
-                soil_parts.append(f"P={float(sensor_reading.phosphorus):.0f} mg/kg")
-            if sensor_reading.potassium is not None:
-                soil_parts.append(f"K={float(sensor_reading.potassium):.0f} mg/kg")
-            if soil_parts:
-                soil_str = f" Their current soil readings: {', '.join(soil_parts)}."
+        telemetry = context.get("telemetry", {})
+        if telemetry:
+            t_parts = []
+            if telemetry.get("soil_ph"): t_parts.append(f"pH {telemetry['soil_ph']:.1f}")
+            if telemetry.get("soil_moist"): t_parts.append(f"Moisture {telemetry['soil_moist']:.0f}%")
+            if telemetry.get("nitrogen"): t_parts.append(f"N={telemetry['nitrogen']:.0f} mg/kg")
+            if telemetry.get("phosphorus"): t_parts.append(f"P={telemetry['phosphorus']:.0f} mg/kg")
+            if telemetry.get("potassium"): t_parts.append(f"K={telemetry['potassium']:.0f} mg/kg")
+            
+            if t_parts:
+                soil_str = f"\n\n--- REAL-TIME SENSOR DATA ---\n{', '.join(t_parts)}\n----------------------------"
 
-        return base + context_str + soil_str + " Tailor all advice specifically to this farmer's situation."
+        return (
+            base + context_str + soil_str + 
+            "\n\nCRITICAL: Always reference the real-time sensor data provided above to make your advice factual and specific. "
+            "If NPK or moisture levels are outside optimal ranges for the specified crop, highlight this immediately and provide recovery steps."
+        )
 
     @staticmethod
     async def handle_request(request: Dict[str, Any]) -> Dict[str, Any]:
@@ -187,11 +221,11 @@ class OrchestratorAgent:
             user_id = request.get("user_id")
             if user_id:
                 try:
-                    user, sensor_reading = OrchestratorAgent._fetch_user_context(int(user_id))
-                    system_prompt = OrchestratorAgent._build_system_prompt(user, sensor_reading)
+                    user, context = OrchestratorAgent._fetch_user_context(int(user_id))
+                    system_prompt = OrchestratorAgent._build_system_prompt(user, context)
                     # Also inject farm data into the request so agents can use it
-                    if user and hasattr(user, 'onboarding_data') and isinstance(user.onboarding_data, dict):
-                        profile = user.onboarding_data
+                    if context and context.get("profile"):
+                        profile = context["profile"]
                         if not request.get("location"):
                             request = dict(request)  # make mutable copy
                         else:
@@ -202,10 +236,46 @@ class OrchestratorAgent:
                             request["location"].setdefault("district", profile.get("district"))
                         if not request.get("crop_info"):
                             request["crop_info"] = {}
-                        crop_name = profile.get("specificCrop") or profile.get("mainCropCategory")
+                        crop_name = profile.get("crop")
                         if crop_name:
                             request["crop_info"].setdefault("name", crop_name)
-                        logger.info(f"User context injected for user_id={user_id}: {profile.get('state')}, {crop_name}")
+                        
+                        # Map Telemetry to specific fields expected by agents
+                        telemetry = context.get("telemetry", {})
+                        if telemetry:
+                            # For Irrigation Agent
+                            if telemetry.get("soil_moist") is not None:
+                                request.setdefault("soil_moisture_percent", telemetry["soil_moist"])
+                            
+                            # For Fertilizer Agent
+                            request.setdefault("soil", {})
+                            if isinstance(request["soil"], dict):
+                                if telemetry.get("nitrogen") is not None: request["soil"].setdefault("n", telemetry["nitrogen"])
+                                if telemetry.get("phosphorus") is not None: request["soil"].setdefault("p", telemetry["phosphorus"])
+                                if telemetry.get("potassium") is not None: request["soil"].setdefault("k", telemetry["potassium"])
+                                if telemetry.get("soil_ph") is not None: request["soil"].setdefault("ph", telemetry["soil_ph"])
+                            
+                            # For Weather-dependent logic in sub-agents
+                            request.setdefault("recent_weather", {})
+                            if isinstance(request["recent_weather"], dict):
+                                if telemetry.get("air_temp") is not None: request["recent_weather"].setdefault("temperature", telemetry["air_temp"])
+                                if telemetry.get("air_humid") is not None: request["recent_weather"].setdefault("humidity", telemetry["air_humid"])
+
+                        # Map Profile extra details
+                        if profile.get("farmSize"):
+                            try:
+                                # Extract numeric part from "5 acres" etc.
+                                size_str = str(profile["farmSize"]).split()[0]
+                                request.setdefault("area_acres", float(size_str))
+                            except:
+                                pass
+                        
+                        if profile.get("soilType"):
+                            request.setdefault("soil_type", profile["soilType"])
+                            if isinstance(request.get("soil"), dict):
+                                request["soil"].setdefault("type", profile["soilType"])
+
+                        logger.info(f"User context injected for user_id={user_id}: {profile.get('state')}, {crop_name}, Telemetry: {bool(telemetry)}")
                 except Exception as e:
                     logger.warning(f"User context injection failed: {e}")
 

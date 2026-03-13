@@ -27,7 +27,7 @@ const SENSOR_RANGES = {
   V5: { min: 0, max: 14 },
   V6: { min: 0, max: 200 },
   V7: { min: 0, max: 200 },
-  V8: { min: 0, max: 200 },
+  V8: { min: 0, max: 1000 },
 };
 
 const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
@@ -85,8 +85,8 @@ export default function HardwareIoT() {
     try {
       const token = localStorage.getItem('access_token');
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-      
-      await fetch(`${API_BASE_URL}/api/blynk/delete-device`, { 
+
+      await fetch(`${API_BASE_URL}/api/blynk/delete-device`, {
         method: "DELETE",
         headers
       });
@@ -132,7 +132,7 @@ export default function HardwareIoT() {
         // Get auth token from localStorage
         const token = localStorage.getItem('access_token');
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-        
+
         const res = await fetch(`${API_BASE_URL}/api/blynk/check-device`, { headers });
         const contentType = res.headers.get('content-type') || '';
         if (res.ok && contentType.includes('application/json')) {
@@ -179,7 +179,7 @@ export default function HardwareIoT() {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` })
         };
-        
+
         await fetch(`${API_BASE_URL}/api/soil-tests/save`, {
           method: "POST",
           headers,
@@ -236,7 +236,7 @@ export default function HardwareIoT() {
         'Content-Type': 'application/json',
         ...(token && { 'Authorization': `Bearer ${token}` })
       };
-      
+
       // Register with backend
       const res = await fetch(`${API_BASE_URL}/api/blynk/register-device`, {
         method: "POST",

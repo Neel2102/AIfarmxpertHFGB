@@ -73,7 +73,10 @@ class AuthService:
     def authenticate_user(self, username: str, password: str) -> Optional[User]:
         """Authenticate user with username and password"""
         user = self.db.query(User).filter(
-            and_(User.username == username, User.is_active == True)
+            and_(
+                (User.username == username) | (User.email == username),
+                User.is_active == True
+            )
         ).first()
         
         if user and user.check_password(password):

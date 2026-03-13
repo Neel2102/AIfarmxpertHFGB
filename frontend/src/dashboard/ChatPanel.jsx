@@ -6,6 +6,7 @@ import {
   MapPin, Camera, Mic, MicOff, Paperclip, X, Check, Menu, Plus
 } from 'lucide-react';
 import { useOrchestrator } from '../contexts/OrchestratorContext';
+import { useAuth } from '../contexts/AuthContext';
 import '../styles/Dashboard/ChatPanel.css';
 import '../styles/Dashboard/ChatPanel-reasoning.css';
 
@@ -26,6 +27,7 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
     loading: contextLoading,
     setMessages
   } = useOrchestrator();
+  const { user } = useAuth();
 
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -349,6 +351,7 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
         body: JSON.stringify({ 
           message: text, 
           session_id: sessionId,
+          user_id: user?.id,
           context: { selected_agents: selectedAgents }
         }),
       });
@@ -432,11 +435,46 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
         </header>
 
         <div className="farm-messages-container">
-          {messages.length === 1 && messages[0].type === 'system' && (
-            <div className="farm-welcome">
-              <div className="farm-welcome-icon"><Bot size={32} /></div>
-              <h2>How can I help you today?</h2>
-              <p>Type a question or select specialists from the menu below.</p>
+          {messages.length <= 1 && (messages.length === 0 || messages[0].type === 'system') && (
+            <div className="farm-welcome-overlay">
+              <div className="farm-welcome-content">
+                <div className="farm-welcome-orb" />
+                <div className="farm-welcome-orb secondary" />
+                <div className="farm-welcome-inner">
+                  <div className="farm-welcome-icon-wrapper">
+                    <div className="farm-welcome-icon-bg" />
+                    <Bot size={48} className="farm-welcome-bot" />
+                  </div>
+                  <h1 className="farm-welcome-title">Welcome to FarmXpert AI</h1>
+                  <p className="farm-welcome-subtitle">
+                    Your personal agricultural intelligence coordinator. I'm connected to your 
+                    <strong> {farmData.farm_name}</strong> and ready to assist with real-time insights.
+                  </p>
+                  
+                  <div className="farm-welcome-features">
+                    <div className="farm-feature-item">
+                      <div className="feature-icon-box weather"><Cloud size={18} /></div>
+                      <span>Weather Analysis</span>
+                    </div>
+                    <div className="farm-feature-item">
+                      <div className="feature-icon-box soil"><FlaskConical size={18} /></div>
+                      <span>Soil Health</span>
+                    </div>
+                    <div className="farm-feature-item">
+                      <div className="feature-icon-box growth"><TrendingUp size={18} /></div>
+                      <span>Growth Monitor</span>
+                    </div>
+                    <div className="farm-feature-item">
+                      <div className="feature-icon-box market"><Calendar size={18} /></div>
+                      <span>Market Intel</span>
+                    </div>
+                  </div>
+
+                  <div className="farm-welcome-prompt">
+                    Type a question below or pick a specialist to get started.
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
