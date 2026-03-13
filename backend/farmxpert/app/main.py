@@ -6,13 +6,18 @@ Updated to use the new core agent system
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+import sys
+import os
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 
-# Import the new core agent system instead of old scattered agents
 from farmxpert.core.core_agent_updated import process_farm_request
 from farmxpert.core.agent_routes import router as core_agent_router
+
+# Store startup errors for diagnostics
+_startup_error = None
+_db_status = "initializing"
 from farmxpert.interfaces.api.routes import health_routes, farm_routes, auth_routes, agent_info_routes, agent_routes
 from farmxpert.interfaces.api.routes import super_agent_updated
 from farmxpert.interfaces.api.routes import llm_usage_routes, blynk_routes, soil_routes, iot_routes, admin_routes
@@ -70,6 +75,8 @@ app.include_router(voice_router, prefix="/api")
 
 @app.on_event("startup")
 async def _ensure_tables_exist():
+    global _startup_error, _db_status
+    
     # Log database connection attempt
     try:
         from farmxpert.config.settings import settings
@@ -82,13 +89,41 @@ async def _ensure_tables_exist():
         logger.warning(f"Could not log connection details: {e}")
         
     try:
+        # Check if we should use SSL connect args (SQLAlchemy 2.0+)
+        connect_args = {}
+        if "sslmode" in settings.database_url:
+            connect_args["sslmode"] = "require"
+            
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables verified successfully.")
+        _db_status = "connected"
     except Exception as e:
-        logger.error(f"FATAL: Database connectivity failure: {e}")
-        logger.error("Please verify DATABASE_URL is correct and the database is accessible.")
-        # On Railway, failing here prevents the app from starting, which is better than inconsistent state
-        raise e
+        _startup_error = str(e)
+        _db_status = "failed"
+        logger.error(f"NON-FATAL ERROR: Database connectivity failure: {e}")
+        logger.error("The app will continue to run for diagnostic purposes.")
+        # We do NOT raise here, allowing the app to stay up so we can check logs/endpoints
+        
+@app.get("/api/diagnostic")
+async def diagnostic():
+    """Diagnostic endpoint to reveal startup/DB errors"""
+    from farmxpert.config.settings import settings
+    
+    # Obfuscate DB URL
+    db_url = settings.database_url
+    if "@" in db_url:
+        pref, suff = db_url.split("@", 1)
+        db_url = f"{pref.split('://')[0]}://****:****@{suff}"
+        
+    return {
+        "status": "online",
+        "database_status": _db_status,
+        "startup_error": _startup_error,
+        "detected_db_url": db_url,
+        "env_keys": list(os.environ.keys()),
+        "python_path": sys.path,
+        "cwd": os.getcwd()
+    }
 
 @app.get("/")
 async def root():

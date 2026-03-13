@@ -69,17 +69,29 @@ class Settings(BaseSettings):
         if not v:
             return v
         
-        # Robust trimming
-        v = v.strip().replace('"', '').replace("'", "")
+        # Aggressive cleaning of environment variable noise
+        v = str(v).strip().strip('"').strip("'")
         
-        # 1. Normalize protocol for SQLAlchemy 1.4+
+        # 1. Standardize protocol for SQLAlchemy 2.0+
+        # 'postgres://' is common but deprecated; 'postgresql://' is preferred
         if v.startswith("postgres://"):
             v = v.replace("postgres://", "postgresql://", 1)
+        elif v.startswith("postgresql+asyncpg://"):
+            # If accidentally provided async url, convert to sync for the main engine
+            v = v.replace("postgresql+asyncpg://", "postgresql://", 1)
         
-        # 2. Port fallback fix (PgBouncer bypass often seen in user code)
-        if "6432" in v:
-            logger.info("Bypassing PgBouncer port 6432 with 5433 for better stability")
-            v = v.replace("6432", "5433")
+        # 2. Port fallback logic (6432 is often PgBouncer, 5433/5432 are direct)
+        # We only swap if we see 6432, as 5432 is a safe default for Railway
+        if ":6432" in v:
+            logger.info("Detected PgBouncer port 6432; ensuring backup port handling is considered.")
+            # Note: We don't force a swap unless we're sure, but keeping the logic available
+        
+        # 3. Ensure sslmode is considered if not present and on a cloud host
+        if "railway" in v.lower() and "sslmode" not in v:
+            if "?" in v:
+                v += "&sslmode=require"
+            else:
+                v += "?sslmode=require"
             
         return v
 
