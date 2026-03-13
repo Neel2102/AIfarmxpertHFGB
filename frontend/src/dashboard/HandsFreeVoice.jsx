@@ -280,6 +280,29 @@ export default function HandsFreeVoice() {
 
       const ai = new GoogleGenAI({ apiKey: API_KEY });
 
+      // Fetch context for system instruction
+      let liveContext = "No farm context available.";
+      try {
+        const user = await api.auth.getSession();
+        const devices = await api.hardware.getDevices();
+        const fields = await api.fields.getFields();
+
+        liveContext = `
+        --- REAL-TIME FARM CONTEXT ---
+        USER: ${user ? `${user.name} (${user.role})` : 'Guest'}
+        FARM: ${user ? user.farmName : 'Unknown Farm'}
+
+        MAPPED FIELDS:
+        ${fields.length > 0 ? fields.map(f => `- Field Name: "${f.name}", Crop: "${f.crop}", Area: ${f.area}ha`).join('\n') : 'No fields mapped yet.'}
+
+        LIVE TELEMETRY (Sensors/Drones/Machinery):
+        ${devices.map(d => `- [${String(d.type || '').toUpperCase()}] ${d.name}: ${JSON.stringify(d.readings || {})}`).join('\n')}
+        ------------------------------
+        `;
+      } catch (ctxErr) {
+        console.warn('Failed to fetch live context for voice session:', ctxErr);
+      }
+
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.0-flash-exp',
         config: {
@@ -289,7 +312,9 @@ export default function HandsFreeVoice() {
                     You are speaking to a farmer who is likely driving a tractor or has dirty hands.
                     Keep responses SHORT, CONCISE, and ACTION-ORIENTED.
                     Do not read out long lists. Summarize key points.
-                    If there is an emergency (red status), state it first.`
+                    If there is an emergency (red status), state it first.
+
+                    ${liveContext}`
         },
         callbacks: {
           onopen: async () => {

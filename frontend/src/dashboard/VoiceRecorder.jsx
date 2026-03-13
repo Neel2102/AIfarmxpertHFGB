@@ -408,7 +408,7 @@ export default function VoiceRecorder() {
 
               {msg.audioUrl && (
                 <div className="voice-recorder-audio-player">
-                  <audio controls preload="none" autoPlay={msg.role === 'ai'} src={msg.audioUrl}>
+                  <audio controls preload="none" src={msg.audioUrl}>
                     Your browser does not support audio.
                   </audio>
                 </div>

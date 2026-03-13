@@ -168,7 +168,7 @@ services:
     depends_on:
       - backend
     environment:
-      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_API_URL=https://6c415e8983d35ff1-157-49-127-200.serveousercontent.com
     networks:
       - farmxpert-network
     volumes:
