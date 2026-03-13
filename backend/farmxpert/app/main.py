@@ -70,19 +70,24 @@ app.include_router(voice_router, prefix="/api")
 
 @app.on_event("startup")
 async def _ensure_tables_exist():
-    # Log database host for debugging (obfuscated)
+    # Log database connection attempt
     try:
-        db_host = engine.url.host
-        logger.info(f"Connecting to database host: {db_host}")
+        from farmxpert.config.settings import settings
+        db_url_obfuscated = settings.database_url
+        if "@" in db_url_obfuscated:
+            pref, suff = db_url_obfuscated.split("@", 1)
+            db_url_obfuscated = f"{pref.split('://')[0]}://****:****@{suff}"
+        logger.info(f"Attempting to connect to database: {db_url_obfuscated}")
     except Exception as e:
-        logger.warning(f"Could not log database host: {e}")
+        logger.warning(f"Could not log connection details: {e}")
         
     try:
         Base.metadata.create_all(bind=engine)
-        logger.info("Database tables verified.")
+        logger.info("Database tables verified successfully.")
     except Exception as e:
-        logger.error(f"Failed to create/verify database tables: {e}")
-        # On Railway, failing here is fatal for the app
+        logger.error(f"FATAL: Database connectivity failure: {e}")
+        logger.error("Please verify DATABASE_URL is correct and the database is accessible.")
+        # On Railway, failing here prevents the app from starting, which is better than inconsistent state
         raise e
 
 @app.get("/")

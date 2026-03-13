@@ -140,7 +140,14 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
       return { success: true, user: data };
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('Registration error details:', error);
+      // Improve transparency for "Unexpected token <" errors
+      if (error.message.includes('Unexpected token') || error.message.includes('is not valid JSON')) {
+          return { 
+              success: false, 
+              error: 'The server provided an invalid response (likely an error page). This usually means the backend service is down or misconfigured.' 
+          };
+      }
       return { success: false, error: error.message };
     }
   };
