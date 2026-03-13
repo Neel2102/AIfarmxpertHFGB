@@ -141,8 +141,14 @@ export const AuthProvider = ({ children }) => {
       return { success: true, user: data };
     } catch (error) {
       console.error('Registration error details:', error);
-      // Improve transparency for "Unexpected token <" errors
+      // Improve transparency for "Unexpected token <" or raw text errors
       if (error.message.includes('Unexpected token') || error.message.includes('is not valid JSON')) {
+          if (error.message.includes('Internal Server Error')) {
+              return {
+                  success: false,
+                  error: 'The backend crashed with an "Internal Server Error". This often means the database connection failed. Check your Railway DATABASE_URL.'
+              };
+          }
           return { 
               success: false, 
               error: 'The server provided an invalid response (likely an error page). This usually means the backend service is down or misconfigured.' 
