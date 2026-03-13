@@ -47,7 +47,10 @@ class Settings(BaseSettings):
 
     low_llm_mode: bool = Field(default=False)
 
-    database_url: str = Field(default="postgresql://postgres:password@localhost:5432/farmxpert")
+    database_url: str = Field(
+        default="postgresql://postgres:password@localhost:5432/farmxpert",
+        validation_alias=AliasChoices("DATABASE_URL", "database_url")
+    )
 
     @field_validator("database_url", mode="before")
     @classmethod
@@ -56,7 +59,10 @@ class Settings(BaseSettings):
             return v.replace("postgres://", "postgresql://", 1)
         return v
 
-    redis_url: str = Field(default="redis://localhost:6379/0")
+    redis_url: str = Field(
+        default="redis://localhost:6379/0",
+        validation_alias=AliasChoices("REDIS_URL", "redis_url")
+    )
     static_data_dir: str = Field(default="data/static")
     
     # Authentication
