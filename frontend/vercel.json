@@ -1,9 +1,0 @@
-{
-  "buildCommand": "npm run build",
-  "outputDirectory": "build",
-  "framework": "create-react-app",
-  "env": {
-    "REACT_APP_API_KEY": "@react_app_api_key",
-    "REACT_APP_BACKEND_URL": "@react_app_backend_url"
-  }
-}
