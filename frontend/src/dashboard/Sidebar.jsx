@@ -1,23 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, MessageSquare, Map, Mic, Users, Cpu, Settings,
-  History, Plus, Sun, Moon, X, ChevronRight, Trash2
+  History, Plus, Trash2
 } from 'lucide-react';
 import { useOrchestrator } from '../contexts/OrchestratorContext';
 import apiService from '../services/api';
-import { useAuth } from "../contexts/AuthContext";
 import '../styles/Dashboard/Sidebar.css';
 
 const Sidebar = ({ onLogout }) => {
   const navigate = useNavigate();
   const { chatHistory, session, loadSessionMessages, resetSession, loadHistory } = useOrchestrator();
-  const { } = useAuth();
 
   const [isOpen, setIsOpen] = useState(true);
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem("theme") || "dark";
   });
+
   const [expandedCategories, setExpandedCategories] = useState({
     main_menu: true,
     history: true,
@@ -113,11 +112,6 @@ const Sidebar = ({ onLogout }) => {
     if (isMobile) {
       setIsOpen(false);
     }
-  };
-
-  // eslint-disable-next-line no-unused-vars
-  const _toggleProfileMenu = () => {
-    setShowProfileMenu(!showProfileMenu);
   };
 
   const toggleSidebar = () => {

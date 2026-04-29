@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { useAuth } from "../contexts/AuthContext";
 import "../styles/Dashboard/FarmMap.css";
 
 // Leaflet is loaded from CDN in index.html
@@ -7,8 +6,6 @@ const L = window.L;
 const API_BASE_URL = '/api';
 
 export default function FarmMap() {
-  // eslint-disable-next-line no-unused-vars
-  const { user } = useAuth();
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const drawnItemsRef = useRef(null);
@@ -21,7 +18,6 @@ export default function FarmMap() {
   const [buttonsEnabled, setButtonsEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
-  const [saveError, setSaveError] = useState(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -211,7 +207,6 @@ export default function FarmMap() {
     }
 
     setSaving(true);
-    setSaveError(null);
     const cropPreferences = formData.crop_preferences
       .split(",")
       .map(crop => crop.trim())
@@ -249,7 +244,7 @@ export default function FarmMap() {
         setSaving(false);
       }, 2500);
     } catch (err) {
-      setSaveError(err.message || 'Failed to save farm layout. Please try again.');
+      alert(err.message || 'Failed to save farm layout. Please try again.');
       setSaving(false);
     }
   };

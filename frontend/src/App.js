@@ -31,13 +31,6 @@ const AuthContainer = ({ children }) => (
   </div>
 );
 
-// Auth Card Component  
-const AuthCard = ({ children }) => (
-  <div className="auth-card">
-    {children}
-  </div>
-);
-
 // Enhanced Private Route Component with strict validation
 const PrivateRoute = ({ children }) => {
   const { user, loading, needsOnboarding } = useAuth();
@@ -61,14 +54,6 @@ const PrivateRoute = ({ children }) => {
   }
 
   return <RouteGuard>{children}</RouteGuard>;
-};
-
-// Helper function to get cookie value
-const getCookie = (name) => {
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return parts.pop().split(';').shift();
-  return null;
 };
 
 // Main App Component

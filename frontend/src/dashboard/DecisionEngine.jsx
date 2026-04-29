@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
-  Thermometer, Droplets, FlaskConical, Sprout, 
+  Droplets, FlaskConical, Sprout, 
   TrendingUp, AlertTriangle, ArrowRight, CheckCircle2,
-  RefreshCw, BarChart3, Info
+  RefreshCw, BarChart3, Cpu
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import '../styles/Dashboard/TodayDashboard.css'; // Reusing styles for consistency

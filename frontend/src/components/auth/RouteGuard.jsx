@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 const styles = {
@@ -45,7 +45,7 @@ if (!document.head.querySelector('style[data-auth-spinner]')) {
 const RouteGuard = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loading, performCompleteLogout } = useAuth();
+  const { user, loading } = useAuth();
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {

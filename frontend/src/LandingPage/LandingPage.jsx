@@ -6,13 +6,8 @@ import React from 'react';
 import { ArrowRight, Droplets, Thermometer, FlaskRound } from 'lucide-react';
 import '../styles/LandingPage/LandingPage.css';
 import NavbarLanding from './NavbarLanding';
-import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
 
 export default function Home() {
-  const { user, loading, needsOnboarding } = useAuth();
-  const navigate = useNavigate();
-
   // Remove automatic redirection to allow landing page visibility as requested
   // Redirection will be handled by explicit navigation and route guards
   // Function to render animated hero title
@@ -191,6 +186,90 @@ export default function Home() {
                   insights.
                 </p>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="getting-started-section-landingpage">
+          <div className="container">
+            <div className="section-header-landingpage">
+              <h2 className="section-title-landingpage">Quick Start Guide</h2>
+              <p className="section-subtitle-landingpage">
+                New here? Follow this exact flow to get value in under 5 minutes.
+              </p>
+            </div>
+
+            <div className="guide-grid-landingpage">
+              <div className="guide-card-landingpage">
+                <div className="guide-step-badge-landingpage">Step 1</div>
+                <h3 className="guide-title-landingpage">Create your account</h3>
+                <p className="guide-text-landingpage">
+                  Start by signing up. You’ll be able to securely access your farm workspace and AI tools.
+                </p>
+                <div className="guide-actions-landingpage">
+                  <a href="/register" className="btn-landingpage btn-primary-landingpage">
+                    Sign Up <ArrowRight className="ml-2" style={{ width: "16px", height: "16px" }} />
+                  </a>
+                  <a href="/login" className="btn-landingpage btn-secondary-landingpage">
+                    Log In
+                  </a>
+                </div>
+              </div>
+
+              <div className="guide-card-landingpage">
+                <div className="guide-step-badge-landingpage">Step 2</div>
+                <h3 className="guide-title-landingpage">Complete onboarding</h3>
+                <p className="guide-text-landingpage">
+                  Add basic farm info once. This helps the system personalize recommendations and keep your dashboard
+                  consistent.
+                </p>
+                <div className="guide-note-landingpage">
+                  Tip: if you see an onboarding screen after login, just follow it—it's required once.
+                </div>
+              </div>
+
+              <div className="guide-card-landingpage">
+                <div className="guide-step-badge-landingpage">Step 3</div>
+                <h3 className="guide-title-landingpage">Use the tools inside the dashboard</h3>
+                <p className="guide-text-landingpage">
+                  After onboarding you’ll land in the dashboard where you can navigate everything from the left sidebar.
+                </p>
+              </div>
+            </div>
+
+            <div className="module-grid-landingpage">
+              <div className="module-card-landingpage">
+                <div className="module-icon-landingpage"><Droplets /></div>
+                <h4 className="module-title-landingpage">Decision Engine</h4>
+                <p className="module-text-landingpage">
+                  Enter soil values or fetch from IoT, then generate actionable recommendations.
+                </p>
+              </div>
+
+              <div className="module-card-landingpage">
+                <div className="module-icon-landingpage"><FlaskRound /></div>
+                <h4 className="module-title-landingpage">Smart Chat (Orchestrator)</h4>
+                <p className="module-text-landingpage">
+                  Ask questions naturally. The orchestrator routes your query to the best specialist agents.
+                </p>
+              </div>
+
+              <div className="module-card-landingpage">
+                <div className="module-icon-landingpage"><Thermometer /></div>
+                <h4 className="module-title-landingpage">Farm Map & Voice</h4>
+                <p className="module-text-landingpage">
+                  Draw your farm layout, save it, and use voice to interact hands‑free when you’re in the field.
+                </p>
+              </div>
+            </div>
+
+            <div className="landing-cta-row-landingpage">
+              <a href="/register" className="btn-landingpage btn-primary-landingpage">
+                Start Now <ArrowRight className="ml-2" style={{ width: "16px", height: "16px" }} />
+              </a>
+              <a href="/login" className="btn-landingpage btn-secondary-landingpage">
+                Continue Existing Account
+              </a>
             </div>
           </div>
         </section>

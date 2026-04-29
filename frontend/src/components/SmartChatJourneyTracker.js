@@ -1,10 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Map, 
-  Play, 
-  Pause, 
-  RotateCcw, 
-  X,
   ChevronDown,
   ChevronUp,
   Activity,
@@ -15,9 +11,7 @@ import {
   TrendingUp,
   Sprout,
   Cloud,
-  Droplets,
-  Calendar,
-  ArrowRight
+  Droplets
 } from 'lucide-react';
 import '../styles/Dashboard/SmartChatJourneyTracker.css';
 
@@ -53,6 +47,24 @@ const SmartChatJourneyTracker = ({ sessionId, isActive, onComplete }) => {
   const [selectedAgent, setSelectedAgent] = useState(null);
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
+
+  const fetchJourneyState = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`/api/journey-graph/status/${sessionId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setJourneyState(data.state);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch journey state:', e);
+    }
+  }, [sessionId]);
 
   // WebSocket connection
   useEffect(() => {
@@ -114,25 +126,7 @@ const SmartChatJourneyTracker = ({ sessionId, isActive, onComplete }) => {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [sessionId, isActive]);
-
-  const fetchJourneyState = async () => {
-    try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`/api/journey-graph/status/${sessionId}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setJourneyState(data.state);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to fetch journey state:', e);
-    }
-  };
+  }, [sessionId, isActive, fetchJourneyState, onComplete]);
 
   const toggleStage = (stage) => {
     setExpandedStages(prev => {

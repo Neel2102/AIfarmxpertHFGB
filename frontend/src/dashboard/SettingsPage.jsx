@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  LogOut, Save, User as UserIcon, Edit3, 
-  ShieldCheck, FileText, KeyRound, Activity, 
-  Sprout, Droplets, Truck, Target, Cpu 
+  LogOut, Save, User as UserIcon,
+  ShieldCheck, KeyRound, Activity,
+  Sprout, Droplets, Truck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -77,8 +77,7 @@ const SettingsPage = () => {
     } catch (e) {
       toast.error(e?.message || 'Update failed');
     } finally {
-      setSaving(true); 
-      setTimeout(() => setSaving(false), 1000);
+      setSaving(false);
     }
   };
 

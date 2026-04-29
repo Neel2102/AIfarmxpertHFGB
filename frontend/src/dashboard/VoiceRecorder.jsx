@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Mic, MicOff, Play, Square, Loader, Loader2, Volume2, AlertCircle, Check, User, Bot } from 'lucide-react';
+import { Mic, Square, Loader, Volume2, AlertCircle, Check, User, Bot } from 'lucide-react';
 import '../styles/Dashboard/VoiceRecorder.css';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
@@ -456,7 +456,7 @@ export default function VoiceRecorder() {
         <div className="voice-recorder-statusbar">
           <div className="voice-recorder-pill">
             <span className={`voice-recorder-dot ${status}`} />
-            <span>{status === 'idle' ? 'Ready' : status.charAt(0).toUpperCase() + status.slice(1)}</span>
+            <span>{getStatusText()}</span>
           </div>
         </div>
 

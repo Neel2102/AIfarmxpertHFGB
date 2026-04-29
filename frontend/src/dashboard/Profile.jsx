@@ -8,7 +8,6 @@ const Profile = () => {
   const { user, updateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
-  const [saving, setSaving] = useState(false);
 
   // Initialize with user data from context
   const [profileData, setProfileData] = useState({
@@ -26,14 +25,16 @@ const Profile = () => {
 
   useEffect(() => {
     if (user) {
-      const newData = {
-        ...profileData,
-        name: user.full_name || user.name || profileData.name,
-        email: user.email || profileData.email,
-        phone: user.phone || profileData.phone,
-      };
-      setProfileData(newData);
-      setEditData(newData);
+      setProfileData((prev) => {
+        const newData = {
+          ...prev,
+          name: user.full_name || user.name || prev.name,
+          email: user.email || prev.email,
+          phone: user.phone || prev.phone,
+        };
+        setEditData(newData);
+        return newData;
+      });
     }
   }, [user]);
 
@@ -54,7 +55,6 @@ const Profile = () => {
   };
 
   const handleSave = async () => {
-    setSaving(true);
     try {
       const res = await updateProfile({
         name: editData.name,
@@ -73,8 +73,6 @@ const Profile = () => {
       }
     } catch (error) {
       toast.error('An unexpected error occurred');
-    } finally {
-      setSaving(false);
     }
   };
 

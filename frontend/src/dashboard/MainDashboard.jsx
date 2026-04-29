@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import TodayDashboard from './TodayDashboard';
+import DecisionEngine from './DecisionEngine';
 import FarmInformation from './FarmInformation';
 import Profile from './Profile';
 import Sidebar from './Sidebar';

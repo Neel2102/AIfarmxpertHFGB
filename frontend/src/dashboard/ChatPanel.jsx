@@ -1,9 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
-  Bot, BarChart3, Droplets, ThermometerSun, FlaskConical, Sprout, 
+  BarChart3, Droplets, ThermometerSun, FlaskConical, Sprout, 
   Calendar, Circle, Bug, Cloud, TrendingUp, Clock, Truck, 
-  MapPin, Camera, Mic, MicOff, Paperclip, X, Check, Menu, Plus, Map
+  MapPin, Camera, Mic, MicOff, Paperclip, X, Check, Map
 } from 'lucide-react';
 import { useOrchestrator } from '../contexts/OrchestratorContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,13 +18,10 @@ const getAuthHeaders = () => {
 };
 
 const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
-  const navigate = useNavigate();
   const { 
     messages: contextMessages, 
     loadSessionMessages, 
-    resetSession,
     session,
-    loading: contextLoading,
     setMessages
   } = useOrchestrator();
   const { user } = useAuth();
@@ -68,9 +64,6 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
   const [journeySessionId, setJourneySessionId] = useState(null);
   const [journeyComplete, setJourneyComplete] = useState(false);
 
-  // ── Media State ──
-
-
   useEffect(() => {
     // Re-sync chat history when switching agents or sessions
     if (sessionId && loadSessionMessages) {
@@ -79,25 +72,17 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, agent, session?.id]);
 
-
-  const handleNewChat = () => {
-    if (resetSession) resetSession();
-    // Clear local states if any
-    setAttachedImage(null);
-    setAttachedFile(null);
-    setAudioBlob(null);
-    setInputValue('');
-  };
-
   // Process messages for display
-  const messages = contextMessages.length > 0 
-    ? contextMessages.map((m) => ({
-        ...m,
-        content: typeof m?.content === 'string'
-          ? m.content.replace(/<[^>]*>/g, '').replace(/\b\w+">/g, '').replace(/\bclass="[^"]*"/g, '')
-          : m?.content,
-      }))
-    : [];
+  const messages = useMemo(() => {
+    return contextMessages.length > 0 
+      ? contextMessages.map((m) => ({
+          ...m,
+          content: typeof m?.content === 'string'
+            ? m.content.replace(/<[^>]*>/g, '').replace(/\b\w+">/g, '').replace(/\bclass="[^"]*"/g, '')
+            : m?.content,
+        }))
+      : [];
+  }, [contextMessages]);
 
   // Debug: log messages to see if they are loaded
   console.log('[ChatPanel] contextMessages length:', contextMessages.length, contextMessages);
@@ -448,14 +433,11 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
     }]);
   };
 
-  const closeJourneyTracker = () => {
-    setShowJourneyTracker(false);
-  };
-
   const renderVisionCard = (visionResult) => {
     if (!visionResult) return null;
     const confidence = Math.round((parseFloat(visionResult.confidence) || 0) * 100);
     const severityColor = { none: '#10b981', mild: '#eab308', moderate: '#f97316', severe: '#ef4444', unknown: '#94a3b8' }[visionResult.severity || 'unknown'] || '#94a3b8';
+
     return (
       <div className="farm-vision-card">
         <div className="farm-vision-title"><Bug size={16} /> Pest & Disease Diagnosis</div>
