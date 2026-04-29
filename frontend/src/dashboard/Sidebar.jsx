@@ -346,16 +346,6 @@ const Sidebar = ({ onLogout }) => {
 
                 <NavLink
                   className={({ isActive }) => `agent-item-sidebar ${isActive ? 'active' : ''}`}
-                  to="/dashboard/decision-engine"
-                  onClick={() => handleNavigation("/dashboard/decision-engine")}
-                >
-                  <Cpu className="agent-icon-sidebar" size={20} />
-                  <span className="agent-name-sidebar">Decision Engine</span>
-                  <span className="agent-status-sidebar active-sidebar"></span>
-                </NavLink>
-
-                <NavLink
-                  className={({ isActive }) => `agent-item-sidebar ${isActive ? 'active' : ''}`}
                   to="/dashboard/farm-information"
                   onClick={() => handleNavigation("/dashboard/farm-information")}
                 >
