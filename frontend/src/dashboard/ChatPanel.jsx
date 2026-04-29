@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useOrchestrator } from '../contexts/OrchestratorContext';
 import { useAuth } from '../contexts/AuthContext';
-import SmartChatJourneyTracker from '../components/SmartChatJourneyTracker.js';
+import SmartChatJourneyTracker from '../components/SmartChatJourneyTracker';
 import '../styles/Dashboard/ChatPanel.css';
 import '../styles/Dashboard/ChatPanel-reasoning.css';
 
