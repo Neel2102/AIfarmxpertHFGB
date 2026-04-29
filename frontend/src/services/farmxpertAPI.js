@@ -1,5 +1,5 @@
 // API Service for FarmXpert Backend
-const API_BASE_URL = `${typeof window !== 'undefined' && window.location?.protocol === 'https:' ? 'https://' : 'http://'}//${typeof window !== 'undefined' ? window.location?.hostname : 'localhost'}:${typeof window !== 'undefined' ? window.location?.port || '8000' : '8000'}/api` || `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}/api`;
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api';
 
 export const farmxpertAPI = {
   // Send message to centralized agent endpoint

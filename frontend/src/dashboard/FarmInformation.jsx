@@ -8,7 +8,7 @@ import AllSVGChart from "./Graph/all"
 import SoilGauge from "./Graph/soil-gauge"
 import "../styles/Dashboard/FarmInfoDashboard/farminformation.css"
 
-const API_BASE_URL = `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}/api`
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api'
 
 const initialSoilData = {
   moisture: 0,

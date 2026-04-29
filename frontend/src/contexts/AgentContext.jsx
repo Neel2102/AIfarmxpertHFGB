@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 // Base URL for backend API
-const API_BASE_URL = `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}/api`;
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api';
 
 const AgentContext = createContext();
 
