@@ -36,6 +36,7 @@ const MainDashboard = () => {
       <div className="main-dashboard-content">
         <Routes>
           <Route path="/today" element={<TodayDashboard />} />
+          <Route path="/decision-engine" element={<DecisionEngine />} />
           <Route path="/farm-information" element={<FarmInformation />} />
           <Route path="/farm-map" element={<FarmMap />} />
           <Route path="/voice" element={<VoiceRecorder />} />

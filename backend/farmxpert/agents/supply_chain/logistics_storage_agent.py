@@ -2,6 +2,15 @@ from __future__ import annotations
 from typing import Dict, Any, List
 import json
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import LogisticsStorageTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -59,13 +68,47 @@ class LogisticsStorageAgent(EnhancedBaseAgent):
         """
         response = await gemini_service.generate_response(prompt, {"agent": self.name, "task": "logistics_planning"})
         
-        return {
-            "agent": self.name,
-            "success": True,
-            "response": response,
-            "data": {
+        # Build structured recommendations from storage facilities
+        structured_recommendations: List[StructuredRecommendation] = []
+        facilities = storage_facilities if isinstance(storage_facilities, list) else []
+        
+        for i, facility in enumerate(facilities[:3]):
+            if isinstance(facility, dict):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=f"Store at {facility.get('name', 'Facility')}",
+                    reason=f"Capacity: {facility.get('capacity', 'N/A')} tons. Distance: {facility.get('distance', 'N/A')} km",
+                    timeline="post-harvest",
+                    priority=1 if i == 0 else 2,
+                    category="storage"
+                ))
+        
+        # Add logistics route recommendations
+        routes = logistics_routes if isinstance(logistics_routes, list) else []
+        for i, route in enumerate(routes[:2]):
+            if isinstance(route, dict):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=f"Transport via {route.get('mode', 'truck')}",
+                    reason=f"Cost: ₹{route.get('cost', 'N/A')}. Time: {route.get('duration', 'N/A')}",
+                    timeline="after storage selection",
+                    priority=2,
+                    category="logistics"
+                ))
+        
+        decision = create_agent_decision(
+            summary=f"Logistics plan for {len(crops)} crops ({harvest_quantity} tons). {len(facilities)} storage options, {len(routes)} routes.",
+            details=response[:200] if len(response) > 200 else response,
+            confidence=0.8 if storage_facilities else 0.6
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],
+            data={
                 "storage_facilities": storage_facilities,
                 "logistics_routes": logistics_routes
             },
-            "metadata": {"model": "gemini", "tools_used": list(tools.keys())}
-        }
+            metadata={"model": "gemini", "tools_used": list(tools.keys())}
+        ).to_dict()

@@ -1,7 +1,17 @@
+from __future__ import annotations
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import json
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import TaskPrioritizationTool, RealTimeTrackingTool, WeatherAPITool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -99,22 +109,58 @@ Tracking Sync: {json.dumps(tracking_sync.get('operation_status', {}), indent=2)}
 Provide: schedule_table, priorities_summary, resource_plan, dependencies, risk_notes, next_actions
 """
             response = await gemini_service.generate_response(prompt, {"agent": self.name, "task": "task_scheduling"})
-
-            return {
-                "agent": self.name,
-                "success": True,
-                "response": response,
-                "data": {
+            
+            # Build structured recommendations from prioritized tasks
+            ordered_tasks = prioritization.get('ordered_tasks', [])
+            structured_recommendations: List[StructuredRecommendation] = []
+            for i, task in enumerate(ordered_tasks[:5]):
+                if isinstance(task, dict):
+                    structured_recommendations.append(create_structured_recommendation(
+                        action=task.get('name', f"Task {i+1}"),
+                        reason=task.get('reason', 'Prioritized by task scheduler'),
+                        timeline=task.get('scheduled_time', 'as scheduled'),
+                        priority=1 if i < 2 else 2,
+                        category=task.get('category', 'general')
+                    ))
+            
+            decision = create_agent_decision(
+                summary=f"Task schedule: {len(ordered_tasks)} tasks prioritized. Weather considered: {bool(weather_data)}",
+                details=response[:200] if len(response) > 200 else response,
+                confidence=0.8 if prioritization else 0.6
+            )
+            
+            return StandardizedAgentOutput(
+                agent=self.name,
+                success=True,
+                decision=decision,
+                recommendations=structured_recommendations,
+                warnings=[],
+                data={
                     "weather_data": weather_data,
                     "prioritization": prioritization,
                     "optimization": optimization,
                     "tracking_sync": tracking_sync
                 },
-                "metadata": {"model": "gemini", "tools_used": list(tools.keys())}
-            }
+                metadata={"model": "gemini", "tools_used": list(tools.keys())}
+            ).to_dict()
         except Exception as e:
             self.logger.error(f"Error in task scheduler agent: {e}")
-            return {"success": False, "error": str(e)}
+            
+            decision = create_agent_decision(
+                summary="Task scheduling failed",
+                confidence=0.0
+            )
+            
+            return StandardizedAgentOutput(
+                agent=self.name,
+                success=False,
+                decision=decision,
+                recommendations=[],
+                warnings=[],
+                data={},
+                error={"message": str(e), "type": "exception"},
+                metadata={"model": "gemini"}
+            ).to_dict()
     
     def _generate_basic_schedule(self, farm_id: int, active_crops: List) -> List[Dict[str, Any]]:
         """Generate basic task schedule"""

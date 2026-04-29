@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Bot, BarChart3, Droplets, ThermometerSun, FlaskConical, Sprout, 
   Calendar, Circle, Bug, Cloud, TrendingUp, Clock, Truck, 
-  MapPin, Camera, Mic, MicOff, Paperclip, X, Check, Menu, Plus
+  MapPin, Camera, Mic, MicOff, Paperclip, X, Check, Menu, Plus, Map
 } from 'lucide-react';
 import { useOrchestrator } from '../contexts/OrchestratorContext';
 import { useAuth } from '../contexts/AuthContext';
+import SmartChatJourneyTracker from '../components/SmartChatJourneyTracker';
 import '../styles/Dashboard/ChatPanel.css';
 import '../styles/Dashboard/ChatPanel-reasoning.css';
 
@@ -40,6 +41,17 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
   // ── Multi-Agent State ──
   const [selectedAgents, setSelectedAgents] = useState([]);
   const [showAgentDrawer, setShowAgentDrawer] = useState(false);
+  const [theme, setTheme] = useState(document.documentElement.getAttribute('data-theme') || 'dark');
+
+  useEffect(() => {
+    // Observe theme changes on html element
+    const observer = new MutationObserver(() => {
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+      setTheme(currentTheme);
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
 
   // ── Media State ──
   const [attachedImage, setAttachedImage] = useState(null);
@@ -50,6 +62,11 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+
+  // ── Smart Journey State ──
+  const [showJourneyTracker, setShowJourneyTracker] = useState(false);
+  const [journeySessionId, setJourneySessionId] = useState(null);
+  const [journeyComplete, setJourneyComplete] = useState(false);
 
   // ── Media State ──
 
@@ -389,6 +406,52 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
     }
   };
 
+  // ── Smart Journey Functions ──
+  const startSmartJourney = async () => {
+    const newJourneySessionId = `journey_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    setJourneySessionId(newJourneySessionId);
+    setShowJourneyTracker(true);
+    setJourneyComplete(false);
+
+    // Start the journey on the backend
+    try {
+      const response = await fetch(`${API_BASE_URL}/journey-graph/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          input_data: {
+            location: farmData?.location || { city: 'Ahmedabad', state: 'Gujarat' },
+            farm_size_acres: farmData?.size_acres || 15,
+            season: 'kharif',
+            soil_data: farmData?.soil_data || null
+          },
+          session_id: newJourneySessionId
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to start journey:', response.status);
+      }
+    } catch (error) {
+      console.error('Error starting journey:', error);
+    }
+  };
+
+  const handleJourneyComplete = (finalState) => {
+    setJourneyComplete(true);
+    // Add a system message about journey completion
+    setMessages((prev) => [...prev, {
+      id: Date.now(),
+      type: 'system',
+      content: `✅ Smart Journey Complete! All 7 stages processed. Your farming plan is ready.`,
+      timestamp: new Date().toISOString()
+    }]);
+  };
+
+  const closeJourneyTracker = () => {
+    setShowJourneyTracker(false);
+  };
+
   const renderVisionCard = (visionResult) => {
     if (!visionResult) return null;
     const confidence = Math.round((parseFloat(visionResult.confidence) || 0) * 100);
@@ -443,7 +506,12 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
                 <div className="farm-welcome-inner">
                   <div className="farm-welcome-icon-wrapper">
                     <div className="farm-welcome-icon-bg" />
-                    <Bot size={48} className="farm-welcome-bot" />
+                    <img 
+                      src={theme === 'dark' ? "/dark_theme_logo-removebg-preview.png" : "/White_theme_logo-removebg-preview.png"} 
+                      alt="FarmXpert AI" 
+                      className="farm-welcome-bot" 
+                      style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '12px', padding: '12px' }} 
+                    />
                   </div>
                   <h1 className="farm-welcome-title">Welcome to FarmXpert AI</h1>
                   <p className="farm-welcome-subtitle">
@@ -468,6 +536,12 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
                       <div className="feature-icon-box market"><Calendar size={18} /></div>
                       <span>Market Intel</span>
                     </div>
+                    <div className="farm-feature-item" onClick={startSmartJourney} style={{ cursor: 'pointer' }}>
+                      <div className="feature-icon-box" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+                        <Map size={18} />
+                      </div>
+                      <span>🚀 Smart Journey</span>
+                    </div>
                   </div>
 
                   <div className="farm-welcome-prompt">
@@ -478,12 +552,22 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
             </div>
           )}
 
+          {showJourneyTracker && journeySessionId && (
+            <div className="farm-journey-tracker-container" style={{ padding: '16px', background: 'var(--bg-secondary)', borderRadius: '12px', margin: '16px 0' }}>
+              <SmartChatJourneyTracker
+                sessionId={journeySessionId}
+                isActive={!journeyComplete}
+                onComplete={handleJourneyComplete}
+              />
+            </div>
+          )}
+
           {messages.map((m) => (
             <div key={m.id} className={`farm-message-row ${m.type}`}>
               <div className="farm-message-inner">
                 {m.type !== 'system' && (
                   <div className={`farm-avatar ${m.type === 'user' ? 'user-bg' : 'assistant-bg'}`}>
-                    {m.type === 'user' ? 'U' : <Bot size={18} />}
+                    {m.type === 'user' ? 'U' : <img src={theme === 'dark' ? "/dark_theme_logo-removebg-preview.png" : "/White_theme_logo-removebg-preview.png"} alt="AI" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />}
                   </div>
                 )}
                 

@@ -74,13 +74,13 @@ npm start
 
 ```powershell
 # Health check
-curl http://localhost:8000/health/live
+curl http://localhost:8000/api/health/live
 
 # List agents
-curl http://localhost:8000/agents
+curl http://localhost:8000/api/super-agent/agents
 
-# Test orchestration
-curl -X POST http://localhost:8000/orchestrate -H "Content-Type: application/json" -d '{"query": "What should I grow this season?", "context": {"season": "rabi", "location": "ahmedabad"}}'
+# Test SuperAgent (primary pipeline)
+curl -X POST http://localhost:8000/api/super-agent/query -H "Content-Type: application/json" -d '{"query": "What should I grow this season?", "context": {"season": "rabi", "location": "ahmedabad"}}'
 ```
 
 ### Test Frontend

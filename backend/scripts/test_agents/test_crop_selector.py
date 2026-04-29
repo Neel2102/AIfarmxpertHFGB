@@ -5,7 +5,9 @@ import json
 from dotenv import load_dotenv
 
 # Add the backend directory to python path for simple testing
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+script_path = os.path.abspath(__file__)
+# test_crop_selector.py -> test_agents -> scripts -> backend
+backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(script_path)))
 sys.path.append(backend_dir)
 load_dotenv(os.path.join(backend_dir, ".env"))
 

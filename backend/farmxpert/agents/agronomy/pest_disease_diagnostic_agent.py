@@ -1,6 +1,15 @@
 from __future__ import annotations
 from typing import Dict, Any, List, Optional
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import VoiceToTextTool, DiseasePredictionTool, PestDiseaseTool
 from farmxpert.services.gemini_service import gemini_service
 from farmxpert.services.providers.pest_disease_inference import PestDiseaseInferenceProvider
@@ -159,23 +168,58 @@ Format your response as a natural conversation with the farmer.
             if "429" in resp_lower or "quota" in resp_lower or "rate limit" in resp_lower:
                 return await self._handle_traditional(inputs)
             
-            return {
-                "agent": self.name,
-                "success": True,
-                "response": response,
-                "data": {
+            # Build structured recommendations
+            recs_from_data = self._extract_recommendations_from_data(image_analysis_data, voice_analysis_data)
+            structured_recommendations: List[StructuredRecommendation] = []
+            for i, rec in enumerate(recs_from_data):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=rec,
+                    reason="Based on symptom analysis and diagnostic data",
+                    timeline="as soon as conditions allow",
+                    priority=i + 1,
+                    category="pest_disease"
+                ))
+            
+            # Build structured warnings
+            warns_from_data = self._extract_warnings_from_data(disease_prediction_data, risk_analysis_data)
+            structured_warnings: List[StructuredWarning] = []
+            for warn in warns_from_data:
+                structured_warnings.append(create_structured_warning(
+                    issue=warn,
+                    severity="high" if "high" in warn.lower() else "medium",
+                    category="disease"
+                ))
+            
+            # Get confidence from image analysis if available
+            confidence = 0.7
+            if isinstance(image_analysis_data, dict):
+                confidence = image_analysis_data.get("confidence", 0.7)
+            
+            # Create decision
+            decision = create_agent_decision(
+                summary=f"Diagnostic analysis for {crop} completed with {len(structured_recommendations)} recommendations",
+                details=response[:300] if len(response) > 300 else response,
+                confidence=confidence
+            )
+            
+            return StandardizedAgentOutput(
+                agent=self.name,
+                success=True,
+                decision=decision,
+                recommendations=structured_recommendations,
+                warnings=structured_warnings,
+                data={
                     "crop": crop,
                     "location": location,
                     "symptoms": symptoms,
                     "image_analysis_data": image_analysis_data,
                     "voice_analysis_data": voice_analysis_data,
                     "disease_prediction_data": disease_prediction_data,
-                    "risk_analysis_data": risk_analysis_data
+                    "risk_analysis_data": risk_analysis_data,
+                    "diagnosis_confidence": confidence
                 },
-                "recommendations": self._extract_recommendations_from_data(image_analysis_data, voice_analysis_data),
-                "warnings": self._extract_warnings_from_data(disease_prediction_data, risk_analysis_data),
-                "metadata": {"model": "gemini", "tools_used": list(tools.keys())}
-            }
+                metadata={"model": "gemini", "tools_used": list(tools.keys())}
+            ).to_dict()
             
         except Exception as e:
             self.logger.error(f"Error in pest disease diagnostic agent: {e}")
@@ -208,18 +252,52 @@ Format your response as a natural conversation with the farmer.
         if not possible_issues:
             possible_issues.append("No clear diagnosis from symptoms")
             treatments.append("Contact local agricultural extension officer")
-            
-        return {
-            "agent": self.name,
-            "success": True,
-            "crop": crop,
-            "symptoms_analyzed": symptoms,
-            "possible_issues": possible_issues,
-            "recommended_treatments": treatments,
-            "severity_level": "moderate",
-            "follow_up_required": True,
-            "metadata": {"source": "traditional"}
-        }
+        
+        # Build structured recommendations
+        structured_recommendations: List[StructuredRecommendation] = []
+        for i, treatment in enumerate(treatments):
+            structured_recommendations.append(create_structured_recommendation(
+                action=treatment,
+                reason=f"Addresses: {possible_issues[i] if i < len(possible_issues) else 'symptom management'}",
+                timeline="immediate" if "severe" in str(possible_issues).lower() else "within 24-48 hours",
+                priority=1 if "severe" in str(possible_issues).lower() else 2,
+                category="pest_disease"
+            ))
+        
+        # Build structured warnings
+        structured_warnings: List[StructuredWarning] = []
+        if len(possible_issues) > 1:
+            structured_warnings.append(create_structured_warning(
+                issue="Multiple potential issues detected - professional consultation recommended",
+                severity="medium",
+                impact="Delayed or incorrect treatment may worsen condition",
+                mitigation="Seek expert diagnosis for confirmation",
+                category="disease"
+            ))
+        
+        # Create decision
+        decision = create_agent_decision(
+            summary=f"Identified {len(possible_issues)} potential issues for {crop}: {', '.join(possible_issues[:2])}",
+            details=f"Symptoms analyzed: {', '.join(symptoms)}. Severity: moderate. Follow-up required.",
+            confidence=0.55 if len(possible_issues) > 1 else 0.7
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=structured_warnings,
+            data={
+                "crop": crop,
+                "symptoms_analyzed": symptoms,
+                "possible_issues": possible_issues,
+                "recommended_treatments": treatments,
+                "severity_level": "moderate",
+                "follow_up_required": True
+            },
+            metadata={"source": "traditional", "mode": "fallback"}
+        ).to_dict()
     
     def _extract_crop_from_query(self, query: str) -> Optional[str]:
         """Extract mentioned crop from user query"""

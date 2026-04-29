@@ -633,7 +633,7 @@ async def process_user_query(request: QueryRequest):
         
         # Prepare concise string answer for UI and attach SOP JSON
         sop_json: Dict[str, Any] = result.response if isinstance(result.response, dict) else {}
-        answer_text: str = sop_json.get("answer") if isinstance(sop_json, dict) else None
+        answer_text: str = sop_json.get("response") or sop_json.get("answer") if isinstance(sop_json, dict) else None
         if not answer_text:
             # Fallback to a short string
             answer_text = "Response ready." if result.success else "Sorry, something went wrong."

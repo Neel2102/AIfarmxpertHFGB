@@ -2,6 +2,15 @@ from __future__ import annotations
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import MaintenanceTrackerTool, PredictiveMaintenanceTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -88,12 +97,43 @@ Uptime Optimization: {json.dumps(uptime_optimization.get('optimized_plan', {}), 
 Provide: equipment_plan, maintenance_highlights, risk_mitigation, spare_parts_recs, cost_summary, next_actions
 """
             response = await gemini_service.generate_response(prompt, {"agent": self.name, "task": "machinery_advice"})
-
-            return {
-                "agent": self.name,
-                "success": True,
-                "response": response,
-                "data": {
+            
+            # Build structured recommendations
+            structured_recommendations: List[StructuredRecommendation] = []
+            
+            # Add equipment recommendations
+            for i, eq_rec in enumerate(recommendations.get("missing_equipment", [])[:3]):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=f"Acquire {eq_rec.get('equipment', 'equipment')}",
+                    reason=f"{eq_rec.get('reason', 'Required for operations')}. Cost: ₹{eq_rec.get('estimated_cost', 0)}",
+                    timeline="as per budget availability",
+                    priority=1 if eq_rec.get('priority') == 'essential' else 2,
+                    category="equipment"
+                ))
+            
+            # Add maintenance recommendations
+            for i, maint in enumerate(maintenance_schedule[:2]):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=f"Service {maint.get('equipment', 'equipment')} - {', '.join(maint.get('tasks', []))}",
+                    reason=f"Scheduled {maint.get('frequency', 'periodic')} maintenance",
+                    timeline=maint.get('next_maintenance', 'as scheduled'),
+                    priority=1,
+                    category="maintenance"
+                ))
+            
+            decision = create_agent_decision(
+                summary=f"Equipment plan for {farm_size} acres: {len(available_equipment)} current, {len(recommendations.get('missing_equipment', []))} needed. Budget: ₹{budget}",
+                details=response[:200] if len(response) > 200 else response,
+                confidence=0.8 if failure_predictions else 0.65
+            )
+            
+            return StandardizedAgentOutput(
+                agent=self.name,
+                success=True,
+                decision=decision,
+                recommendations=structured_recommendations,
+                warnings=[],
+                data={
                     "recommendations": recommendations,
                     "maintenance_schedule": maintenance_schedule,
                     "usage_optimization": usage_optimization,
@@ -102,11 +142,26 @@ Provide: equipment_plan, maintenance_highlights, risk_mitigation, spare_parts_re
                     "failure_predictions": failure_predictions,
                     "uptime_optimization": uptime_optimization
                 },
-                "metadata": {"model": "gemini", "tools_used": list(tools.keys())}
-            }
+                metadata={"model": "gemini", "tools_used": list(tools.keys())}
+            ).to_dict()
         except Exception as e:
             self.logger.error(f"Error in machinery equipment agent: {e}")
-            return {"success": False, "error": str(e)}
+            
+            decision = create_agent_decision(
+                summary="Machinery analysis failed",
+                confidence=0.0
+            )
+            
+            return StandardizedAgentOutput(
+                agent=self.name,
+                success=False,
+                decision=decision,
+                recommendations=[],
+                warnings=[],
+                data={},
+                error={"message": str(e), "type": "exception"},
+                metadata={"model": "gemini"}
+            ).to_dict()
     
     def _analyze_equipment_needs(self, farm_size: float, available: List[str], tasks: List[str]) -> Dict[str, Any]:
         """Analyze what equipment is needed based on farm size and tasks"""

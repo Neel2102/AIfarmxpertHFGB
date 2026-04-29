@@ -7,6 +7,15 @@ from __future__ import annotations
 from typing import Dict, Any, List
 from datetime import datetime
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 
 
 class EnhancedCropSelectorAgent(EnhancedBaseAgent):
@@ -91,23 +100,40 @@ Always consider the farmer's location, soil conditions, available resources, and
         else:
             suggested = ["pulses", "vegetables", "fruits"]
         
-        return {
-            "agent": self.name,
-            "success": True,
-            "response": f"Based on {season} season in {location}, I recommend: {', '.join(suggested)}",
-            "recommendations": suggested,
-            "data": {
+        # Build structured recommendations
+        structured_recommendations: List[StructuredRecommendation] = []
+        for i, crop in enumerate(suggested):
+            structured_recommendations.append(create_structured_recommendation(
+                action=f"Plant {crop}",
+                reason=f"Suitable for {season} season in {location}",
+                timeline=f"Plant during {season}",
+                priority=i + 1,
+                category="crop_selection"
+            ))
+        
+        decision = create_agent_decision(
+            summary=f"Crop recommendations for {season} in {location}: {', '.join(suggested[:3])}",
+            confidence=0.6
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],
+            data={
                 "location": location,
                 "season": season,
                 "soil_summary": {k: soil.get(k) for k in ("ph", "npk", "organic") if k in soil},
                 "suggested_crops": suggested,
                 "method": "traditional"
             },
-            "metadata": {
+            metadata={
                 "method": "traditional",
                 "confidence": 0.6
             }
-        }
+        ).to_dict()
     
     async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """

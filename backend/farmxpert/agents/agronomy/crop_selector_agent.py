@@ -3,6 +3,15 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 import json
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent, AgentStatus
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import SoilTool, WeatherTool, MarketTool, CropTool, WebScrapingTool, ClimatePredictionTool, MarketAnalysisTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -69,24 +78,71 @@ Always provide practical, actionable recommendations with clear reasoning."""
         # Generate reasoning
         reasoning = self._generate_reasoning(season, soil, location, suggested_crops)
         
-        # Generate recommendations
-        recommendations = self._generate_recommendations(suggested_crops, soil, season)
+        # Generate structured recommendations
+        structured_recommendations: List[StructuredRecommendation] = []
+        if suggested_crops:
+            structured_recommendations.append(create_structured_recommendation(
+                action=f"Plant {suggested_crops[0]} as your primary crop",
+                reason=f"Based on {season} season conditions and soil compatibility",
+                timeline="before the planting window closes",
+                expected_benefit="Optimal yield for current conditions",
+                priority=1,
+                category="crop_selection"
+            ))
+            if len(suggested_crops) > 1:
+                structured_recommendations.append(create_structured_recommendation(
+                    action=f"Consider {suggested_crops[1]} as a secondary option",
+                    reason="Diversification reduces risk and can improve soil health",
+                    timeline="evaluate based on market conditions",
+                    expected_benefit="Risk mitigation through crop diversity",
+                    priority=2,
+                    category="crop_selection"
+                ))
         
-        return {
-            "agent": self.name,
-            "success": True,
-            "response": f"Based on your {season} season and soil conditions, I recommend: {', '.join(suggested_crops[:3])}",
-            "recommendations": recommendations,
-            "insights": [reasoning],
-            "data": {
+        # Add soil-specific recommendations
+        ph = soil.get("ph")
+        if ph and ph < 6.0:
+            structured_recommendations.append(create_structured_recommendation(
+                action="Apply agricultural lime to raise soil pH",
+                reason=f"Current pH {ph} is too acidic for optimal crop growth",
+                timeline="2-4 weeks before planting",
+                expected_benefit="Improved nutrient availability and root development",
+                priority=2,
+                category="soil"
+            ))
+        elif ph and ph > 7.5:
+            structured_recommendations.append(create_structured_recommendation(
+                action="Apply sulfur or acidifying amendments",
+                reason=f"Current pH {ph} is too alkaline for some crops",
+                timeline="3-6 weeks before planting",
+                expected_benefit="Better micronutrient availability",
+                priority=2,
+                category="soil"
+            ))
+        
+        # Generate decision
+        decision = create_agent_decision(
+            summary=f"Recommend {', '.join(suggested_crops[:3])} for {season} season based on {location} conditions",
+            details=reasoning,
+            confidence=0.75 if suggested_crops else 0.4
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],  # No critical warnings in traditional mode
+            data={
                 "location": location,
                 "season": season,
                 "soil_summary": {k: soil.get(k) for k in ("ph", "npk", "organic") if k in soil},
                 "suggested_crops": suggested_crops,
-                "reasoning": reasoning
+                "reasoning": reasoning,
+                "crop_count": len(suggested_crops)
             },
-            "confidence": 0.8
-        }
+            metadata={"mode": "traditional", "source": "rule_based"}
+        ).to_dict()
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -148,11 +204,23 @@ Always provide practical, actionable recommendations with clear reasoning."""
         Tool 3: Real-Time Market Scraping Output for top crop ({top_crop}):
         {json.dumps(market_data, indent=2)}
         
-        Synthesize a final json response with:
-        1. "recommended_crops": List of top 3 crops.
-        2. "response": A natural paragraph explaining the main recommendation integrating climate and market conditions.
-        3. "recommendations": Concrete next steps.
-        4. "warnings": Any risks from market or climate.
+        Synthesize a final JSON response with this EXACT structure:
+        {{
+            "best_choice": "Name of the single best crop",
+            "top_3_crops": [
+                {{
+                    "name": "Crop Name",
+                    "estimated_profit": "High/Medium/Low or approx $ amount",
+                    "reason": "Short reasoning",
+                    "risk": "Key risk"
+                }},
+                ... (exactly 3 crops)
+            ],
+            "profit_comparison": "A short paragraph comparing the profitability of these 3 options.",
+            "response": "A natural paragraph explaining the choice and next steps.",
+            "warnings": ["Warning 1", "Warning 2"],
+            "recommendations": ["Action step 1", "Action step 2"]
+        }}
         """
         
         try:
@@ -160,19 +228,74 @@ Always provide practical, actionable recommendations with clear reasoning."""
             synthesized = await gemini_service.generate_response(final_prompt, {"task": "crop_selector_synthesis"})
             parsed = gemini_service._parse_json_response(synthesized)
             
-            return {
-                "agent": self.name,
-                "success": True,
-                "response": parsed.get("response", f"Based on conditions, we recommend {top_crop}."),
-                "recommendations": parsed.get("recommendations", []),
-                "warnings": parsed.get("warnings", []),
-                "next_steps": parsed.get("recommendations", []),
-                "data": parsed,
-                "metadata": {
+            # Ensure top_3_crops exists and has data
+            top_3 = parsed.get("top_3_crops", [])
+            if not top_3 and base_recs.get("recommended_crops"):
+                # Fallback if LLM missed the list but tools had it
+                for c in base_recs["recommended_crops"][:3]:
+                    name = c.get("name", str(c)) if isinstance(c, dict) else str(c)
+                    top_3.append({"name": name, "estimated_profit": "Analyzing...", "reason": "Recommended based on soil Compatibility"})
+
+            # Convert to standardized output format
+            best_choice = parsed.get("best_choice", top_3[0]["name"] if top_3 else "Under review")
+            
+            # Build structured recommendations from LLM output
+            structured_recommendations: List[StructuredRecommendation] = []
+            raw_recommendations = parsed.get("recommendations", [])
+            for i, rec in enumerate(raw_recommendations):
+                if isinstance(rec, str):
+                    structured_recommendations.append(create_structured_recommendation(
+                        action=rec,
+                        reason="Based on comprehensive analysis of soil, climate, and market conditions",
+                        timeline="as appropriate for your farming schedule",
+                        priority=i + 1,
+                        category="crop_selection"
+                    ))
+                elif isinstance(rec, dict):
+                    structured_recommendations.append(StructuredRecommendation(**rec))
+            
+            # Build structured warnings from LLM output
+            structured_warnings: List[StructuredWarning] = []
+            raw_warnings = parsed.get("warnings", [])
+            for warn in raw_warnings:
+                if isinstance(warn, str):
+                    structured_warnings.append(create_structured_warning(
+                        issue=warn,
+                        severity="medium",
+                        category="general"
+                    ))
+                elif isinstance(warn, dict):
+                    structured_warnings.append(StructuredWarning(**warn))
+            
+            # Create decision
+            decision = create_agent_decision(
+                summary=f"Best crop choice: {best_choice}. Top alternatives: {', '.join([c.get('name', '') for c in top_3[1:3]])}" if len(top_3) > 1 else f"Best crop choice: {best_choice}",
+                details=parsed.get("profit_comparison", ""),
+                confidence=0.8 if top_3 else 0.5
+            )
+            
+            return StandardizedAgentOutput(
+                agent=self.name,
+                success=True,
+                decision=decision,
+                recommendations=structured_recommendations,
+                warnings=structured_warnings,
+                data={
+                    "best_choice": best_choice,
+                    "top_three": top_3,
+                    "profit_comparison": parsed.get("profit_comparison", ""),
+                    "location": location,
+                    "season": season,
+                    "raw_analysis": parsed,
+                    "climate_data": climate_data,
+                    "market_data": market_data
+                },
+                metadata={
                     "mode": "real_tools_orchestration",
-                    "tools_used": ["CropTool", "ClimatePredictionTool", "WebScrapingTool"]
+                    "tools_used": ["CropTool", "ClimatePredictionTool", "WebScrapingTool"],
+                    "llm_processed": True
                 }
-            }
+            ).to_dict()
         except Exception as e:
             self.logger.error(f"Synthesis failed: {e}")
             raise

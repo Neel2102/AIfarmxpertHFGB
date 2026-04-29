@@ -2,6 +2,14 @@ from __future__ import annotations
 from typing import Dict, Any, List
 import json
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation
+)
 from farmxpert.services.tools import FarmerCoachTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -65,18 +73,63 @@ class FarmerCoachAgent(EnhancedBaseAgent):
         """
         response = await gemini_service.generate_response(prompt, {"agent": self.name, "task": "farmer_coach"})
 
-        return {
-            "agent": self.name,
-            "success": True,
-            "response": response,
-            "data": {
+        # Build structured recommendations from action plan
+        structured_recommendations: List[StructuredRecommendation] = []
+        
+        # Add recommendations from action plan if available
+        if isinstance(action_plan, dict):
+            steps = action_plan.get("steps", action_plan.get("actions", []))
+            if isinstance(steps, list):
+                for i, step in enumerate(steps[:5]):  # Limit to top 5
+                    if isinstance(step, str):
+                        structured_recommendations.append(create_structured_recommendation(
+                            action=step,
+                            reason="Part of personalized action plan based on your query",
+                            timeline="as per your farming schedule",
+                            priority=i + 1,
+                            category="general"
+                        ))
+                    elif isinstance(step, dict):
+                        structured_recommendations.append(StructuredRecommendation(
+                            action=step.get("action", "Action step"),
+                            reason=step.get("reason", "From action plan"),
+                            timeline=step.get("timeline", "as scheduled"),
+                            priority=step.get("priority", i + 1),
+                            category=step.get("category", "general")
+                        ))
+        
+        # Add learning resource recommendation if available
+        if learning_resources and not structured_recommendations:
+            structured_recommendations.append(create_structured_recommendation(
+                action="Review recommended learning resources",
+                reason="Continuous learning improves farming outcomes",
+                timeline="at your convenience",
+                priority=2,
+                category="education"
+            ))
+        
+        # Create decision
+        decision = create_agent_decision(
+            summary=f"Coaching advice for {experience} farmer in {location}. {len(structured_recommendations)} action items provided.",
+            details=response[:250] if len(response) > 250 else response,
+            confidence=0.75 if action_plan else 0.6
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],
+            data={
                 "experience": experience,
                 "location": location,
                 "season": season,
                 "current_crops": current_crops,
                 "raw_seasonal_tips": seasonal_tips,
                 "raw_learning_resources": learning_resources,
-                "raw_action_plan": action_plan
+                "raw_action_plan": action_plan,
+                "coaching_response": response
             },
-            "metadata": {"model": "gemini", "tools_used": list(tools.keys())}
-        }
+            metadata={"model": "gemini", "tools_used": list(tools.keys())}
+        ).to_dict()

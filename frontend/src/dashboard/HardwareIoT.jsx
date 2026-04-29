@@ -4,7 +4,7 @@ import "../styles/Dashboard/HardwareIoT.css";
 import { useAuth } from "../contexts/AuthContext";
 
 const BLYNK_CLOUD_URL = "https://blr1.blynk.cloud/external/api/get";
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
 
 const SENSORS = [
   { label: "Air Temperature", pin: "V0", unit: "°C", color: "#FF6B6B" },

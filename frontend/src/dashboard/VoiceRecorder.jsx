@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Mic, MicOff, Play, Square, Loader, Loader2, Volume2, AlertCircle, Check, User, Bot } from 'lucide-react';
 import '../styles/Dashboard/VoiceRecorder.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 
 export default function VoiceRecorder() {
   const [status, setStatus] = useState('idle');
@@ -22,6 +22,15 @@ export default function VoiceRecorder() {
   const analyserRef = useRef(null);
   const micStreamRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const [theme, setTheme] = useState(document.documentElement.getAttribute('data-theme') || 'dark');
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     conversationEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -369,10 +378,10 @@ export default function VoiceRecorder() {
         {conversations.length === 0 ? (
           <div className="voice-recorder-empty-state">
         <img 
-          src="/voice-agent-graphic.png" 
+          src={theme === 'dark' ? "/dark_theme_logo-removebg-preview.png" : "/White_theme_logo-removebg-preview.png"} 
           alt="AI Farming Assistant" 
           className="voice-recorder-empty-icon" 
-          style={{ opacity: 0.8, width: '280px', height: 'auto', marginBottom: '1rem' }}
+          style={{ opacity: 0.8, width: '180px', height: 'auto', marginBottom: '1rem' }}
         />
         <h2 className="voice-recorder-empty-title">AI Farming Assistant</h2>
         <p className="voice-recorder-empty-subtitle">

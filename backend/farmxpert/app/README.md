@@ -1,10 +1,10 @@
 # FarmXpert Application Core
 
-This directory contains the core application logic for FarmXpert - an AI-powered agricultural assistant built with a modular monolith architecture using FastAPI and the orchestrator pattern.
+This directory contains the application logic for FarmXpert - an AI-powered agricultural assistant built with FastAPI.
 
 ## 🏗️ Architecture Overview
 
-FarmXpert uses a **modular monolith** architecture with an **orchestrator pattern** to coordinate multiple specialized AI agents while maintaining logical boundaries and clean separation of concerns.
+FarmXpert uses a modular architecture with a single primary AI pipeline driven by the **SuperAgent** (see `farmxpert/core/super_agent.py`) exposed via `/api/super-agent/*` routes.
 
 ### Key Components
 
@@ -14,9 +14,9 @@ app/
 │   ├── market_intelligence/   # Market analysis and pricing
 │   ├── task_scheduler/        # Farm task planning and scheduling
 │   └── weather_watcher/       # Weather monitoring and alerts
-├── orchestrator/              # Central coordination layer
-│   ├── agent.py              # Main orchestrator logic
-│   └── services/             # Shared services (LLM, etc.)
+├── orchestrator/              # Legacy orchestrator (not used by the main API pipeline)
+│   ├── agent.py              # Legacy orchestrator logic
+│   └── services/             # Legacy shared services
 ├── shared/                    # Shared utilities and models
 └── config.py                 # Application configuration
 ```
@@ -116,9 +116,9 @@ agent = TaskSchedulerAgent()
 tasks = await agent.handle({"query": "schedule tasks", "context": {"crop_info": {"name": "cotton", "growth_stage": "vegetative"}, "location": {"state": "Gujarat"}}})
 ```
 
-## 🎯 Orchestrator Pattern
+## 🎯 Primary AI Pipeline
 
-The orchestrator (`orchestrator/agent.py`) serves as the central coordination layer:
+The SuperAgent (`farmxpert/core/super_agent.py`) serves as the central coordination layer:
 
 ### Key Responsibilities
 
@@ -131,21 +131,13 @@ The orchestrator (`orchestrator/agent.py`) serves as the central coordination la
 ### Usage Example
 
 ```python
-from farmxpert.app.orchestrator.agent import OrchestratorAgent
+from farmxpert.core.super_agent import super_agent
 
-orchestrator = OrchestratorAgent()
-
-# Single agent query
-response = orchestrator.handle_request({
-    "query": "weather in ahmedabad",
-    "session_id": "user123"
-})
-
-# Multi-agent comprehensive query
-response = orchestrator.handle_request({
-    "query": "farming advice for cotton",
-    "session_id": "user123"
-})
+result = await super_agent.process_query(
+    query="weather in ahmedabad",
+    context={"session_id": "user123"},
+    session_id="user123",
+)
 ```
 
 ## 🔧 Configuration
@@ -182,34 +174,36 @@ class Settings(BaseSettings):
 
 ## 📡 API Endpoints
 
-### Chat Interface
+### Chat Interface (SuperAgent)
 ```http
-POST /chat
+POST /api/super-agent/query
 Content-Type: application/json
 
 {
     "query": "weather in ahmedabad",
-    "session_id": "user123"
+    "session_id": "user123",
+    "context": {}
 }
 ```
 
-### Task Scheduler
+### Unified Chat (Authenticated)
 ```http
-POST /task-schedule?crop=cotton&growth_stage=vegetative
+POST /api/chat/orchestrate
 Content-Type: application/json
 
 {
-    "location": "ahmedabad",
-    "resources": {
-        "water": "sufficient",
-        "labor": "available"
+    "message": "What should I do for cotton at vegetative stage?",
+    "session_id": "user123",
+    "context": {
+        "crop_info": {"name": "cotton", "growth_stage": "vegetative"},
+        "location": {"state": "Gujarat"}
     }
 }
 ```
 
-### Agent Status
+### Health
 ```http
-GET /status
+GET /api/health/live
 ```
 
 ## 🧪 Testing
@@ -230,7 +224,7 @@ python test_api_endpoints.py
 ### Test Coverage
 
 - Unit tests for individual agents
-- Integration tests for orchestrator
+- Integration tests for SuperAgent pipeline
 - API endpoint tests
 - LLM service tests
 
@@ -248,25 +242,11 @@ DEBUG=true python start_server.py
 
 ### Common Debugging Tools
 
-1. **Agent Debugging**:
-```python
-from app.orchestrator.agent import OrchestratorAgent
-orchestrator = OrchestratorAgent()
-orchestrator.debug_mode = True
-```
-
-2. **LLM Service Debugging**:
-```python
-from app.orchestrator.services.llm_service import OrchestratorLLMService
-service = OrchestratorLLMService()
-service.debug_mode = True
-```
-
-3. **API Debugging**:
+1. **API Debugging**:
 ```bash
-curl -X POST "http://localhost:8000/chat" \
+curl -X POST "http://localhost:8000/api/super-agent/query" \
      -H "Content-Type: application/json" \
-     -d '{"query": "weather in ahmedabad", "session_id": "debug"}'
+     -d '{"query": "weather in ahmedabad", "session_id": "debug", "context": {}}'
 ```
 
 ## 🚨 Error Handling
@@ -287,11 +267,11 @@ except Exception as e:
     return {"error": "Internal server error"}
 ```
 
-### Orchestrator-Level Errors
+### Pipeline-Level Errors
 
-The orchestrator provides fallback mechanisms:
+The pipeline provides fallback mechanisms:
 
-1. **LLM Fallback**: Uses template-based responses if AI fails
+1. **LLM Fallback**: Uses deterministic synthesis when LLM output fails
 2. **Agent Fallback**: Continues with available agents if one fails
 3. **Graceful Degradation**: Provides partial results if possible
 
@@ -343,14 +323,7 @@ class NewAgentService:
         return result
 ```
 
-3. **Register with Orchestrator**:
-```python
-# app/orchestrator/agent.py
-def _resolve_agents(request):
-    # Add agent matching logic
-    if "new_agent_keyword" in query:
-        agents.append("new_agent")
-```
+3. **Register with SuperAgent/Registry**: Add the agent to the core registry (`farmxpert/core/base_agent/agent_registry.py`) and ensure it has a stable, structured output.
 
 4. **Add Tests**:
 ```python

@@ -116,10 +116,10 @@ frontend/
 
 The frontend connects to the FarmXpert FastAPI backend through the `api.js` service file. Key endpoints include:
 
-- `/health/live` - Health check
-- `/agents` - List all agents
-- `/agents/{agent_name}` - Invoke specific agent
-- `/orchestrate` - Multi-agent workflow orchestration
+- `/api/health/live` - Health check
+- `/api/super-agent/query` - Primary SuperAgent chat endpoint
+- `/api/super-agent/agents` - List available agents
+- `/api/chat/orchestrate` - Authenticated unified chat endpoint
 
 ## Environment Variables
 

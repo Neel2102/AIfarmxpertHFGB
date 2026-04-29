@@ -12,6 +12,17 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 from enum import Enum
 from farmxpert.core.base_agent.base_agent import BaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning,
+    format_legacy_response,
+    calculate_confidence_level
+)
 from farmxpert.core.utils.logger import get_logger
 from farmxpert.services.gemini_service import gemini_service
 
@@ -245,15 +256,42 @@ Current Context:
 
 User Query: {inputs.get('query', '')}
 
-Please provide a comprehensive response in the following JSON format:
+CRITICAL: You MUST respond in the following EXACT JSON format. No markdown, no extra text outside the JSON:
 {{
-    "response": "Main response text (markdown supported)",
-    "recommendations": ["recommendation1", "recommendation2"],
-    "warnings": ["warning1", "warning2"],
-    "insights": ["insight1", "insight2"],
-    "data": {{"key": "value"}},
-    "confidence": 0.85
+    "decision": {{
+        "summary": "One-line summary of your assessment (max 150 chars)",
+        "details": "Extended explanation if needed (optional)",
+        "confidence": 0.85
+    }},
+    "recommendations": [
+        {{
+            "action": "Specific action to take",
+            "reason": "Why this action is needed",
+            "timeline": "When to do it (e.g., 'immediately', 'within 3 days', 'before planting')",
+            "expected_benefit": "What result to expect (optional)",
+            "priority": 1,
+            "category": "soil|irrigation|pest|fertilizer|harvest|general"
+        }}
+    ],
+    "warnings": [
+        {{
+            "issue": "The specific warning/issue",
+            "severity": "critical|high|medium|low|info",
+            "impact": "What happens if ignored",
+            "mitigation": "How to address it",
+            "category": "weather|pest|disease|soil|market|general"
+        }}
+    ],
+    "data": {{}}
 }}
+
+Requirements:
+- ALL fields are required except those marked (optional)
+- Keep summaries concise and factual
+- Recommendations must be actionable with clear timelines
+- Warnings must include severity and mitigation steps
+- Confidence must be between 0.0 and 1.0
+- Use "uncertain" confidence (< 0.5) when data is insufficient
 
 Response:"""
         
@@ -272,74 +310,142 @@ Response:"""
                     raise
                 await asyncio.sleep(1 * (attempt + 1))  # Exponential backoff
     
-    def _parse_response(self, response: str) -> Dict[str, Any]:
-        """Parse LLM response into structured format"""
+    def _parse_response(self, response: str) -> StandardizedAgentOutput:
+        """Parse LLM response into standardized format with structured recommendations and warnings"""
         try:
             # Try to extract JSON from response
             if "{" in response and "}" in response:
                 start = response.find("{")
                 end = response.rfind("}") + 1
                 json_str = response[start:end]
-                
                 parsed = json.loads(json_str)
                 
-                # Validate required fields
-                if "response" not in parsed:
-                    parsed["response"] = response
+                # Parse decision
+                decision_data = parsed.get("decision", {})
+                if isinstance(decision_data, dict):
+                    confidence = decision_data.get("confidence", 0.7)
+                    decision = AgentDecision(
+                        summary=decision_data.get("summary", response[:150]),
+                        details=decision_data.get("details"),
+                        confidence=confidence,
+                        confidence_level=calculate_confidence_level(confidence)
+                    )
+                else:
+                    decision = create_agent_decision(
+                        summary=response[:150],
+                        details=response if len(response) > 150 else None,
+                        confidence=0.6
+                    )
                 
-                return parsed
+                # Parse recommendations into structured format
+                recommendations = []
+                recs_data = parsed.get("recommendations", [])
+                if isinstance(recs_data, list):
+                    for i, rec in enumerate(recs_data):
+                        if isinstance(rec, dict):
+                            recommendations.append(StructuredRecommendation(**rec))
+                        elif isinstance(rec, str):
+                            # Convert string recommendation to structured
+                            recommendations.append(create_structured_recommendation(
+                                action=rec,
+                                reason="Based on analysis",
+                                priority=i + 1
+                            ))
+                
+                # Parse warnings into structured format
+                warnings = []
+                warns_data = parsed.get("warnings", [])
+                if isinstance(warns_data, list):
+                    for warn in warns_data:
+                        if isinstance(warn, dict):
+                            warnings.append(StructuredWarning(**warn))
+                        elif isinstance(warn, str):
+                            # Convert string warning to structured
+                            warnings.append(create_structured_warning(
+                                issue=warn,
+                                severity="medium"
+                            ))
+                
+                return StandardizedAgentOutput(
+                    agent=self.name,
+                    success=True,
+                    decision=decision,
+                    recommendations=recommendations,
+                    warnings=warnings,
+                    data=parsed.get("data", {}),
+                    metadata={"model": "gemini", "mode": "llm", "parsed": True}
+                )
             else:
-                # Fallback to treating entire response as text
-                return {
-                    "response": response,
-                    "recommendations": [],
-                    "warnings": [],
-                    "insights": [],
-                    "data": {},
-                    "confidence": 0.7
-                }
+                # No JSON found - create fallback structured output
+                return format_legacy_response(
+                    agent_name=self.name,
+                    success=True,
+                    response_text=response,
+                    confidence=0.5,
+                    metadata={"model": "gemini", "mode": "fallback", "parsed": False}
+                )
                 
         except json.JSONDecodeError as e:
             self.logger.warning(f"Failed to parse JSON response: {str(e)}")
-            return {
-                "response": response,
-                "recommendations": [],
-                "warnings": [],
-                "insights": [],
-                "data": {},
-                "confidence": 0.6
-            }
+            # Return structured fallback with the raw text
+            return format_legacy_response(
+                agent_name=self.name,
+                success=True,
+                response_text=response,
+                confidence=0.5,
+                metadata={"model": "gemini", "mode": "parse_error", "error": str(e)}
+            )
+        except Exception as e:
+            self.logger.error(f"Unexpected error parsing response: {str(e)}")
+            return format_legacy_response(
+                agent_name=self.name,
+                success=False,
+                response_text="Error processing response",
+                confidence=0.0,
+                error=str(e),
+                metadata={"model": "gemini", "mode": "error"}
+            )
     
     async def _handle_with_llm(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Generic handler for LLM-based agent logic"""
+        """Generic handler for LLM-based agent logic - returns standardized output"""
         try:
             llm_context = self._prepare_context(inputs)
             prompt = self._build_prompt(inputs, llm_context)
             llm_response = await self._get_llm_response(prompt, inputs)
-            parsed = self._parse_response(llm_response)
-
-            return {
-                "agent": self.name,
-                "success": True,
-                "response": parsed.get("response"),
-                "recommendations": parsed.get("recommendations", []) or [],
-                "warnings": parsed.get("warnings", []) or [],
-                "insights": parsed.get("insights", []) or [],
-                "data": parsed.get("data", {}) or {},
-                "metadata": {"model": "gemini", "mode": "llm"},
-            }
+            standardized_output = self._parse_response(llm_response)
+            
+            # Return as dict for API compatibility
+            return standardized_output.to_dict()
+            
         except Exception as e:
             self.logger.error(f"LLM handling failed for {self.name}: {e}")
-            # If the agent has a traditional fallback, use it
+            # If the agent has a traditional fallback, use it and convert to standardized
             if hasattr(self, '_handle_traditional'):
-                return await self._handle_traditional(inputs)
+                traditional_result = await self._handle_traditional(inputs)
+                # Convert traditional result to standardized format
+                return format_legacy_response(
+                    agent_name=self.name,
+                    success=traditional_result.get("success", False),
+                    response_text=str(traditional_result.get("response", traditional_result)),
+                    recommendations=traditional_result.get("recommendations", []),
+                    warnings=traditional_result.get("warnings", []),
+                    data=traditional_result.get("data", {}),
+                    confidence=traditional_result.get("confidence", 0.6),
+                    metadata={"model": "gemini", "mode": "traditional_fallback"}
+                ).to_dict()
             
-            return {
-                "agent": self.name,
-                "success": False,
-                "error": str(e),
-                "metadata": {"model": "gemini", "mode": "error"}
-            }
+            # Return error in standardized format
+            return StandardizedAgentOutput(
+                agent=self.name,
+                success=False,
+                decision=create_agent_decision(
+                    summary="Processing failed",
+                    details=str(e),
+                    confidence=0.0
+                ),
+                error={"message": str(e), "type": type(e).__name__},
+                metadata={"model": "gemini", "mode": "error"}
+            ).to_dict()
 
     async def get_status(self) -> Dict[str, Any]:
         """Get current agent status"""

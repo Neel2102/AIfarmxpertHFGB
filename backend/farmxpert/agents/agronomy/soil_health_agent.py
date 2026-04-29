@@ -4,6 +4,15 @@ from typing import Dict, Any, List, Optional
 import json
 import os
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.config.settings import settings
 from farmxpert.services.tools import SoilSensorTool, AmendmentRecommendationTool, LabTestAnalyzerTool, SoilTool
 from farmxpert.services.gemini_service import gemini_service
@@ -74,7 +83,8 @@ Always provide practical, science-based recommendations with clear implementatio
         # --- 1. REAL SENSOR DATA (Fast) ---
         if self.iot_soil_tool:
             try:
-                real_iot_data = self.iot_soil_tool.get_realtime_data()
+                farm_id = context.get("farm_id") or inputs.get("farm_id")
+                real_iot_data = self.iot_soil_tool.get_realtime_data(farm_id=farm_id)
                 tool_data["iot_readings"] = real_iot_data
                 
                 # Update basic soil_data if likely outdated or missing
@@ -179,18 +189,60 @@ Always provide practical, science-based recommendations with clear implementatio
         if moisture is not None and moisture < 15:
             warnings.append("Low soil moisture; plan irrigation or mulch to conserve water")
 
-        return {
-            "agent": self.name,
-            "success": True,
-            "response": {
-                "summary": "Soil health assessment completed",
+        # Build structured recommendations
+        structured_recommendations: List[StructuredRecommendation] = []
+        for i, rec in enumerate(recommendations):
+            structured_recommendations.append(create_structured_recommendation(
+                action=rec,
+                reason="Based on soil test analysis and agronomic best practices",
+                timeline="as per seasonal schedule" if "compost" in rec.lower() else "immediate to 2 weeks",
+                priority=1 if "lime" in rec.lower() or "sulfur" in rec.lower() else 2,
+                category="soil"
+            ))
+        
+        # Build structured warnings
+        structured_warnings: List[StructuredWarning] = []
+        for warn in warnings:
+            structured_warnings.append(create_structured_warning(
+                issue=warn,
+                severity="medium" if "moisture" in warn.lower() else "low",
+                category="soil"
+            ))
+        
+        # Create decision based on soil health
+        confidence = 0.75
+        if ph is not None and 6.0 <= ph <= 7.5:
+            summary = f"Soil health is good (pH {ph}). {len(structured_recommendations)} improvements suggested."
+            confidence = 0.85
+        elif ph is not None:
+            summary = f"Soil pH {ph} requires adjustment. {len(structured_recommendations)} amendments recommended."
+            confidence = 0.7
+        else:
+            summary = f"Soil assessment completed with {len(structured_recommendations)} recommendations."
+        
+        decision = create_agent_decision(
+            summary=summary,
+            details="; ".join(insights) if insights else "Soil parameters analyzed",
+            confidence=confidence
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=structured_warnings,
+            data={
+                "soil": soil_data,
+                "ph": ph,
+                "npk": soil_data.get("npk"),
+                "organic_matter": organic,
+                "moisture": moisture,
                 "insights": insights,
-                "recommendations": recommendations,
-                "warnings": warnings
+                "recommendation_count": len(structured_recommendations)
             },
-            "data": {"soil": soil_data},
-            "metadata": {"source": "traditional"}
-        }
+            metadata={"source": "traditional", "mode": "fallback"}
+        ).to_dict()
     
     async def _get_soil_data(self, context: Dict[str, Any], session_id: Optional[str]) -> Dict[str, Any]:
         """Get soil data from various sources"""

@@ -8,7 +8,7 @@ class SuperAgentChat {
         this.currentAgent = 'super-agent';
         this.sessionId = this.generateSessionId();
         this.isLoading = false;
-        this.apiBaseUrl = 'http://localhost:8000/api'; // Update this to match your backend URL
+        this.apiBaseUrl = (typeof process !== 'undefined' && process.env?.REACT_APP_BACKEND_URL) ? `${process.env.REACT_APP_BACKEND_URL}/api` : 'http://localhost:8000/api'; // Backend URL from env or fallback
         
         this.initializeElements();
         this.attachEventListeners();

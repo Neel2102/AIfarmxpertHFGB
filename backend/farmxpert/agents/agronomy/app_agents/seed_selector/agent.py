@@ -1,6 +1,15 @@
 from __future__ import annotations
 from typing import Dict, Any, List, Optional
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import GeneticDatabaseTool, SoilSuitabilityTool, YieldPredictionTool, MarketTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -136,11 +145,40 @@ Format your response as a natural conversation with the farmer.
             if "429" in resp_lower or "quota" in resp_lower or "rate limit" in resp_lower:
                 return await self._handle_traditional(inputs)
             
-            return {
-                "agent": self.name,
-                "success": True,
-                "response": response,
-                "data": {
+            # Build structured recommendations
+            recs = self._extract_recommendations_from_data(genetic_data, soil_suitability_data, yield_prediction_data)
+            structured_recommendations: List[StructuredRecommendation] = []
+            for i, rec in enumerate(recs):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=rec,
+                    reason="Based on genetic, soil, and yield analysis",
+                    timeline="for upcoming season",
+                    priority=i + 1,
+                    category="seed_selection"
+                ))
+            
+            warns = self._extract_warnings_from_data(soil_suitability_data, yield_prediction_data)
+            structured_warnings: List[StructuredWarning] = []
+            for warn in warns:
+                structured_warnings.append(create_structured_warning(
+                    issue=warn,
+                    severity="medium",
+                    category="seed"
+                ))
+            
+            decision = create_agent_decision(
+                summary=f"Seed recommendations for {crop} in {location} ({goals}, {budget} budget). {len(structured_recommendations)} varieties suggested.",
+                details=response[:200] if len(response) > 200 else response,
+                confidence=0.8 if genetic_data else 0.65
+            )
+            
+            return StandardizedAgentOutput(
+                agent=self.name,
+                success=True,
+                decision=decision,
+                recommendations=structured_recommendations,
+                warnings=structured_warnings,
+                data={
                     "crop": crop,
                     "location": location,
                     "goals": goals,
@@ -150,10 +188,8 @@ Format your response as a natural conversation with the farmer.
                     "yield_prediction_data": yield_prediction_data,
                     "market_data": market_data
                 },
-                "recommendations": self._extract_recommendations_from_data(genetic_data, soil_suitability_data, yield_prediction_data),
-                "warnings": self._extract_warnings_from_data(soil_suitability_data, yield_prediction_data),
-                "metadata": {"model": "gemini", "tools_used": list(tools.keys())}
-            }
+                metadata={"model": "gemini", "tools_used": list(tools.keys())}
+            ).to_dict()
             
         except Exception as e:
             self.logger.error(f"Error in seed selection agent: {e}")
@@ -229,18 +265,36 @@ Format your response as a natural conversation with the farmer.
         elif budget == "high":
             recommendations = [r for r in recommendations if r["price"] > "₹3000"]
         
-        # Ensure we have data for the response string
-        rec_str = ", ".join([r['variety'] for r in recommendations[:3]])
-        response = f"Seed recommendations for {crop} in {location}: {rec_str}"
+        # Build structured recommendations from seed varieties
+        structured_recommendations: List[StructuredRecommendation] = []
+        for i, rec in enumerate(recommendations):
+            variety_name = rec.get('variety', 'Unknown')
+            variety_type = rec.get('type', 'Hybrid')
+            yield_potential = rec.get('yield_potential', 'N/A')
+            price = rec.get('price', 'N/A')
+            
+            structured_recommendations.append(create_structured_recommendation(
+                action=f"Select {variety_name} ({variety_type})",
+                reason=f"Yield potential: {yield_potential}. Price: {price}",
+                timeline="for upcoming planting season",
+                priority=i + 1,
+                category="seed_selection"
+            ))
         
-        return {
-            "agent": self.name,
-            "success": True,
-            "response": response,
-            "recommendations": recommendations,
-            "data": {"crop": crop, "location": location, "goal": goals, "budget": budget},
-            "metadata": {"model": "traditional"}
-        }
+        decision = create_agent_decision(
+            summary=f"Seed recommendations for {crop} in {location} ({goals}, {budget} budget). {len(recommendations)} varieties.",
+            confidence=0.7
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],
+            data={"crop": crop, "location": location, "goal": goals, "budget": budget, "recommendations": recommendations},
+            metadata={"model": "traditional"}
+        ).to_dict()
     
     def _extract_crop_from_query(self, query: str) -> Optional[str]:
         """Extract mentioned crop from user query"""

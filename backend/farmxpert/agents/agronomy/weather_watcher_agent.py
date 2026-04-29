@@ -2,6 +2,15 @@ from __future__ import annotations
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import WeatherMonitoringTool, AlertSystemTool, WeatherTool
 from farmxpert.agents.operations.weather_watcher.agent import WeatherWatcherAgent as AppWeatherWatcherAgent
 
@@ -112,25 +121,53 @@ Always provide practical, time-sensitive recommendations with real-time alerts b
                         if dry:
                             parts.append("Dry spell risk")
                         response_text = ", ".join(parts)
-
-                    return {
-                        "agent": self.name,
-                        "success": True,
-                        "response": response_text,
-                        "forecast": {"days": daily_list, "count": len(daily_list)},
-                        "alerts": alerts_dict,
-                        "provider": forecast.get("provider") or "unknown",
-                        "forecast_count": len(daily_list),
-                        "data": {
+                    
+                    # Build structured recommendations from farming_recommendations
+                    farming_recs = forecast.get("farming_recommendations") or []
+                    structured_recommendations: List[StructuredRecommendation] = []
+                    for i, rec in enumerate(farming_recs[:4]):
+                        structured_recommendations.append(create_structured_recommendation(
+                            action=rec,
+                            reason="Based on weather forecast analysis",
+                            timeline="as conditions permit",
+                            priority=i + 1,
+                            category="weather"
+                        ))
+                    
+                    # Build structured warnings from alerts
+                    structured_warnings: List[StructuredWarning] = []
+                    if heat:
+                        structured_warnings.append(create_structured_warning(
+                            issue="Heat stress risk detected",
+                            severity="high" if heat else "medium",
+                            category="weather"
+                        ))
+                    if dry:
+                        structured_warnings.append(create_structured_warning(
+                            issue="Dry spell risk detected",
+                            severity="medium",
+                            category="weather"
+                        ))
+                    
+                    decision = create_agent_decision(
+                        summary=f"Weather forecast for {location_text}: {response_text}. {len(daily_list)} days forecast.",
+                        confidence=0.85
+                    )
+                    
+                    return StandardizedAgentOutput(
+                        agent=self.name,
+                        success=True,
+                        decision=decision,
+                        recommendations=structured_recommendations,
+                        warnings=structured_warnings,
+                        data={
                             "location": {"text": location_text},
                             "forecast": {"days": daily_list, "count": len(daily_list)},
                             "alerts": alerts_dict,
                             "raw": forecast,
                         },
-                        "recommendations": forecast.get("farming_recommendations") or [],
-                        "warnings": [],
-                        "metadata": {"model": "deterministic", "provider": forecast.get("provider") or "unknown"},
-                    }
+                        metadata={"model": "deterministic", "provider": forecast.get("provider") or "unknown"}
+                    ).to_dict()
 
             result = AppWeatherWatcherAgent.analyze_weather(location)
             ok = bool(result.get("success")) if isinstance(result, dict) else False
@@ -140,24 +177,39 @@ Always provide practical, time-sensitive recommendations with real-time alerts b
             temp = weather.get("temperature") if isinstance(weather, dict) else None
             cond = weather.get("weather_condition") if isinstance(weather, dict) else None
             response_text = f"Temperature: {temp}°C, {cond}" if temp is not None and cond else "Weather analysis complete"
-
-            return {
-                "agent": self.name,
-                "success": ok,
-                "response": response_text,
-                "data": data,
-                "recommendations": [],
-                "warnings": [],
-                "metadata": {"model": "deterministic"},
-            }
+            
+            decision = create_agent_decision(
+                summary=response_text,
+                confidence=0.8 if ok else 0.5
+            )
+            
+            return StandardizedAgentOutput(
+                agent=self.name,
+                success=ok,
+                decision=decision,
+                recommendations=[],
+                warnings=[],
+                data=data if data else {},
+                metadata={"model": "deterministic"}
+            ).to_dict()
         except Exception as e:
             self.logger.error(f"Error in weather watcher agent: {e}")
-            return {
-                "agent": self.name,
-                "success": False,
-                "response": "Weather analysis failed",
-                "error": str(e),
-            }
+            
+            decision = create_agent_decision(
+                summary="Weather analysis failed",
+                confidence=0.0
+            )
+            
+            return StandardizedAgentOutput(
+                agent=self.name,
+                success=False,
+                decision=decision,
+                recommendations=[],
+                warnings=[],
+                data={},
+                error={"message": str(e), "type": "exception"},
+                metadata={"model": "deterministic"}
+            ).to_dict()
 
     async def _handle_traditional(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Handle weather analysis using traditional logic"""
@@ -180,22 +232,48 @@ Always provide practical, time-sensitive recommendations with real-time alerts b
         # Determine best farming window
         best_window = self._determine_best_farming_window(forecast)
         
-        return {
-            "agent": self.name,
-            "success": True,
-            "response": f"Weather analysis for {location}: {analysis['summary']}",
-            "recommendations": recommendations,
-            "warnings": alerts,
-            "insights": insights,
-            "data": {
+        # Build structured recommendations
+        structured_recommendations: List[StructuredRecommendation] = []
+        for i, rec in enumerate(recommendations):
+            structured_recommendations.append(create_structured_recommendation(
+                action=rec,
+                reason="Based on weather forecast analysis",
+                timeline=best_window,
+                priority=i + 1,
+                category="weather"
+            ))
+        
+        # Build structured warnings from alerts
+        structured_warnings: List[StructuredWarning] = []
+        for alert in alerts:
+            severity = "high" if "warning" in alert.lower() else "medium"
+            structured_warnings.append(create_structured_warning(
+                issue=alert,
+                severity=severity,
+                category="weather"
+            ))
+        
+        decision = create_agent_decision(
+            summary=f"Weather for {location}: {analysis['summary']}. Risk: {analysis.get('risk_level', 'low')}",
+            details=f"Best farming window: {best_window}. Insights: {', '.join(insights)}",
+            confidence=0.85 if analysis.get('risk_level') == 'low' else 0.7
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=structured_warnings,
+            data={
                 "location": location,
                 "weather_forecast": forecast,
                 "analysis": analysis,
                 "best_farming_window": best_window,
                 "weather_risk_level": analysis.get("risk_level", "low")
             },
-            "confidence": 0.85
-        }
+            metadata={"source": "traditional"}
+        ).to_dict()
 
     def _generate_weather_forecast(self, location: str) -> Dict[str, Any]:
         """Generate weather forecast (mock data - in real implementation, call weather API)"""

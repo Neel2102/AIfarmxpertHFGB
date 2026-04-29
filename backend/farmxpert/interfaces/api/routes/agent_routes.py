@@ -7,6 +7,7 @@ from farmxpert.core.core_agent_updated import process_farm_request
 
 from sqlalchemy.orm import Session
 
+from farmxpert.models.farm_models import SoilTest
 from farmxpert.models.blynk_models import SensorReading
 from farmxpert.models.database import get_db
 
@@ -200,27 +201,72 @@ async def agent_iot_latest(
             query = query.filter(SensorReading.device_id == device_id)
 
         r = query.order_by(SensorReading.recorded_at.desc()).first()
-        if not r:
-            return {"agent": normalized_agent, "has_data": False}
+        
+        # Also check SoilTest table (Manual/IoT syncs often go here)
+        st_query = db.query(SoilTest)
+        if farm_id is not None:
+            st_query = st_query.filter(SoilTest.farm_id == farm_id)
+        st = st_query.order_by(SoilTest.test_date.desc()).first()
 
+        # Decide which one is newer
+        latest_reading = None
+        source = "IoT"
+        
+        if r and st:
+            if r.recorded_at >= st.test_date:
+                latest_reading = r
+                source = "IoT"
+            else:
+                latest_reading = st
+                source = "Manual/Sync"
+        elif r:
+            latest_reading = r
+            source = "IoT"
+        elif st:
+            latest_reading = st
+            source = "Manual/Sync"
+
+        if not latest_reading:
+            return {"agent": normalized_agent, "has_data": False, "success": True, "data": {"success": False, "error": "No data found"}}
+
+        is_st = isinstance(latest_reading, SoilTest)
+        recorded_at = latest_reading.test_date if is_st else latest_reading.recorded_at
+        
+        result_data = {
+            "id": int(latest_reading.id),
+            "farm_id": int(latest_reading.farm_id),
+            "air_temperature": float(latest_reading.air_temperature) if latest_reading.air_temperature is not None else None,
+            "air_humidity": float(latest_reading.air_humidity) if latest_reading.air_humidity is not None else None,
+            "soil_moisture": float(latest_reading.soil_moisture) if latest_reading.soil_moisture is not None else None,
+            "soil_temperature": float(latest_reading.soil_temperature) if latest_reading.soil_temperature is not None else None,
+            "soil_ec": float(latest_reading.soil_ec) if latest_reading.soil_ec is not None else None,
+            "soil_ph": float(latest_reading.soil_ph) if latest_reading.soil_ph is not None else None,
+            "nitrogen": float(latest_reading.nitrogen) if latest_reading.nitrogen is not None else None,
+            "phosphorus": float(latest_reading.phosphorus) if latest_reading.phosphorus is not None else None,
+            "potassium": float(latest_reading.potassium) if latest_reading.potassium is not None else None,
+            "recorded_at": recorded_at.isoformat() if recorded_at else None,
+        }
+
+        # Format specifically for Farmer Dashboard (FarmInformation.jsx)
         return {
             "agent": normalized_agent,
             "has_data": True,
-            "reading": {
-                "id": int(r.id),
-                "farm_id": int(r.farm_id),
-                "device_id": int(r.device_id),
-                "air_temperature": float(r.air_temperature) if r.air_temperature is not None else None,
-                "air_humidity": float(r.air_humidity) if r.air_humidity is not None else None,
-                "soil_moisture": float(r.soil_moisture) if r.soil_moisture is not None else None,
-                "soil_temperature": float(r.soil_temperature) if r.soil_temperature is not None else None,
-                "soil_ec": float(r.soil_ec) if r.soil_ec is not None else None,
-                "soil_ph": float(r.soil_ph) if r.soil_ph is not None else None,
-                "nitrogen": float(r.nitrogen) if r.nitrogen is not None else None,
-                "phosphorus": float(r.phosphorus) if r.phosphorus is not None else None,
-                "potassium": float(r.potassium) if r.potassium is not None else None,
-                "recorded_at": r.recorded_at.isoformat() if r.recorded_at else None,
-            },
+            "success": True, # Wrap in success for UI consistency
+            "reading": result_data,
+            "data": {
+                "success": True,
+                "source": source,
+                "fetched_at": recorded_at.isoformat() if recorded_at else None,
+                "soil_data": {
+                    "moisture": result_data["soil_moisture"],
+                    "temperature": result_data["soil_temperature"],
+                    "pH": result_data["soil_ph"],
+                    "nitrogen": result_data["nitrogen"],
+                    "phosphorus": result_data["phosphorus"],
+                    "potassium": result_data["potassium"],
+                    "ec": result_data["soil_ec"]
+                }
+            }
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch latest iot reading: {str(e)}")

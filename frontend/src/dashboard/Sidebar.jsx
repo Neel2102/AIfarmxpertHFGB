@@ -210,7 +210,11 @@ const Sidebar = ({ onLogout }) => {
         >
           <div className="sidebar-header-sidebar">
             <div className="logo-container-sidebar">
-              <img src="/leaf.png" alt="FarmXpert" className="logo-icon-sidebar" />
+              <img 
+                src={theme === 'dark' ? "/dark_theme_logo-removebg-preview.png" : "/White_theme_logo-removebg-preview.png"} 
+                alt="FarmXpert" 
+                className="logo-icon-sidebar" 
+              />
               <div className="logo-text-sidebar">
                 <h1 className="logo-title-sidebar">FarmXpert</h1>
                 <p className="logo-tagline-sidebar">AI-Powered Farming</p>
@@ -342,7 +346,17 @@ const Sidebar = ({ onLogout }) => {
                   onClick={() => handleNavigation("/dashboard/today")}
                 >
                   <LayoutDashboard className="agent-icon-sidebar" size={20} />
-                  <span className="agent-name-sidebar">Today</span>
+                  <span className="agent-name-sidebar">Daily Flow</span>
+                  <span className="agent-status-sidebar active-sidebar"></span>
+                </NavLink>
+
+                <NavLink
+                  className={({ isActive }) => `agent-item-sidebar ${isActive ? 'active' : ''}`}
+                  to="/dashboard/decision-engine"
+                  onClick={() => handleNavigation("/dashboard/decision-engine")}
+                >
+                  <Cpu className="agent-icon-sidebar" size={20} />
+                  <span className="agent-name-sidebar">Decision Engine</span>
                   <span className="agent-status-sidebar active-sidebar"></span>
                 </NavLink>
 

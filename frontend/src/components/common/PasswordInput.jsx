@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
 const PasswordInput = ({ 
   id, 
@@ -37,8 +38,18 @@ const PasswordInput = ({
         onClick={togglePasswordVisibility}
         disabled={disabled}
         aria-label={showPassword ? 'Hide password' : 'Show password'}
+        style={{
+          background: 'none',
+          border: 'none',
+          padding: '0.5rem',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--text-secondary, #94a3b8)'
+        }}
       >
-        {showPassword ? '🙈' : '👁️'}
+        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
       </button>
     </div>
   );

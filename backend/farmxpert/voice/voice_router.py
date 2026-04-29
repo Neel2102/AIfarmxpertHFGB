@@ -77,26 +77,10 @@ async def voice_chat(
 
         logger.info(f"STT result: '{transcript[:100]}...' (lang={detected_language})")
 
-        # Step 3: Forward to orchestrator
+        # Step 3: Forward to SuperAgent via shared helper
         try:
-            from farmxpert.app.orchestrator.agent import OrchestratorAgent
-
-            orchestrator_result = await OrchestratorAgent.handle_request({
-                "query": transcript,
-                "strategy": "auto",
-            })
-
-            if orchestrator_result.get("error"):
-                response_text = "I'm sorry, I encountered an error processing your request. Please try again."
-                logger.error(f"Orchestrator error: {orchestrator_result}")
-            else:
-                # Extract the response text from orchestrator
-                response_text = (
-                    orchestrator_result.get("llm_summary")
-                    or orchestrator_result.get("summary")
-                    or orchestrator_result.get("response")
-                    or str(orchestrator_result)
-                )
+            orch_result = await _call_orchestrator(transcript, user_id=current_user.id)
+            response_text = orch_result.get("response", "I processed your request.")
         except Exception as e:
             logger.error(f"Orchestrator call failed: {e}")
             response_text = "I'm having trouble connecting to the farm system. Please try again in a moment."

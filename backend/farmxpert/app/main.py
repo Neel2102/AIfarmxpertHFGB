@@ -12,23 +12,25 @@ import os
 # Initialize logger
 logger = logging.getLogger(__name__)
 
-from farmxpert.core.core_agent_updated import process_farm_request
+# Import the new core agent system
 from farmxpert.core.agent_routes import router as core_agent_router
+from farmxpert.core.agent_registry import get_registry
 
 # Store startup errors for diagnostics
 _startup_error = None
 _db_status = "initializing"
 from farmxpert.interfaces.api.routes import health_routes, farm_routes, auth_routes, agent_info_routes, agent_routes
-from farmxpert.interfaces.api.routes import super_agent_updated
+from farmxpert.interfaces.api.routes import super_agent
 from farmxpert.interfaces.api.routes import llm_usage_routes, blynk_routes, soil_routes, iot_routes, admin_routes
-from farmxpert.interfaces.api.routes import chat_routes, market_routes, task_routes
+from farmxpert.interfaces.api.routes import chat_routes, market_routes, task_routes, journey_routes
+from farmxpert.interfaces.api.routes.journey_graph_routes import router as journey_graph_router
+from farmxpert.interfaces.api.routes.admin_dashboard_routes import router as admin_dashboard_router
 from farmxpert.interfaces.api.middleware.logging_middleware import RequestLoggingMiddleware
 import farmxpert.models.user_models  # noqa: F401
 import farmxpert.models.farm_models  # noqa: F401
 import farmxpert.models.admin_models  # noqa: F401
 import farmxpert.models.blynk_models  # noqa: F401
 from farmxpert.models.database import Base, engine
-from farmxpert.app.orchestrator.router import router as orchestrator_router
 from farmxpert.voice.voice_router import router as voice_router
 
 app = FastAPI(
@@ -61,16 +63,18 @@ app.include_router(llm_usage_routes.router, prefix="/api")
 app.include_router(agent_routes.router, prefix="/api")  # This provides /api/agents/{agent_name}
 app.include_router(core_agent_router, prefix="/api")    # This provides /api/agent/* endpoints
 app.include_router(farm_routes.router, prefix="/api")
-app.include_router(super_agent_updated.router, prefix="/api")
+app.include_router(super_agent.router, prefix="/api")
 app.include_router(blynk_routes.router, prefix="/api")
 app.include_router(soil_routes.router, prefix="/api")
 app.include_router(iot_routes.router, prefix="/api")
 app.include_router(admin_routes.router, prefix="/api")
-app.include_router(orchestrator_router, prefix="/api/orchestrator")
 app.include_router(chat_routes.router, prefix="/api")
 app.include_router(market_routes.router, prefix="/api")
 app.include_router(task_routes.router, prefix="/api")
+app.include_router(journey_routes.router, prefix="/api")
+app.include_router(journey_graph_router, prefix="/api")
 app.include_router(voice_router, prefix="/api")
+app.include_router(admin_dashboard_router, prefix="/api")
 
 
 @app.on_event("startup")

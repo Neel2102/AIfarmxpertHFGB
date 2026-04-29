@@ -2,6 +2,15 @@ from __future__ import annotations
 from typing import Dict, Any, List
 import json
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import CommunityEngagementTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -61,12 +70,47 @@ class CommunityEngagementAgent(EnhancedBaseAgent):
         Provide: local_groups, networking_opportunities, cooperative_activities, government_interaction, recommendations
         """
         response = await gemini_service.generate_response(prompt, {"agent": self.name, "task": "community_engagement"})
-
-        return {
-            "agent": self.name,
-            "success": True,
-            "response": response,
-            "data": {
+        
+        # Build structured recommendations from community data
+        structured_recommendations: List[StructuredRecommendation] = []
+        groups = local_groups if isinstance(local_groups, list) else []
+        schemes = government_schemes if isinstance(government_schemes, list) else []
+        
+        # Add group recommendations
+        for i, group in enumerate(groups[:3]):
+            if isinstance(group, dict):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=f"Join {group.get('name', 'Community Group')}",
+                    reason=f"{group.get('type', 'Local group')} - {group.get('description', 'Community networking')}",
+                    timeline="at your convenience",
+                    priority=2,
+                    category="community"
+                ))
+        
+        # Add scheme recommendations
+        for i, scheme in enumerate(schemes[:2]):
+            if isinstance(scheme, dict):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=f"Apply for {scheme.get('name', 'Government Scheme')}",
+                    reason=f"Benefit: {scheme.get('benefit', 'Government support')}. Deadline: {scheme.get('deadline', 'Check locally')}",
+                    timeline="before deadline",
+                    priority=1 if i == 0 else 2,
+                    category="government"
+                ))
+        
+        decision = create_agent_decision(
+            summary=f"Community engagement for {location}: {len(groups)} groups, {len(schemes)} schemes, {len(farmer_interests)} interests.",
+            details=response[:200] if len(response) > 200 else response,
+            confidence=0.75 if groups else 0.6
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],
+            data={
                 "location": location,
                 "farm_size": farm_size,
                 "interests": farmer_interests,
@@ -74,5 +118,5 @@ class CommunityEngagementAgent(EnhancedBaseAgent):
                 "raw_government_schemes": government_schemes,
                 "raw_forum_trends": forum_trends
             },
-            "metadata": {"model": "gemini", "tools_used": list(tools.keys())}
-        }
+            metadata={"model": "gemini", "tools_used": list(tools.keys())}
+        ).to_dict()

@@ -142,11 +142,12 @@ export default function Home() {
         
         {/* Logo with Text Section */}
         <section className="logo-section-landingpage">
-          <div className="container">
+          <div className="container" style={{ textAlign: 'center' }}>
             <img
               className="logo-with-text-img-landingpage"
-              src="/logo-text.png"
+              src={document.documentElement.getAttribute('data-theme') === 'dark' ? "/dark_theme_logo-removebg-preview.png" : "/White_theme_logo-removebg-preview.png"}
               alt="FarmXpert"
+              style={{ maxWidth: '300px', height: 'auto' }}
             />
           </div>
         </section>

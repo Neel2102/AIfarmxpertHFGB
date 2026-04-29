@@ -3,6 +3,15 @@ from typing import Dict, Any, List
 import math
 from datetime import datetime
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import ProfitOptimizationTool
  
 
@@ -97,12 +106,48 @@ class ProfitOptimizationAgent(EnhancedBaseAgent):
             response = f"Profit analysis for {crop} prepared, but market prices are missing."
         else:
             response = f"Profit analysis for {crop} complete."
-
-        return {
-            "agent": self.name,
-            "success": True,
-            "response": response,
-            "data": {
+        
+        # Build structured recommendations
+        structured_recommendations: List[StructuredRecommendation] = []
+        if crop:
+            structured_recommendations.append(create_structured_recommendation(
+                action=f"Collect 2-3 mandi prices for {crop} before selling.",
+                reason="Better price discovery improves profitability",
+                timeline="before harvest",
+                priority=1,
+                category="market"
+            ))
+        else:
+            structured_recommendations.append(create_structured_recommendation(
+                action="Collect mandi prices before selling.",
+                reason="Price discovery is essential for profit maximization",
+                timeline="before harvest",
+                priority=1,
+                category="market"
+            ))
+        
+        # Add best market recommendation if available
+        if best_market:
+            structured_recommendations.append(create_structured_recommendation(
+                action=f"Sell at {best_market.get('market', 'best market')} for ₹{best_market.get('price', 0)}/unit",
+                reason=f"Highest price available. Expected profit: ₹{best_market.get('profit', 0):.2f}",
+                timeline="at harvest",
+                priority=1,
+                category="market"
+            ))
+        
+        decision = create_agent_decision(
+            summary=f"Profit analysis for {crop or 'unknown'}: {len(market_table)} markets compared. Best profit: ₹{best_market.get('profit', 0):.2f}" if best_market else f"Profit analysis for {crop or 'unknown'}: Provide market prices for complete analysis.",
+            confidence=0.8 if best_market else 0.5
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],
+            data={
                 "timestamp": datetime.now().isoformat(),
                 "query": query,
                 "crop": crop,
@@ -116,12 +161,8 @@ class ProfitOptimizationAgent(EnhancedBaseAgent):
                 "best_market": best_market,
                 "tool_profitability": tool_profitability,
             },
-            "recommendations": [
-                f"Collect 2-3 mandi prices for {crop} before selling." if crop else "Collect mandi prices before selling.",
-            ],
-            "warnings": [],
-            "metadata": {"model": "deterministic", "tools_used": list(tools.keys())},
-        }
+            metadata={"model": "deterministic", "tools_used": list(tools.keys())}
+        ).to_dict()
     
     def _calculate_current_profitability(self, crops: List[str], yields: Dict, 
                                        prices: Dict, costs: Dict, farm_size: float) -> Dict[str, Any]:

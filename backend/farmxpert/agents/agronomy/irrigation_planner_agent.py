@@ -1,6 +1,15 @@
 from __future__ import annotations
 from typing import Dict, Any, List, Optional
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import EvapotranspirationModelTool, IoTSoilMoistureTool, WeatherAPITool, IrrigationTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -130,11 +139,40 @@ Format your response as a natural conversation with the farmer.
 
             response = await gemini_service.generate_response(prompt, {"agent": self.name, "task": "irrigation_planning"})
             
-            return {
-                "agent": self.name,
-                "success": True,
-                "response": response,
-                "data": {
+            # Build structured recommendations
+            recs = self._extract_recommendations_from_data(et_data, irrigation_optimization_data)
+            structured_recommendations: List[StructuredRecommendation] = []
+            for i, rec in enumerate(recs):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=rec,
+                    reason="Based on evapotranspiration and soil moisture analysis",
+                    timeline="as per irrigation schedule",
+                    priority=i + 1,
+                    category="irrigation"
+                ))
+            
+            warns = self._extract_warnings_from_data(weather_data, sensor_analysis_data)
+            structured_warnings: List[StructuredWarning] = []
+            for warn in warns:
+                structured_warnings.append(create_structured_warning(
+                    issue=warn,
+                    severity="medium",
+                    category="irrigation"
+                ))
+            
+            decision = create_agent_decision(
+                summary=f"Irrigation plan for {crop} ({field_size_acres} acres). {len(structured_recommendations)} recommendations.",
+                details=response[:200] if len(response) > 200 else response,
+                confidence=0.8 if sensor_analysis_data else 0.65
+            )
+            
+            return StandardizedAgentOutput(
+                agent=self.name,
+                success=True,
+                decision=decision,
+                recommendations=structured_recommendations,
+                warnings=structured_warnings,
+                data={
                     "crop": crop,
                     "growth_stage": growth_stage,
                     "location": location,
@@ -144,10 +182,8 @@ Format your response as a natural conversation with the farmer.
                     "weather_data": weather_data,
                     "irrigation_optimization_data": irrigation_optimization_data
                 },
-                "recommendations": self._extract_recommendations_from_data(et_data, irrigation_optimization_data),
-                "warnings": self._extract_warnings_from_data(weather_data, sensor_analysis_data),
-                "metadata": {"model": "gemini", "tools_used": list(tools.keys())}
-            }
+                metadata={"model": "gemini", "tools_used": list(tools.keys())}
+            ).to_dict()
             
         except Exception as e:
             self.logger.error(f"Error in irrigation planner agent: {e}")
@@ -179,16 +215,39 @@ Format your response as a natural conversation with the farmer.
             "method": "sprinkler"
         })
         
-        return {
-            "agent": self.name,
-            "success": True,
-            "crop": crop,
-            "current_soil_moisture": soil_moisture,
-            "irrigation_schedule": irrigation_schedule,
-            "water_efficiency_score": 8.5,
-            "estimated_weekly_cost": 1200,
-            "metadata": {"source": "traditional"}
-        }
+        water_efficiency_score = 8.5
+        
+        # Build structured recommendations from schedule
+        structured_recommendations: List[StructuredRecommendation] = []
+        for i, schedule in enumerate(irrigation_schedule):
+            structured_recommendations.append(create_structured_recommendation(
+                action=f"Irrigate on {schedule['date']} using {schedule['method']} for {schedule['duration_hours']}h",
+                reason=f"Water requirement: {schedule['water_amount_liters']}L. Soil moisture at {soil_moisture}%",
+                timeline=schedule['date'],
+                priority=1 if i == 0 else 2,
+                category="irrigation"
+            ))
+        
+        decision = create_agent_decision(
+            summary=f"Irrigation schedule: {len(irrigation_schedule)} events planned. Water efficiency: {water_efficiency_score}/10",
+            confidence=0.7
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],
+            data={
+                "crop": crop,
+                "current_soil_moisture": soil_moisture,
+                "irrigation_schedule": irrigation_schedule,
+                "water_efficiency_score": water_efficiency_score,
+                "estimated_weekly_cost": 1200
+            },
+            metadata={"source": "traditional"}
+        ).to_dict()
     
     def _extract_crop_from_query(self, query: str) -> Optional[str]:
         """Extract mentioned crop from user query"""

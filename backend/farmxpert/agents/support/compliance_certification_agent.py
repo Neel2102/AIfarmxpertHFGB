@@ -2,6 +2,15 @@ from __future__ import annotations
 from typing import Dict, Any, List
 import json
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import ComplianceTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -63,12 +72,58 @@ class ComplianceCertificationAgent(EnhancedBaseAgent):
         Provide: compliance_status, certification_requirements, compliance_roadmap, cost_analysis, documentation_guidance, recommendations
         """
         response = await gemini_service.generate_response(prompt, {"agent": self.name, "task": "compliance_certification"})
-
-        return {
-            "agent": self.name,
-            "success": True,
-            "response": response,
-            "data": {
+        
+        # Build structured recommendations from compliance data
+        structured_recommendations: List[StructuredRecommendation] = []
+        
+        # Add requirements-based recommendations
+        if isinstance(requirements, dict):
+            for i, (req, details) in enumerate(list(requirements.items())[:3]):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=f"Fulfill requirement: {req}",
+                    reason=str(details) if isinstance(details, str) else "Certification requirement",
+                    timeline="during application process",
+                    priority=1,
+                    category="compliance"
+                ))
+        
+        # Add roadmap-based recommendations
+        if isinstance(roadmap, dict) and "steps" in roadmap:
+            steps = roadmap["steps"]
+            if isinstance(steps, list):
+                for i, step in enumerate(steps[:3]):
+                    if isinstance(step, dict):
+                        structured_recommendations.append(create_structured_recommendation(
+                            action=step.get("action", f"Step {i+1}"),
+                            reason=step.get("description", "Certification roadmap step"),
+                            timeline=step.get("timeline", "as scheduled"),
+                            priority=step.get("priority", 2),
+                            category="certification"
+                        ))
+        
+        # Add compliance status recommendation
+        compliance_score = status.get("compliance_score", 0) if isinstance(status, dict) else 0
+        structured_recommendations.append(create_structured_recommendation(
+            action=f"Address compliance gaps for {certification_type}",
+            reason=f"Current compliance: {compliance_score}%. Target: 100%",
+            timeline="before certification submission",
+            priority=1,
+            category="compliance"
+        ))
+        
+        decision = create_agent_decision(
+            summary=f"Compliance roadmap for {certification_type} certification. {len(requirements)} requirements, {compliance_score}% compliant.",
+            details=response[:200] if len(response) > 200 else response,
+            confidence=compliance_score / 100 if compliance_score > 0 else 0.6
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],
+            data={
                 "certification_type": certification_type,
                 "location": location,
                 "farm_size": farm_size,
@@ -77,5 +132,5 @@ class ComplianceCertificationAgent(EnhancedBaseAgent):
                 "raw_status": status,
                 "raw_roadmap": roadmap
             },
-            "metadata": {"model": "gemini", "tools_used": list(tools.keys())}
-        }
+            metadata={"model": "gemini", "tools_used": list(tools.keys())}
+        ).to_dict()

@@ -4,6 +4,15 @@ import math
 import json
 
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import CarbonSustainabilityTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -42,6 +51,7 @@ class CarbonSustainabilityAgent(EnhancedBaseAgent):
         inputs["additional_data"] = inputs.get("additional_data", {})
         inputs["additional_data"]["sustainability_tool_result"] = tool_data
         
+        # Call LLM handler and get standardized output
         return await self._handle_with_llm(inputs)
     
     def _calculate_carbon_footprint(self, practices: Dict, farm_size: float, 

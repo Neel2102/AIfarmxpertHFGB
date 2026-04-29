@@ -28,6 +28,7 @@ class AuthUser(Base):
     
     # Relationships - using string references to avoid circular imports
     farms = relationship("Farm", back_populates="auth_user")
+    journey_sessions = relationship("JourneySession", back_populates="user")
 
 class User(Base):
     """User model for authentication and profile management"""

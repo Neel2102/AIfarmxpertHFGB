@@ -2,6 +2,15 @@ from __future__ import annotations
 from typing import Dict, Any, List
 import math
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import FieldMappingTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -79,23 +88,43 @@ Rotation Plan: {json.dumps(rotation_plan.get('rotation_cycles', {}), indent=2)}
 Provide: map_summary, layout_plan, irrigation_overview, rotation_notes, export_links, next_steps
 """
         response = await gemini_service.generate_response(prompt, {"agent": self.name, "task": "farm_layout_mapping"})
-
-        return {
-            "agent": self.name,
-            "success": True,
-            "response": response,
-            "data": {
+        
+        # Build structured recommendations
+        layout_recs = self._generate_layout_recommendations(field_layout, crop_allocation)
+        structured_recommendations: List[StructuredRecommendation] = []
+        for i, rec in enumerate(layout_recs):
+            structured_recommendations.append(create_structured_recommendation(
+                action=rec,
+                reason="Based on field layout optimization analysis",
+                timeline="during planning phase",
+                priority=i + 1,
+                category="farm_layout"
+            ))
+        
+        efficiency_score = self._calculate_efficiency_score(field_layout, crop_allocation)
+        decision = create_agent_decision(
+            summary=f"Farm layout for {total_farm_size} acres: {len(field_layout)} fields, efficiency {efficiency_score}%",
+            details=response[:200] if len(response) > 200 else response,
+            confidence=0.8 if map_layers else 0.65
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],
+            data={
                 "total_farm_size_acres": total_farm_size,
                 "field_layout": field_layout,
                 "crop_allocation": crop_allocation,
                 "crop_rotation_plan": rotation_plan,
                 "layout_optimization": layout_optimization,
-                "mapping": {"layers": map_layers, "shape_analysis": shape_analysis, "exports": map_exports}
+                "mapping": {"layers": map_layers, "shape_analysis": shape_analysis, "exports": map_exports},
+                "efficiency_score": efficiency_score
             },
-            "efficiency_score": self._calculate_efficiency_score(field_layout, crop_allocation),
-            "recommendations": self._generate_layout_recommendations(field_layout, crop_allocation),
-            "metadata": {"model": "gemini", "tools_used": list(tools.keys())}
-        }
+            metadata={"model": "gemini", "tools_used": list(tools.keys())}
+        ).to_dict()
     
     def _generate_field_layout(self, total_size: float, soil_types: Dict, water_sources: List[str]) -> List[Dict[str, Any]]:
         """Generate optimal field layout based on farm characteristics"""

@@ -2,6 +2,15 @@ from __future__ import annotations
 from typing import Dict, Any, List
 import json
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import CropInsuranceTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -64,16 +73,37 @@ class CropInsuranceRiskAgent(EnhancedBaseAgent):
         Provide: recommended_plans, coverage_gaps, premium_summary, claim_guidance, next_steps
         """
         response = await gemini_service.generate_response(prompt, {"agent": self.name, "task": "insurance_advice"})
-
-        return {
-            "agent": self.name,
-            "success": True,
-            "response": response,
-            "data": {
+        
+        # Build structured recommendations from insurance plans
+        structured_recommendations: List[StructuredRecommendation] = []
+        plans = insurance_plans if isinstance(insurance_plans, list) else []
+        for i, plan in enumerate(plans[:3]):
+            if isinstance(plan, dict):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=f"Consider {plan.get('name', 'Insurance Plan')}",
+                    reason=f"Coverage: {plan.get('coverage', 'N/A')}. Premium: ₹{plan.get('premium', 'N/A')}",
+                    timeline="before planting season",
+                    priority=1 if i == 0 else 2,
+                    category="insurance"
+                ))
+        
+        decision = create_agent_decision(
+            summary=f"Insurance analysis for {len(crops)} crops on {farm_size} acres. {len(plans)} plans evaluated.",
+            details=response[:200] if len(response) > 200 else response,
+            confidence=0.8 if risk_assessment else 0.6
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],
+            data={
                 "risk_assessment": risk_assessment,
                 "insurance_plans": insurance_plans,
                 "premium_estimates": premium_estimates
             },
-            "metadata": {"model": "gemini", "tools_used": list(tools.keys())}
-        }
+            metadata={"model": "gemini", "tools_used": list(tools.keys())}
+        ).to_dict()
     

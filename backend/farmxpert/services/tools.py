@@ -13,6 +13,9 @@ from datetime import datetime, timedelta
 from farmxpert.config.settings import settings
 from farmxpert.services.gemini_service import gemini_service
 from farmxpert.services.providers import MandiPriceProvider, SchemesProvider, WeatherProvider
+from farmxpert.models.database import SessionLocal
+from farmxpert.models.farm_models import SoilTest
+from farmxpert.models.blynk_models import SensorReading
 
 
 _weather_provider = WeatherProvider()
@@ -201,17 +204,64 @@ class LabTestAnalyzerTool:
 
 class SoilSensorTool:
     @staticmethod
-    def get_realtime_data() -> Dict[str, Any]:
-        """Simulates fetching data from an IoT soil sensor."""
-        import random
-        return {
-            "moisture_percent": round(random.uniform(10.0, 40.0), 1),
-            "ph_level": round(random.uniform(5.5, 8.0), 1),
-            "nitrogen_mg_kg": round(random.uniform(15.0, 60.0), 1),
-            "phosphorus_mg_kg": round(random.uniform(10.0, 40.0), 1),
-            "potassium_mg_kg": round(random.uniform(20.0, 80.0), 1),
-            "temperature_c": round(random.uniform(15.0, 35.0), 1)
-        }
+    def get_realtime_data(farm_id: Optional[int] = None) -> Dict[str, Any]:
+        """Fetches latest real data from SoilTest or SensorReading tables."""
+        db = SessionLocal()
+        try:
+            # Try SensorReading first
+            query = db.query(SensorReading)
+            if farm_id:
+                query = query.filter(SensorReading.farm_id == farm_id)
+            r = query.order_by(SensorReading.recorded_at.desc()).first()
+
+            # Try SoilTest (manual sync/IoT syncs)
+            st_query = db.query(SoilTest)
+            if farm_id:
+                st_query = st_query.filter(SoilTest.farm_id == farm_id)
+            st = st_query.order_by(SoilTest.test_date.desc()).first()
+
+            latest = None
+            if r and st:
+                latest = r if r.recorded_at >= st.test_date else st
+            else:
+                latest = r or st
+
+            if latest:
+                return {
+                    "moisture_percent": float(latest.soil_moisture) if latest.soil_moisture is not None else 0.0,
+                    "ph_level": float(latest.soil_ph) if latest.soil_ph is not None else 7.0,
+                    "nitrogen_mg_kg": float(latest.nitrogen) if latest.nitrogen is not None else 45.0,
+                    "phosphorus_mg_kg": float(latest.phosphorus) if latest.phosphorus is not None else 25.0,
+                    "potassium_mg_kg": float(latest.potassium) if latest.potassium is not None else 30.0,
+                    "temperature_c": float(latest.soil_temperature) if latest.soil_temperature is not None else 25.0,
+                    "real_data": True,
+                    "source": "database"
+                }
+
+            # Final fallback to simulation if no data at all
+            import random
+            return {
+                "moisture_percent": round(random.uniform(10.0, 40.0), 1),
+                "ph_level": round(random.uniform(5.5, 8.0), 1),
+                "nitrogen_mg_kg": round(random.uniform(15.0, 60.0), 1),
+                "phosphorus_mg_kg": round(random.uniform(10.0, 40.0), 1),
+                "potassium_mg_kg": round(random.uniform(20.0, 80.0), 1),
+                "temperature_c": round(random.uniform(15.0, 35.0), 1),
+                "real_data": False,
+                "source": "simulation"
+            }
+        except Exception as e:
+            # Ensure we always return something
+            import random
+            return {
+                "error": str(e),
+                "moisture_percent": round(random.uniform(10.0, 40.0), 1),
+                "ph_level": 7.0,
+                "real_data": False,
+                "source": "error_fallback"
+            }
+        finally:
+            db.close()
 
 class WeatherTool:
     @staticmethod

@@ -1,6 +1,15 @@
 from __future__ import annotations
 from typing import Dict, Any, List, Optional
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import SatelliteImageProcessingTool, DroneImageProcessingTool, GrowthStagePredictionTool, CropTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -140,11 +149,40 @@ Format your response as a natural conversation with the farmer.
             if "429" in resp_lower or "quota" in resp_lower or "rate limit" in resp_lower:
                 return await self._handle_traditional(inputs)
             
-            return {
-                "agent": self.name,
-                "success": True,
-                "response": response,
-                "data": {
+            # Build structured response
+            structured_recommendations: List[StructuredRecommendation] = []
+            recs = self._extract_recommendations_from_data(ndvi_analysis_data, drone_analysis_data)
+            for i, rec in enumerate(recs):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=rec,
+                    reason="Based on growth monitoring analysis",
+                    timeline="as per growth stage",
+                    priority=i + 1,
+                    category="growth_monitoring"
+                ))
+            
+            structured_warnings: List[StructuredWarning] = []
+            warns = self._extract_warnings_from_data(growth_prediction_data, progression_monitoring_data)
+            for warn in warns:
+                structured_warnings.append(create_structured_warning(
+                    issue=warn,
+                    severity="medium",
+                    category="growth"
+                ))
+            
+            decision = create_agent_decision(
+                summary=f"Growth monitoring for {crop}: {growth_prediction_data.get('current_stage', {}).get('stage', 'analyzing')}",
+                details=response[:200] if len(response) > 200 else response,
+                confidence=0.8 if ndvi_analysis_data else 0.65
+            )
+            
+            return StandardizedAgentOutput(
+                agent=self.name,
+                success=True,
+                decision=decision,
+                recommendations=structured_recommendations,
+                warnings=structured_warnings,
+                data={
                     "crop": crop,
                     "location": location,
                     "planting_date": planting_date,
@@ -153,10 +191,8 @@ Format your response as a natural conversation with the farmer.
                     "growth_prediction_data": growth_prediction_data,
                     "progression_monitoring_data": progression_monitoring_data
                 },
-                "recommendations": self._extract_recommendations_from_data(ndvi_analysis_data, drone_analysis_data),
-                "warnings": self._extract_warnings_from_data(growth_prediction_data, progression_monitoring_data),
-                "metadata": {"model": "gemini", "tools_used": list(tools.keys())}
-            }
+                metadata={"model": "gemini", "tools_used": list(tools.keys())}
+            ).to_dict()
             
         except Exception as e:
             self.logger.error(f"Error in growth stage monitor agent: {e}")
@@ -174,6 +210,7 @@ Format your response as a natural conversation with the farmer.
         days_since_planting = 31  # Simplified calculation
         
         # Determine growth stage based on crop and days
+        stage_specific_recommendations = []
         if crop.lower() in ["wheat", "rice", "maize"]:
             if days_since_planting < 7:
                 stage = "germination"
@@ -189,27 +226,51 @@ Format your response as a natural conversation with the farmer.
                 stage = "maturity"
         else:
             stage = "vegetative"  # Default stage
+        
+        stage_specific_recommendations = [
+            f"Monitor for {stage}-specific pests",
+            f"Adjust irrigation for {stage} stage",
+            f"Apply {stage}-appropriate nutrients"
+        ]
             
         # Calculate expected completion percentage
         expected_days_to_maturity = 120  # Default for cereals
         completion_percentage = min((days_since_planting / expected_days_to_maturity) * 100, 100)
         
-        return {
-            "agent": self.name,
-            "success": True,
-            "crop": crop,
-            "current_stage": stage,
-            "days_since_planting": days_since_planting,
-            "completion_percentage": round(completion_percentage, 1),
-            "expected_harvest_date": "2024-05-01",
-            "next_stage_timeline": "14-21 days",
-            "stage_specific_recommendations": [
-                f"Monitor for {stage}-specific pests",
-                f"Adjust irrigation for {stage} stage",
-                f"Apply {stage}-appropriate nutrients"
-            ],
-            "metadata": {"source": "traditional"}
-        }
+        # Build structured recommendations
+        structured_recommendations: List[StructuredRecommendation] = []
+        for i, rec in enumerate(stage_specific_recommendations):
+            structured_recommendations.append(create_structured_recommendation(
+                action=rec,
+                reason=f"Recommended for {stage} stage",
+                timeline=f"During {stage} stage",
+                priority=i + 1,
+                category="growth_monitoring"
+            ))
+        
+        decision = create_agent_decision(
+            summary=f"{crop} is in {stage} stage ({completion_percentage:.0f}% complete)",
+            details=f"Days since planting: {days_since_planting}. Expected harvest: 2024-05-01",
+            confidence=0.7
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],
+            data={
+                "crop": crop,
+                "current_stage": stage,
+                "days_since_planting": days_since_planting,
+                "completion_percentage": round(completion_percentage, 1),
+                "expected_harvest_date": "2024-05-01",
+                "next_stage_timeline": "14-21 days",
+                "stage_specific_recommendations": stage_specific_recommendations
+            },
+            metadata={"source": "traditional"}
+        ).to_dict()
     
     def _extract_crop_from_query(self, query: str) -> Optional[str]:
         """Extract mentioned crop from user query"""

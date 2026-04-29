@@ -7,7 +7,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Zap, Activity, Droplets, Thermometer, Wind, Cpu, RefreshCw, AlertCircle, ArrowLeft } from 'lucide-react';
 import '../styles/Dashboard/UserSandbox.css';
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}/api`;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 

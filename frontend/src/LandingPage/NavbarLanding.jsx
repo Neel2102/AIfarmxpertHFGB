@@ -97,7 +97,11 @@ export default function NavbarLanding() {
       <div className="container1">
         <nav className="navbar-navbarlanding">
           <button className="logo-navbarlanding" onClick={() => handleNavClick("/")}>
-            <img src="/leaf.png" alt="Leaf" className="logo-icon-navbarlanding" />
+            <img 
+              src={theme === 'dark' ? "/dark_theme_logo-removebg-preview.png" : "/White_theme_logo-removebg-preview.png"} 
+              alt="FarmXpert" 
+              className="logo-icon-navbarlanding" 
+            />
             <span>FarmXpert</span>
           </button>
 

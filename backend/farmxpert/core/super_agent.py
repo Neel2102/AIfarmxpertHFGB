@@ -37,6 +37,7 @@ class SuperAgentResponse:
     agent_responses: List[AgentResponse] = field(default_factory=list)
     recommendations: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
+    insights: List[str] = field(default_factory=list)  # Added for consistency
     execution_time: float = 0.0
     session_id: Optional[str] = None
 
@@ -727,19 +728,27 @@ IMPORTANT: If a query is about a specific sub-domain like 'seeds', 'irrigation',
         """
         Execute the selected agents and collect their responses
         """
+        self.logger.info(f"Starting execution of {len(agent_names)} agents: {agent_names}")
         agent_responses = []
         
         # Execute agents in parallel for better performance
         tasks = []
         for agent_name in agent_names:
+            self.logger.debug(f"Creating task for agent: {agent_name}")
             task = asyncio.create_task(self._execute_single_agent(agent_name, query, context))
             tasks.append(task)
         
         # Wait for all agents to complete
+        self.logger.debug(f"Waiting for {len(tasks)} agent tasks to complete")
         results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        successful_count = 0
+        failed_count = 0
         
         for i, result in enumerate(results):
             if isinstance(result, Exception):
+                failed_count += 1
+                self.logger.error(f"Agent {agent_names[i]} failed with exception: {str(result)}")
                 agent_responses.append(AgentResponse(
                     agent_name=agent_names[i],
                     success=False,
@@ -747,8 +756,15 @@ IMPORTANT: If a query is about a specific sub-domain like 'seeds', 'irrigation',
                     error=str(result)
                 ))
             else:
+                if result.success:
+                    successful_count += 1
+                    self.logger.debug(f"Agent {agent_names[i]} completed successfully")
+                else:
+                    failed_count += 1
+                    self.logger.warning(f"Agent {agent_names[i]} completed with error: {result.error}")
                 agent_responses.append(result)
         
+        self.logger.info(f"Agent execution completed: {successful_count} successful, {failed_count} failed")
         return agent_responses
     
     async def _execute_single_agent(
@@ -763,20 +779,26 @@ IMPORTANT: If a query is about a specific sub-domain like 'seeds', 'irrigation',
         start_time = datetime.now()
         
         try:
-            self.logger.debug(f"Executing agent: {agent_name}")
+            self.logger.info(f"Executing agent: {agent_name}")
             
             # Handle special General Chat agent
             if agent_name == "__general_chat__":
+                self.logger.debug("Using general chat handler")
                 response_text = await self._handle_general_conversation(query, context)
                 execution_time = (datetime.now() - start_time).total_seconds()
                 return AgentResponse(
                     agent_name="__general_chat__",
                     success=True,
-                    data={"answer": response_text},
+                    data={"response": response_text, "recommendations": [], "warnings": []},
                     execution_time=execution_time
                 )
 
+            # Validate agent exists
+            if agent_name not in self.available_agents:
+                raise ValueError(f"Agent '{agent_name}' is not registered in available agents")
+
             # Create agent instance from registry
+            self.logger.debug(f"Creating agent instance: {agent_name}")
             agent = self.agent_registry.create_agent(agent_name)
             
             # Prepare inputs with tools and context
@@ -788,17 +810,37 @@ IMPORTANT: If a query is about a specific sub-domain like 'seeds', 'irrigation',
                 "session_id": context.get("session_id") if context else None
             }
             
-            self.logger.debug(
+            # Validate inputs
+            if not inputs["query"]:
+                raise ValueError("Query cannot be empty")
+            
+            self.logger.info(
                 f"Agent {agent_name} inputs prepared",
                 extra={
                     "tools_available": list(agent_tools.keys()),
-                    "context_keys": list(context.keys()) if context else []
+                    "context_keys": list(context.keys()) if context else [],
+                    "has_session_id": bool(inputs["session_id"])
                 }
             )
             
             # Execute the agent with timeout
             try:
+                self.logger.debug(f"Sending request to agent {agent_name}")
                 result = await asyncio.wait_for(agent.handle(inputs), timeout=30.0)
+                
+                # Validate agent response
+                if not isinstance(result, dict):
+                    self.logger.warning(f"Agent {agent_name} returned non-dict result: {type(result)}")
+                    result = {"response": str(result), "recommendations": [], "warnings": []}
+                
+                # Ensure required fields exist
+                if "response" not in result and "answer" not in result:
+                    result["response"] = "Agent completed but provided no response text"
+                if "recommendations" not in result:
+                    result["recommendations"] = []
+                if "warnings" not in result:
+                    result["warnings"] = []
+                    
             except asyncio.TimeoutError:
                 raise TimeoutError(f"Agent {agent_name} execution timed out after 30 seconds")
             
@@ -808,7 +850,9 @@ IMPORTANT: If a query is about a specific sub-domain like 'seeds', 'irrigation',
                 f"Agent {agent_name} executed successfully",
                 extra={
                     "execution_time": execution_time,
-                    "result_keys": list(result.keys()) if isinstance(result, dict) else "non_dict_result"
+                    "result_keys": list(result.keys()) if isinstance(result, dict) else "non_dict_result",
+                    "has_recommendations": bool(result.get("recommendations")),
+                    "has_warnings": bool(result.get("warnings"))
                 }
             )
             
@@ -827,7 +871,8 @@ IMPORTANT: If a query is about a specific sub-domain like 'seeds', 'irrigation',
                 extra={
                     "error": str(e),
                     "error_type": type(e).__name__,
-                    "execution_time": execution_time
+                    "execution_time": execution_time,
+                    "query_preview": query[:100] if query else "empty_query"
                 },
                 exc_info=True
             )
@@ -835,7 +880,7 @@ IMPORTANT: If a query is about a specific sub-domain like 'seeds', 'irrigation',
             return AgentResponse(
                 agent_name=agent_name,
                 success=False,
-                data={},
+                data={"response": f"Agent failed: {str(e)}", "recommendations": [], "warnings": []},
                 error=str(e),
                 execution_time=execution_time
             )
@@ -945,7 +990,7 @@ Response Format (JSON):
                 elif '{' in response:
                     start = response.find('{')
                     end = response.rfind('}') + 1
-                    json_str = response[start:end]
+                    json_str = response[start:end].strip()
                     return json.loads(json_str)
             except:
                 pass
@@ -991,6 +1036,10 @@ Response Format (JSON):
         if intro:
             sentences.append(intro)
         
+        # Collect all recommendations and warnings
+        all_recommendations = []
+        all_warnings = []
+        
         for r in agent_responses:
             if not (r.success and isinstance(r.data, dict)):
                 continue
@@ -1004,34 +1053,39 @@ Response Format (JSON):
                     text += '.'
                 sentences.append(text)
                 
-            # Extract specific recommendation if present
+            # Extract structured recommendations
             recs = r.data.get("recommendations", [])
-            if recs and isinstance(recs, list) and len(recs) > 0:
-                rec_text = str(recs[0]).strip()
-                # Clean up if it starts with "Recommended crop:" or similar redundant prefixes
-                lower_rec = rec_text.lower()
-                if "recommended crop:" in lower_rec:
-                    rec_text = rec_text.split(":", 1)[1].strip()
-                elif "recommendation:" in lower_rec:
-                    rec_text = rec_text.split(":", 1)[1].strip()
-                
-                if rec_text:
-                    sentences.append(f"I recommend {rec_text[0].lower() + rec_text[1:]}.")
+            if recs and isinstance(recs, list):
+                for rec in recs:
+                    if isinstance(rec, str):
+                        all_recommendations.append(rec.strip())
+                    elif isinstance(rec, dict) and "text" in rec:
+                        all_recommendations.append(rec["text"].strip())
+            
+            # Extract structured warnings
+            warns = r.data.get("warnings", [])
+            if warns and isinstance(warns, list):
+                for warn in warns:
+                    if isinstance(warn, str):
+                        all_warnings.append(warn.strip())
+                    elif isinstance(warn, dict) and "text" in warn:
+                        all_warnings.append(warn["text"].strip())
 
         if len(sentences) <= 1:
             sentences.append("I don't have enough specific details to give you a complete answer. Please share your crop type and location so I can help you better.")
             
         full_text = " ".join(sentences)
         
-        # Return structured as "answer" only, mimicking the LLM output
+        # Return standardized structured response
         return {
-            "answer": full_text,
-            "recommendations": [],
-            "warnings": [],
-            "next_steps": [],
+            "response": full_text,
+            "recommendations": all_recommendations[:5],  # Limit to top 5
+            "warnings": all_warnings[:3],  # Limit to top 3
+            "insights": [],  # Empty for now, can be enhanced later
             "meta": {
                 "agents_used": agents_used,
                 "confidence": 0.6 if agents_used else 0.4,
+                "synthesis_method": "deterministic"
             },
         }
     

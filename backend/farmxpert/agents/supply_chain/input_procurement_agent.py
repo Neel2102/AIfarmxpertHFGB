@@ -2,6 +2,15 @@ from __future__ import annotations
 from typing import Dict, Any, List
 import json
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import InputProcurementTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -66,15 +75,50 @@ class InputProcurementAgent(EnhancedBaseAgent):
         """
         response = await gemini_service.generate_response(prompt, {"agent": self.name, "task": "procurement_planning"})
         
-        return {
-            "agent": self.name,
-            "success": True,
-            "response": response,
-            "data": {
+        # Build structured recommendations from suppliers
+        structured_recommendations: List[StructuredRecommendation] = []
+        supplier_list = suppliers if isinstance(suppliers, list) else []
+        if not supplier_list and isinstance(suppliers, dict):
+            supplier_list = list(suppliers.values())
+        
+        for i, supplier in enumerate(supplier_list[:3]):
+            if isinstance(supplier, dict):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=f"Procure from {supplier.get('name', 'Supplier')}",
+                    reason=f"Location: {supplier.get('location', 'N/A')}. Rating: {supplier.get('rating', 'N/A')}",
+                    timeline=f"for {season} season",
+                    priority=1 if i == 0 else 2,
+                    category="procurement"
+                ))
+        
+        # Add budget recommendation
+        if budget_analysis and isinstance(budget_analysis, dict):
+            budget_status = budget_analysis.get('status', 'unknown')
+            structured_recommendations.append(create_structured_recommendation(
+                action=f"Budget status: {budget_status}",
+                reason=f"Total estimated cost: ₹{cost_estimates.get('total', 'N/A')}",
+                timeline="before procurement",
+                priority=1,
+                category="budget"
+            ))
+        
+        decision = create_agent_decision(
+            summary=f"Procurement plan for {len(required_inputs)} inputs. Budget: ${budget}. {len(supplier_list)} suppliers found.",
+            details=response[:200] if len(response) > 200 else response,
+            confidence=0.8 if suppliers else 0.6
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],
+            data={
                 "suppliers": suppliers,
                 "cost_estimates": cost_estimates,
                 "budget_analysis": budget_analysis
             },
-            "metadata": {"model": "gemini", "tools_used": list(tools.keys())}
-        }
+            metadata={"model": "gemini", "tools_used": list(tools.keys())}
+        ).to_dict()
     

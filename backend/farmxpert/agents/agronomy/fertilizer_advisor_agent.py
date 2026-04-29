@@ -2,6 +2,15 @@ from __future__ import annotations
 from typing import Dict, Any, List, Optional
 import json
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import FertilizerDatabaseTool, WeatherForecastTool, PlantGrowthSimulationTool, FertilizerTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -131,11 +140,42 @@ Format your response as a natural conversation with the farmer.
 
             response = await gemini_service.generate_response(prompt, {"agent": self.name, "task": "fertilizer_recommendations"})
             
-            return {
-                "agent": self.name,
-                "success": True,
-                "response": response,
-                "data": {
+            # Parse and structure recommendations
+            recs_from_data = self._extract_recommendations_from_data(fertilizer_data, cost_analysis_data)
+            structured_recommendations: List[StructuredRecommendation] = []
+            for i, rec in enumerate(recs_from_data):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=rec,
+                    reason="Based on crop growth stage, soil conditions, and weather forecast",
+                    timeline=f"Week {i+1} of growth stage" if i < 3 else "as conditions permit",
+                    priority=i + 1,
+                    category="fertilizer"
+                ))
+            
+            # Parse and structure warnings
+            warns_from_data = self._extract_warnings_from_data(weather_data, growth_simulation_data)
+            structured_warnings: List[StructuredWarning] = []
+            for warn in warns_from_data:
+                structured_warnings.append(create_structured_warning(
+                    issue=warn,
+                    severity="medium",
+                    category="weather" if "weather" in warn.lower() else "growth"
+                ))
+            
+            # Create decision
+            decision = create_agent_decision(
+                summary=f"Fertilizer plan for {crop} at {growth_stage} stage on {area_acres} acres",
+                details=response[:300] if len(response) > 300 else response,
+                confidence=0.8 if fertilizer_data else 0.6
+            )
+            
+            return StandardizedAgentOutput(
+                agent=self.name,
+                success=True,
+                decision=decision,
+                recommendations=structured_recommendations,
+                warnings=structured_warnings,
+                data={
                     "crop": crop,
                     "growth_stage": growth_stage,
                     "location": location,
@@ -143,12 +183,11 @@ Format your response as a natural conversation with the farmer.
                     "fertilizer_data": fertilizer_data,
                     "weather_data": weather_data,
                     "growth_simulation_data": growth_simulation_data,
-                    "cost_analysis_data": cost_analysis_data
+                    "cost_analysis_data": cost_analysis_data,
+                    "fertilizer_schedule": schedule if 'schedule' in locals() else []
                 },
-                "recommendations": self._extract_recommendations_from_data(fertilizer_data, cost_analysis_data),
-                "warnings": self._extract_warnings_from_data(weather_data, growth_simulation_data),
-                "metadata": {"model": "gemini", "tools_used": list(tools.keys())}
-            }
+                metadata={"model": "gemini", "tools_used": list(tools.keys())}
+            ).to_dict()
             
         except Exception as e:
             self.logger.error(f"Error in fertilizer advisor agent: {e}")
@@ -185,17 +224,42 @@ Format your response as a natural conversation with the farmer.
                 "rate_per_acre": "75 kg",
                 "method": "Foliar spray"
             })
-            
-        return {
-            "agent": self.name,
-            "success": True,
-            "crop": crop,
-            "current_stage": growth_stage,
-            "fertilizer_schedule": schedule,
-            "estimated_cost": 3500,
-            "next_application_date": "2024-02-15",
-            "metadata": {"source": "traditional"}
-        }
+        
+        # Build structured recommendations from schedule
+        structured_recommendations: List[StructuredRecommendation] = []
+        for item in schedule:
+            structured_recommendations.append(create_structured_recommendation(
+                action=f"Apply {item['fertilizer']} at {item['rate_per_acre']} using {item['method']}",
+                reason=f"Standard practice for {growth_stage} stage of {crop}",
+                timeline=f"Week {item['week']} of growth",
+                expected_benefit="Support healthy growth and yield development",
+                priority=1,
+                category="fertilizer"
+            ))
+        
+        # Create decision
+        decision = create_agent_decision(
+            summary=f"Fertilizer schedule for {crop} at {growth_stage}: {len(schedule)} applications planned",
+            details=f"Estimated cost: ₹{3500}. Next application due by 2024-02-15.",
+            confidence=0.65
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],
+            data={
+                "crop": crop,
+                "growth_stage": growth_stage,
+                "fertilizer_schedule": schedule,
+                "estimated_cost_inr": 3500,
+                "next_application_date": "2024-02-15",
+                "soil_npk": soil_npk
+            },
+            metadata={"source": "traditional", "mode": "fallback"}
+        ).to_dict()
     
     def _extract_crop_from_query(self, query: str) -> Optional[str]:
         """Extract mentioned crop from user query"""

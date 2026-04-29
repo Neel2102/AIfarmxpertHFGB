@@ -2,8 +2,18 @@ from __future__ import annotations
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import json
+import math
 
 from farmxpert.core.base_agent.enhanced_base_agent import EnhancedBaseAgent
+from farmxpert.core.base_agent.output_schema import (
+    StandardizedAgentOutput,
+    AgentDecision,
+    StructuredRecommendation,
+    StructuredWarning,
+    create_agent_decision,
+    create_structured_recommendation,
+    create_structured_warning
+)
 from farmxpert.services.tools import YieldPredictorTool
 from farmxpert.services.gemini_service import gemini_service
 
@@ -60,11 +70,47 @@ class YieldPredictorAgent(EnhancedBaseAgent):
         except Exception as e:
             response = f"Based on the tool data, your predicted yield for {crop} is {tool_data.get('predicted_yield_tons', 'unknown')} tons."
         
-        return {
-            "agent": self.name,
-            "success": True,
-            "response": response,
-            "data": {
+        # Build structured recommendations from tool data
+        structured_recommendations: List[StructuredRecommendation] = []
+        tool_recs = tool_data.get("recommendations", [])
+        if isinstance(tool_recs, list):
+            for i, rec in enumerate(tool_recs[:3]):
+                structured_recommendations.append(create_structured_recommendation(
+                    action=rec,
+                    reason="Based on yield prediction analysis",
+                    timeline="during growing season",
+                    priority=i + 1,
+                    category="yield"
+                ))
+        
+        # Add risk-based recommendations
+        risk_factors = tool_data.get("risk_factors", [])
+        if isinstance(risk_factors, list):
+            for risk in risk_factors[:2]:
+                structured_recommendations.append(create_structured_recommendation(
+                    action=f"Mitigate {risk}",
+                    reason="Risk factor identified in yield prediction",
+                    timeline="immediate",
+                    priority=1,
+                    category="risk"
+                ))
+        
+        predicted_yield = tool_data.get('predicted_yield_tons', 'unknown')
+        confidence = tool_data.get('confidence', 0.7)
+        
+        decision = create_agent_decision(
+            summary=f"Yield prediction for {crop} ({area} acres): {predicted_yield} tons expected. Confidence: {confidence:.0%}",
+            details=response[:200] if len(response) > 200 else response,
+            confidence=confidence
+        )
+        
+        return StandardizedAgentOutput(
+            agent=self.name,
+            success=True,
+            decision=decision,
+            recommendations=structured_recommendations,
+            warnings=[],
+            data={
                 "crop": crop,
                 "area": area,
                 "soil_data": soil_data,
@@ -72,9 +118,8 @@ class YieldPredictorAgent(EnhancedBaseAgent):
                 "tool_data": tool_data,
                 "parsed_response": output_data
             },
-            "recommendations": tool_data.get("recommendations", []),
-            "metadata": {"model": "gemini", "tools_used": list(self.tools.keys())}
-        }
+            metadata={"model": "gemini", "tools_used": list(self.tools.keys())}
+        ).to_dict()
     
     def _predict_crop_yield(self, crop: str, soil_data: Dict, weather: Dict, 
                            historical: List[float], field_conditions: Dict, 

@@ -1,9 +1,9 @@
 """
 FarmXpert Unified Chat API Routes
 Provides the following endpoints:
-  POST /api/chat/orchestrate  - Text chat routed to FarmOrchestrator (real AI)
+  POST /api/chat/orchestrate  - Text chat routed to SuperAgent (real AI)
   POST /api/chat/vision       - Image upload → Pest & Disease Diagnostic Agent (Gemini vision)
-  POST /api/chat/voice        - Audio upload → STT → Orchestrator → TTS → audio/mpeg response
+  POST /api/chat/voice        - Audio upload → STT → SuperAgent → TTS → audio/mpeg response
   POST /api/chat/document     - PDF/CSV/TXT upload → Gemini document analysis
 """
 
@@ -22,7 +22,6 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from farmxpert.app.orchestrator.agent import OrchestratorAgent
 from farmxpert.app.shared.utils import logger
 from farmxpert.interfaces.api.routes.auth_routes import get_current_user
 from farmxpert.models.user_models import User
@@ -49,42 +48,37 @@ def _get_gemini_model(model_name: str = "gemini-1.5-flash"):
 # ---------------------------------------------------------------------------
 
 async def _call_orchestrator(message: str, user_id: int, extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Call OrchestratorAgent and return a clean response dict."""
+    """Call SuperAgent and return a clean response dict."""
+    from farmxpert.core.super_agent import super_agent
+    
     payload: Dict[str, Any] = {
         "query": message,
-        "strategy": "auto",
-        "no_cache": True,
-        "user_id": user_id,
+        "user_id": str(user_id),
+        "context": extra or {}
     }
-    if extra:
-        payload.update(extra)
 
-    result = await OrchestratorAgent.handle_request(payload)
+    result = await super_agent.process_query(
+        query=message,
+        context=payload,
+        session_id=extra.get("session_id") if extra else None
+    )
 
     # Extract the best human-readable text from the result
-    response_text = (
-        result.get("llm_summary")
-        or result.get("message")
-        or result.get("error")
-        or "I processed your request but could not generate a summary."
-    )
+    response_text = result.natural_language or result.response.get("response", "") if result.success else str(result.response.get("answer", ""))
 
     # Build agent_responses list for the frontend chips
     agent_responses = []
-    agents_used = result.get("agents_used", [])
-    raw_results = result.get("results", {})
-    for agent_name in agents_used:
-        agent_result = raw_results.get(agent_name, {})
+    for agent_response in result.agent_responses:
         agent_responses.append({
-            "agent_name": agent_name,
-            "success": agent_result.get("success", True),
-            "summary": agent_result.get("data", {}).get("recommendation", ""),
+            "agent_name": agent_response.agent_name,
+            "success": agent_response.success,
+            "summary": agent_response.data.get("response", "")[:100] + "..." if agent_response.success else agent_response.error,
         })
 
     return {
-        "success": result.get("success", True),
+        "success": result.success,
         "response": response_text,
-        "query_type": result.get("query_type", "conversational_query"),
+        "query_type": "super_agent",
         "agent_responses": agent_responses,
         "timestamp": datetime.utcnow().isoformat(),
     }
@@ -108,8 +102,8 @@ async def chat_orchestrate(
 ):
     """
     Unified text chat endpoint (requires authentication).
-    Routes the user message to the Farm Orchestrator which selects the
-    appropriate sub-agents and returns a synthesized LLM summary.
+    Routes the user message to the SuperAgent which selects the
+    appropriate sub-agents and returns a synthesized response.
     The authenticated user_id is forwarded so chat history is user-scoped.
     """
     try:
@@ -270,7 +264,7 @@ async def chat_voice(
     """
     Voice Super Agent loop (requires authentication):
     1. Transcribe audio via Gemini STT
-    2. Route transcript to Farm Orchestrator (scoped to this user)
+    2. Route transcript to SuperAgent (scoped to this user)
     3. Convert response to speech via gTTS
     4. Return audio/mpeg blob for auto-play in the browser
     """
