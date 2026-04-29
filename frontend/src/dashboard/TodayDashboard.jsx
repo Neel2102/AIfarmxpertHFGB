@@ -5,7 +5,7 @@ import { dataService } from '../services/apiService';
 import DailyChecklist from './DailyChecklist';
 import '../styles/Dashboard/TodayDashboard.css';
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api';
 
 const TodayDashboard = () => {
   const navigate = useNavigate();
