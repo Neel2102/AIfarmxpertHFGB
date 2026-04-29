@@ -3,7 +3,7 @@ import { Zap, Activity, Droplets, Thermometer, Wind, Cpu, RefreshCw, AlertCircle
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/Dashboard/UserSandbox.css';
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api';
 
 // ── Token Usage Card ──────────────────────────────────────────────────────────
 

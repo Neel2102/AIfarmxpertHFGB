@@ -11,7 +11,7 @@ import SmartChatJourneyTracker from '../components/SmartChatJourneyTracker';
 import '../styles/Dashboard/ChatPanel.css';
 import '../styles/Dashboard/ChatPanel-reasoning.css';
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api';
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('access_token');
