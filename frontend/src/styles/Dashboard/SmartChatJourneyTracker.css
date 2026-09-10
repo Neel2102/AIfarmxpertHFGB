@@ -1,14 +1,27 @@
+/* ============================================================
+   FarmXpert — Smart Chat Journey Tracker Redesign
+   High-Tech Glassmorphic Multi-Stage Reasoning Pipeline
+   ============================================================ */
+
+@import url('./dashboardShared.css');
+
 .journey-tracker {
-  background: var(--bg-secondary, #1a1a2e);
-  border: 1px solid var(--border-color, #2a2a4a);
-  border-radius: 12px;
-  padding: 16px;
-  margin: 12px 0;
-  font-family: inherit;
+  background: var(--dash-card-bg);
+  backdrop-filter: var(--dash-backdrop-blur);
+  -webkit-backdrop-filter: var(--dash-backdrop-blur);
+  border: 1px solid var(--dash-card-border);
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin: 16px 0;
+  box-shadow: var(--dash-card-shadow);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
 }
 
 .journey-tracker.journey-complete {
-  border-color: #4CAF50;
+  border-color: var(--dash-emerald);
+  box-shadow: 0 0 25px var(--dash-glow-subtle);
 }
 
 /* Header */
@@ -16,62 +29,71 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .journey-tracker-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 14px;
-  color: var(--text-primary, #fff);
+  gap: 10px;
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--dash-text-heading);
+  letter-spacing: 0.04em;
 }
 
 .journey-tracker-icon {
-  color: #667eea;
+  color: var(--dash-emerald);
+  filter: drop-shadow(0 0 8px var(--dash-glow-medium));
 }
 
 .journey-connection-status {
-  font-size: 10px;
-  margin-left: 4px;
+  font-family: 'Orbitron', monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  margin-left: 6px;
 }
 
 .journey-connection-status.connected {
-  color: #4CAF50;
+  color: var(--dash-emerald);
 }
 
 .journey-connection-status.disconnected {
-  color: #f44336;
+  color: #ef4444;
 }
 
 .journey-tracker-progress {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
-  color: var(--text-secondary, #a0a0b0);
+  font-family: 'Orbitron', monospace;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--dash-emerald);
 }
 
 .journey-stage-count {
-  font-size: 11px;
-  opacity: 0.7;
+  font-size: 0.7rem;
+  color: var(--dash-text-muted);
 }
 
 /* Progress Bar */
 .journey-tracker-progress-bar {
   height: 6px;
-  background: var(--bg-tertiary, #2a2a4a);
-  border-radius: 3px;
+  background: var(--dash-card-bg-elevated);
+  border: 1px solid var(--dash-card-border);
+  border-radius: 999px;
   overflow: hidden;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .journey-tracker-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #667eea, #764ba2);
-  border-radius: 3px;
-  transition: width 0.5s ease;
+  background: linear-gradient(90deg, #059669, #10b981, #34d399);
+  border-radius: 999px;
+  box-shadow: 0 0 10px var(--dash-emerald);
+  transition: width 0.5s cubic-bezier(0.22, 0.68, 0.32, 1);
 }
 
 /* Stage Pipeline */
@@ -82,26 +104,28 @@
 }
 
 .journey-stage {
-  border-radius: 8px;
-  background: var(--bg-tertiary, #2a2a4a);
+  border-radius: 12px;
+  background: var(--dash-card-bg-elevated);
+  border: 1px solid var(--dash-card-border);
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
 }
 
 .journey-stage.active {
-  border: 1px solid #667eea;
-  background: rgba(102, 126, 234, 0.1);
+  border-color: var(--dash-emerald);
+  background: rgba(16, 185, 129, 0.08);
+  box-shadow: 0 0 16px var(--dash-glow-subtle);
 }
 
 .journey-stage.completed {
-  border-left: 3px solid #4CAF50;
+  border-left: 3px solid var(--dash-emerald);
 }
 
 .journey-stage-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 12px;
+  padding: 10px 14px;
   cursor: pointer;
   user-select: none;
 }
@@ -113,71 +137,71 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-secondary, #1a1a2e);
-  border: 2px solid var(--border-color, #3a3a5a);
-  color: var(--text-secondary, #a0a0b0);
-  font-size: 12px;
+  background: var(--dash-input-bg);
+  border: 1.5px solid var(--dash-card-border);
+  color: var(--dash-text-muted);
+  font-family: 'Orbitron', monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 
 .journey-stage.active .journey-stage-indicator {
-  background: #667eea;
-  border-color: #667eea;
-  color: white;
-  animation: pulse 2s infinite;
+  background: var(--dash-emerald);
+  border-color: var(--dash-emerald);
+  color: #020617;
+  box-shadow: 0 0 10px var(--dash-emerald);
+  animation: dashDotPulse 1.8s infinite ease-in-out;
 }
 
 .journey-stage.completed .journey-stage-indicator {
-  background: #4CAF50;
-  border-color: #4CAF50;
-  color: white;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+  background: rgba(16, 185, 129, 0.2);
+  border-color: var(--dash-emerald);
+  color: var(--dash-emerald);
 }
 
 .journey-stage-name {
   flex: 1;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary, #fff);
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--dash-text-heading);
 }
 
 .journey-stage-toggle {
-  color: var(--text-secondary, #a0a0b0);
+  color: var(--dash-text-muted);
 }
 
 /* Executions */
 .journey-stage-executions {
-  padding: 0 12px 12px 46px;
+  padding: 0 14px 12px 48px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .journey-execution {
-  background: var(--bg-secondary, #1a1a2e);
-  border-radius: 6px;
-  padding: 8px 10px;
+  background: var(--dash-card-bg);
+  border: 1px solid var(--dash-card-border);
+  border-radius: 8px;
+  padding: 8px 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .journey-execution:hover {
-  background: var(--bg-hover, #3a3a5a);
+  border-color: var(--dash-emerald);
+  background: rgba(16, 185, 129, 0.05);
 }
 
 .journey-execution.success {
-  border-left: 2px solid #4CAF50;
+  border-left: 2px solid var(--dash-emerald);
 }
 
 .journey-execution.running {
-  border-left: 2px solid #FF9800;
+  border-left: 2px solid #f59e0b;
 }
 
 .journey-execution.failed {
-  border-left: 2px solid #f44336;
+  border-left: 2px solid #ef4444;
 }
 
 .journey-execution-header {
@@ -187,112 +211,73 @@
 }
 
 .journey-execution-name {
-  font-size: 12px;
-  color: var(--text-primary, #fff);
-}
-
-.journey-execution-status {
-  display: flex;
-  align-items: center;
+  font-family: 'Orbitron', monospace;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--dash-text-heading);
 }
 
 .journey-execution-status.success {
-  color: #4CAF50;
+  color: var(--dash-emerald);
 }
 
 .journey-execution-status.running {
-  color: #FF9800;
+  color: #f59e0b;
 }
 
 .journey-execution-status.failed {
-  color: #f44336;
+  color: #ef4444;
 }
 
 .journey-execution-time {
-  font-size: 10px;
-  color: var(--text-secondary, #a0a0b0);
+  font-size: 0.68rem;
+  color: var(--dash-text-subtle);
   margin-top: 2px;
 }
 
-/* Execution Details */
 .journey-execution-details {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--border-color, #3a3a5a);
+  border-top: 1px solid var(--dash-card-border);
 }
 
 .journey-execution-result {
-  font-size: 11px;
-  color: var(--text-secondary, #a0a0b0);
+  font-size: 0.76rem;
+  color: var(--dash-text-muted);
 }
 
 .journey-execution-result pre {
-  background: var(--bg-tertiary, #2a2a4a);
-  padding: 8px;
-  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--dash-card-border);
   overflow-x: auto;
-  margin-top: 4px;
-  font-size: 10px;
-}
-
-.journey-execution-error {
-  font-size: 11px;
-  color: #f44336;
-  margin-top: 4px;
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: var(--dash-emerald);
 }
 
 /* Summary */
 .journey-tracker-summary {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  padding: 10px;
-  background: rgba(76, 175, 80, 0.1);
-  border-radius: 8px;
-  color: #4CAF50;
-  font-size: 13px;
-}
-
-.journey-summary-icon {
-  color: #4CAF50;
-}
-
-/* Loading */
-.journey-tracker-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 24px;
-  color: var(--text-secondary, #a0a0b0);
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 10px;
+  color: var(--dash-emerald);
+  font-family: 'Orbitron', monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .journey-tracker-spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--border-color, #3a3a5a);
-  border-top-color: #667eea;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--dash-card-border);
+  border-top-color: var(--dash-emerald);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Spinning animation for clock icon */
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-/* Responsive */
-@media (max-width: 600px) {
-  .journey-tracker {
-    padding: 12px;
-  }
-  
-  .journey-stage-executions {
-    padding-left: 38px;
-  }
+  animation: dashRadarSweep 1s linear infinite;
 }

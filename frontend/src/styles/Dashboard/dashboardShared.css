@@ -1,0 +1,220 @@
+/* ============================================================
+   FarmXpert — Dashboard Shared Glassmorphism System
+   Directly derived from Frozen Lake Tokens, Landing Page & Auth Morphism
+   Strictly Green Palette (#10b981) — Zero Generic Blues
+   Fonts: 'Orbitron', monospace (Headings/Metrics) & 'Sora', sans-serif (Body)
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Sora:wght@300;400;500;600;700&display=swap');
+@import url('../frozenLakeTokens.css');
+
+:root,
+[data-theme="light"] {
+  /* Dynamic Glassmorphic Surfaces */
+  --dash-bg: #f8fafc;
+  --dash-bg-pattern: radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.05) 0%, transparent 40%),
+                     radial-gradient(circle at 90% 80%, rgba(5, 150, 105, 0.04) 0%, transparent 40%);
+  --dash-card-bg: rgba(255, 255, 255, 0.78);
+  --dash-card-bg-elevated: rgba(255, 255, 255, 0.92);
+  --dash-card-border: rgba(0, 0, 0, 0.07);
+  --dash-card-border-hover: rgba(16, 185, 129, 0.45);
+  --dash-card-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.03);
+  --dash-card-shadow-hover: 0 20px 40px -12px rgba(16, 185, 129, 0.18), 0 8px 24px rgba(0, 0, 0, 0.06);
+
+  /* Glass Filter */
+  --dash-backdrop-blur: blur(16px) saturate(180%);
+  --dash-backdrop-blur-deep: blur(24px) saturate(200%);
+
+  /* Accent & Glows */
+  --dash-emerald: #10b981;
+  --dash-emerald-dark: #059669;
+  --dash-emerald-light: #34d399;
+  --dash-glow-subtle: rgba(16, 185, 129, 0.12);
+  --dash-glow-medium: rgba(16, 185, 129, 0.25);
+  --dash-glow-strong: rgba(16, 185, 129, 0.45);
+
+  /* Pill & Tag Badges */
+  --dash-badge-bg: rgba(16, 185, 129, 0.08);
+  --dash-badge-border: rgba(16, 185, 129, 0.25);
+  --dash-badge-text: #047857;
+
+  /* Typography Colors */
+  --dash-text-heading: #0f172a;
+  --dash-text-body: #334155;
+  --dash-text-muted: #64748b;
+  --dash-text-subtle: #94a3b8;
+
+  /* Form Elements */
+  --dash-input-bg: rgba(255, 255, 255, 0.85);
+  --dash-input-border: rgba(0, 0, 0, 0.12);
+  --dash-input-focus-border: #10b981;
+  --dash-input-focus-glow: rgba(16, 185, 129, 0.25);
+
+  /* Buttons */
+  --dash-btn-primary-bg: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  --dash-btn-primary-text: #ffffff;
+  --dash-btn-primary-shadow: 0 4px 20px rgba(16, 185, 129, 0.35);
+  --dash-btn-primary-hover-shadow: 0 8px 30px rgba(16, 185, 129, 0.55);
+
+  /* Status Colors (No Blue) */
+  --dash-status-good: #10b981;
+  --dash-status-good-bg: rgba(16, 185, 129, 0.12);
+  --dash-status-warn: #f59e0b;
+  --dash-status-warn-bg: rgba(245, 158, 11, 0.12);
+  --dash-status-crit: #ef4444;
+  --dash-status-crit-bg: rgba(239, 68, 68, 0.12);
+  --dash-status-cyan: #06b6d4;
+  --dash-status-cyan-bg: rgba(6, 182, 212, 0.12);
+}
+
+[data-theme="dark"] {
+  /* Dynamic Glassmorphic Surfaces */
+  --dash-bg: #0a0c14;
+  --dash-bg-pattern: radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.1) 0%, transparent 45%),
+                     radial-gradient(circle at 90% 80%, rgba(6, 78, 59, 0.12) 0%, transparent 45%),
+                     linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+                     linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  --dash-card-bg: rgba(18, 20, 31, 0.72);
+  --dash-card-bg-elevated: rgba(26, 29, 46, 0.85);
+  --dash-card-border: rgba(255, 255, 255, 0.08);
+  --dash-card-border-hover: rgba(16, 185, 129, 0.5);
+  --dash-card-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.5), 0 0 20px rgba(16, 185, 129, 0.05);
+  --dash-card-shadow-hover: 0 24px 60px -10px rgba(0, 0, 0, 0.7), 0 0 30px rgba(16, 185, 129, 0.28);
+
+  /* Glass Filter */
+  --dash-backdrop-blur: blur(20px) saturate(190%);
+  --dash-backdrop-blur-deep: blur(28px) saturate(220%);
+
+  /* Accent & Glows */
+  --dash-emerald: #10b981;
+  --dash-emerald-dark: #059669;
+  --dash-emerald-light: #34d399;
+  --dash-glow-subtle: rgba(16, 185, 129, 0.15);
+  --dash-glow-medium: rgba(16, 185, 129, 0.3);
+  --dash-glow-strong: rgba(16, 185, 129, 0.55);
+
+  /* Pill & Tag Badges */
+  --dash-badge-bg: rgba(16, 185, 129, 0.12);
+  --dash-badge-border: rgba(16, 185, 129, 0.35);
+  --dash-badge-text: #34d399;
+
+  /* Typography Colors */
+  --dash-text-heading: #f8fafc;
+  --dash-text-body: #cbd5e1;
+  --dash-text-muted: #94a3b8;
+  --dash-text-subtle: #64748b;
+
+  /* Form Elements */
+  --dash-input-bg: rgba(14, 16, 25, 0.75);
+  --dash-input-border: rgba(255, 255, 255, 0.10);
+  --dash-input-focus-border: #10b981;
+  --dash-input-focus-glow: rgba(16, 185, 129, 0.3);
+
+  /* Buttons */
+  --dash-btn-primary-bg: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  --dash-btn-primary-text: #020617;
+  --dash-btn-primary-shadow: 0 4px 25px rgba(16, 185, 129, 0.4);
+  --dash-btn-primary-hover-shadow: 0 8px 35px rgba(16, 185, 129, 0.65);
+
+  /* Status Colors (No Blue) */
+  --dash-status-good: #34d399;
+  --dash-status-good-bg: rgba(52, 211, 153, 0.15);
+  --dash-status-warn: #fbbf24;
+  --dash-status-warn-bg: rgba(251, 191, 36, 0.15);
+  --dash-status-crit: #f87171;
+  --dash-status-crit-bg: rgba(248, 113, 113, 0.15);
+  --dash-status-cyan: #22d3ee;
+  --dash-status-cyan-bg: rgba(34, 211, 238, 0.15);
+}
+
+/* ============================================================
+   Micro-Animations & Keyframes
+   ============================================================ */
+@keyframes dashGlowPulse {
+  0%, 100% {
+    box-shadow: 0 0 15px var(--dash-glow-subtle);
+  }
+  50% {
+    box-shadow: 0 0 30px var(--dash-glow-strong), 0 0 10px var(--dash-emerald);
+  }
+}
+
+@keyframes dashRadarSweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes dashShimmerSweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+@keyframes dashCardEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dashDotPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0.6;
+  }
+}
+
+@keyframes dashFloatSlow {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* Shared Glassmorphism Card Utility */
+.dash-glass-card {
+  background: var(--dash-card-bg);
+  backdrop-filter: var(--dash-backdrop-blur);
+  -webkit-backdrop-filter: var(--dash-backdrop-blur);
+  border: 1px solid var(--dash-card-border);
+  box-shadow: var(--dash-card-shadow);
+  transition: transform 0.3s cubic-bezier(0.22, 0.68, 0.32, 1),
+              box-shadow 0.3s cubic-bezier(0.22, 0.68, 0.32, 1),
+              border-color 0.3s cubic-bezier(0.22, 0.68, 0.32, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.dash-glass-card:hover {
+  border-color: var(--dash-card-border-hover);
+  box-shadow: var(--dash-card-shadow-hover);
+  transform: translateY(-3px);
+}
+
+.dash-glass-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  pointer-events: none;
+}
