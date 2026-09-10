@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Import the new core agent system
 from farmxpert.core.agent_routes import router as core_agent_router
-from farmxpert.core.agent_registry import get_registry
+from farmxpert.core.base_agent.agent_registry import AgentRegistry
 
 # Store startup errors for diagnostics
 _startup_error = None
