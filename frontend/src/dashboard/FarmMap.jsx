@@ -1,4 +1,26 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
+import {
+  Wheat,
+  ClipboardList,
+  Pencil,
+  Crosshair,
+  Square,
+  MapPin,
+  Trash2,
+  BarChart3,
+  Sprout,
+  Mountain,
+  Droplets,
+  Sun,
+  Ruler,
+  Rocket,
+  Save,
+  Microscope,
+  CheckCircle2,
+  Lightbulb,
+  Loader2,
+  Activity
+} from "lucide-react";
 import "../styles/Dashboard/FarmMap.css";
 
 // Leaflet is loaded from CDN in index.html
@@ -14,7 +36,7 @@ export default function FarmMap() {
   const [farmPolygon, setFarmPolygon] = useState(null);
   const [drawingEnabled, setDrawingEnabled] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
-  const [status, setStatus] = useState({ text: "No area selected", area: "Not calculated" });
+  const [status, setStatus] = useState({ text: "No area selected", area: "Not calculated", isSuccess: false });
   const [buttonsEnabled, setButtonsEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -57,6 +79,26 @@ export default function FarmMap() {
     return areaAcres.toFixed(2);
   }, []);
 
+  // Pre-fill from onboarding cached data on initial mount
+  useEffect(() => {
+    const cachedOnboarding = localStorage.getItem('farm_layout_data');
+    if (cachedOnboarding) {
+      try {
+        const parsed = JSON.parse(cachedOnboarding);
+        setFormData(prev => ({
+          ...prev,
+          soil_type: parsed.soil_type || prev.soil_type,
+          water_source: parsed.water_source || prev.water_source,
+          season: parsed.season || prev.season,
+          land_area: parsed.land_area ? String(parsed.land_area) : prev.land_area,
+          crop_preferences: parsed.crop_preferences || prev.crop_preferences
+        }));
+      } catch (err) {
+        console.warn('Could not parse farm_layout_data:', err);
+      }
+    }
+  }, []);
+
   // Initialize map
   useEffect(() => {
     if (!L || !mapRef.current || mapInstanceRef.current) return;
@@ -85,7 +127,7 @@ export default function FarmMap() {
       setFarmPolygon(polygon);
 
       const calculatedArea = calculateArea(polygon.geometry);
-      setStatus({ text: "Area selected successfully", area: `${calculatedArea} acres` });
+      setStatus({ text: "Area selected successfully", area: `${calculatedArea} acres`, isSuccess: true });
       setActiveStep(3);
       setFormData(prev => ({ ...prev, land_area: calculatedArea }));
       setButtonsEnabled(true);
@@ -127,7 +169,7 @@ export default function FarmMap() {
             const area = savedFormData.land_area || calculateArea(
               restoredPolygon.geometry || restoredPolygon
             );
-            setStatus({ text: '✅ Loaded saved farm layout', area: `${area} acres` });
+            setStatus({ text: 'Loaded saved farm layout from cloud', area: `${area} acres`, isSuccess: true });
             setActiveStep(3);
             setButtonsEnabled(true);
           }
@@ -183,7 +225,7 @@ export default function FarmMap() {
       drawnItemsRef.current.clearLayers();
     }
     setFarmPolygon(null);
-    setStatus({ text: "No area selected", area: "Not calculated" });
+    setStatus({ text: "No area selected", area: "Not calculated", isSuccess: false });
     setActiveStep(1);
     setButtonsEnabled(false);
 
@@ -237,10 +279,10 @@ export default function FarmMap() {
         throw new Error(result.detail || result.message || 'Save failed');
       }
 
-      setStatus({ text: "✅ Farm layout saved to database!", area: `${parseFloat(formData.land_area).toFixed(2)} acres` });
+      setStatus({ text: "Farm layout saved to database!", area: `${parseFloat(formData.land_area).toFixed(2)} acres`, isSuccess: true });
       setActiveStep(4);
       setTimeout(() => {
-        setStatus(prev => ({ ...prev, text: "Area selected" }));
+        setStatus(prev => ({ ...prev, text: "Area selected", isSuccess: true }));
         setSaving(false);
       }, 2500);
     } catch (err) {
@@ -282,7 +324,7 @@ export default function FarmMap() {
       warnings: cropPreferences.length === 0 ? ["No crop preferences specified"] : []
     }));
 
-    setStatus({ text: "✅ Analysis complete! Data saved.", area: `${farmData.land_area_acres} acres` });
+    setStatus({ text: "Analysis complete! Data saved locally.", area: `${farmData.land_area_acres} acres`, isSuccess: true });
     setActiveStep(4);
 
     setTimeout(() => {
@@ -305,11 +347,17 @@ export default function FarmMap() {
 
   return (
     <div className="farm-map-container">
-      <h2 className="farm-map-header">🌾 Farm Layout Designer</h2>
+      <h2 className="farm-map-header">
+        <Wheat className="w-6 h-6 text-emerald-400" />
+        Farm Layout Designer
+      </h2>
 
       {/* Info Panel */}
       <div className="farm-map-info-panel">
-        <h4 className="farm-map-info-title">📋 Quick Start Guide</h4>
+        <h4 className="farm-map-info-title">
+          <ClipboardList className="w-4 h-4 text-emerald-400" />
+          Quick Start Guide
+        </h4>
 
         <div className={`farm-map-workflow-step ${activeStep === 1 ? "step-active" : activeStep > 1 ? "step-completed" : "step-inactive"}`}>
           <div className="step-number">1</div>
@@ -332,7 +380,17 @@ export default function FarmMap() {
         </div>
 
         <div className={`farm-map-drawing-indicator ${drawingEnabled ? "drawing-active" : "drawing-inactive"}`}>
-          {drawingEnabled ? "✏️ Drawing Mode: Active - Draw your farm boundary" : "🎯 Drawing Mode: Inactive"}
+          {drawingEnabled ? (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <Pencil className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              Drawing Mode: Active - Draw farm boundary
+            </span>
+          ) : (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <Crosshair className="w-3.5 h-3.5 text-slate-400" />
+              Drawing Mode: Inactive
+            </span>
+          )}
         </div>
       </div>
 
@@ -346,33 +404,50 @@ export default function FarmMap() {
             className={`farm-map-btn ${drawingEnabled ? "btn-warning" : "btn-primary"}`}
             onClick={enableDrawing}
           >
-            {drawingEnabled ? "⏹️ Stop Drawing" : "📍 Select Area"}
+            {drawingEnabled ? (
+              <>
+                <Square className="w-4 h-4" /> Stop Drawing
+              </>
+            ) : (
+              <>
+                <MapPin className="w-4 h-4" /> Select Area
+              </>
+            )}
           </button>
           <button
             className="farm-map-btn btn-danger"
             onClick={clearDrawing}
             disabled={!buttonsEnabled}
           >
-            🗑️ Clear Drawing
+            <Trash2 className="w-4 h-4" /> Clear Drawing
           </button>
         </div>
 
         {/* Status Panel */}
-        <div className={`farm-map-status-panel ${status.text.includes("✅") ? "status-success" : ""}`}>
-          <h4 className="status-title">📊 Current Status</h4>
+        <div className={`farm-map-status-panel ${status.isSuccess ? "status-success" : ""}`}>
+          <h4 className="status-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <BarChart3 className="w-4 h-4 text-emerald-400" /> Current Status
+          </h4>
           <div className="status-content">
-            <div><strong>Status:</strong> {status.text}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {status.isSuccess ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Activity className="w-4 h-4 text-slate-400" />}
+              <strong>Status:</strong> {status.text}
+            </div>
             <div><strong>Area:</strong> {status.area}</div>
           </div>
         </div>
 
         {/* Form Section */}
         <div className="farm-map-form-section">
-          <h4 className="form-title">🌱 Farm Details</h4>
+          <h4 className="form-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Sprout className="w-5 h-5 text-emerald-400" /> Farm Details
+          </h4>
 
           <div className="form-grid">
             <div className="form-group">
-              <label htmlFor="soil_type">🏔️ Soil Type</label>
+              <label htmlFor="soil_type" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Mountain className="w-3.5 h-3.5 text-emerald-400" /> Soil Type
+              </label>
               <select
                 id="soil_type"
                 value={formData.soil_type}
@@ -381,11 +456,15 @@ export default function FarmMap() {
                 <option value="black">Black Soil</option>
                 <option value="red">Red Soil</option>
                 <option value="alluvial">Alluvial Soil</option>
+                <option value="sandy">Sandy Soil</option>
+                <option value="clay">Clay Soil</option>
               </select>
             </div>
 
             <div className="form-group">
-              <label htmlFor="water_source">💧 Water Source</label>
+              <label htmlFor="water_source" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Droplets className="w-3.5 h-3.5 text-cyan-400" /> Water Source
+              </label>
               <select
                 id="water_source"
                 value={formData.water_source}
@@ -394,24 +473,29 @@ export default function FarmMap() {
                 <option value="borewell">Borewell</option>
                 <option value="canal">Canal</option>
                 <option value="rain">Rain-fed</option>
+                <option value="drip">Drip Irrigation</option>
               </select>
             </div>
 
             <div className="form-group">
-              <label htmlFor="season">🌤️ Season</label>
+              <label htmlFor="season" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Sun className="w-3.5 h-3.5 text-amber-400" /> Season
+              </label>
               <select
                 id="season"
                 value={formData.season}
                 onChange={(e) => handleFormChange("season", e.target.value)}
               >
-                <option value="kharif">Kharif</option>
-                <option value="rabi">Rabi</option>
-                <option value="zaid">Zaid</option>
+                <option value="kharif">Kharif (Monsoon)</option>
+                <option value="rabi">Rabi (Winter)</option>
+                <option value="zaid">Zaid (Summer)</option>
               </select>
             </div>
 
             <div className="form-group">
-              <label htmlFor="land_area">📏 Land Area (acres)</label>
+              <label htmlFor="land_area" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Ruler className="w-3.5 h-3.5 text-emerald-400" /> Land Area (acres)
+              </label>
               <input
                 type="number"
                 id="land_area"
@@ -424,38 +508,59 @@ export default function FarmMap() {
           </div>
 
           <div className="form-group full-width">
-            <label htmlFor="crop_preferences">🌾 Crop Preferences (comma-separated)</label>
+            <label htmlFor="crop_preferences" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Wheat className="w-3.5 h-3.5 text-emerald-400" /> Crop Preferences (comma-separated)
+            </label>
             <input
               type="text"
               id="crop_preferences"
               value={formData.crop_preferences}
               onChange={(e) => handleFormChange("crop_preferences", e.target.value)}
-              placeholder="e.g., cotton,soybean,wheat"
+              placeholder="e.g., cotton, soybean, wheat"
             />
           </div>
         </div>
 
         {/* Action Buttons */}
         <div className="farm-map-actions">
-          <h4 className="actions-title">🚀 Next Steps</h4>
+          <h4 className="actions-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Rocket className="w-5 h-5 text-emerald-400" /> Next Steps
+          </h4>
           <div className="farm-map-button-group">
             <button
               className="farm-map-btn btn-success"
               onClick={saveFarmData}
               disabled={!buttonsEnabled || saving}
             >
-              {saving ? "💾 Saving..." : "💾 Save Farm Data"}
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" /> Save Farm Data
+                </>
+              )}
             </button>
             <button
               className="farm-map-btn btn-warning"
               onClick={analyzeFarm}
               disabled={!buttonsEnabled || analyzing}
             >
-              {analyzing ? "🔄 Analyzing..." : "🔬 Analyze & Auto-Save"}
+              {analyzing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> Analyzing...
+                </>
+              ) : (
+                <>
+                  <Microscope className="w-4 h-4" /> Analyze & Auto-Save
+                </>
+              )}
             </button>
           </div>
-          <p className="actions-tip">
-            💡 <strong>Tip:</strong> Save your work to continue later, or analyze directly to auto-save and get AI recommendations
+          <p className="actions-tip" style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+            <Lightbulb className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+            <span>Save your work to sync with cloud intelligence, or analyze directly to receive instant plot allocations.</span>
           </p>
         </div>
       </div>

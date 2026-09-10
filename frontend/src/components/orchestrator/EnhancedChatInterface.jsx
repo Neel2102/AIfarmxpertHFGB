@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Sprout, User, Bot, Zap } from 'lucide-react';
 import { useOrchestrator } from '../../contexts/OrchestratorContext';
 
 // Import orchestrator components
@@ -315,7 +316,7 @@ const EnhancedChatInterface = ({ className = '' }) => {
     <ChatContainer className={className}>
       <ChatHeader>
         <HeaderTitle>
-          <span>🌾</span> FarmXpert AI
+          <Sprout size={20} style={{ display: 'inline', marginRight: '8px', color: '#10b981' }} /> FarmXpert AI
         </HeaderTitle>
         <HeaderStatus>
           <StatusDot isConnected={isConnected} />
@@ -334,7 +335,7 @@ const EnhancedChatInterface = ({ className = '' }) => {
                 animate={{ opacity: 1, y: 0 }}
               >
                 <MessageAvatar isUser={message.type === 'user'}>
-                  {message.type === 'user' ? '👤' : '🤖'}
+                  {message.type === 'user' ? <User size={16} /> : <Bot size={16} />}
                 </MessageAvatar>
 
                 <MessageContent>
@@ -352,12 +353,14 @@ const EnhancedChatInterface = ({ className = '' }) => {
                         {/* Priority: message.agent_responses (history), then executedAgents (current session fallback) */}
                         {(message.agent_responses || []).map(r => (
                           <SmallAgentChip key={r.agent_name}>
-                            ⚡ {r.agent_name.replace(/_/g, ' ').replace('agent', '').trim()}
+                            <Zap size={10} style={{ display: 'inline', marginRight: '4px' }} />
+                            {r.agent_name.replace(/_/g, ' ').replace('agent', '').trim()}
                           </SmallAgentChip>
                         ))}
                         {(!message.agent_responses && index === messages.length - 1) && executedAgents.map(agent => (
                           <SmallAgentChip key={agent}>
-                            ⚡ {agent}
+                            <Zap size={10} style={{ display: 'inline', marginRight: '4px' }} />
+                            {agent}
                           </SmallAgentChip>
                         ))}
                       </ConsultedAgentsChip>

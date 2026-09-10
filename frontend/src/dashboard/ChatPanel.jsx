@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { 
   BarChart3, Droplets, ThermometerSun, FlaskConical, Sprout, 
   Calendar, Circle, Bug, Cloud, TrendingUp, Clock, Truck, 
-  MapPin, Camera, Mic, MicOff, Paperclip, X, Check, Map
+  MapPin, Camera, Mic, MicOff, Paperclip, X, Check, Map,
+  Sparkles, Users, ChevronDown, Rocket, Bot
 } from 'lucide-react';
 import { useOrchestrator } from '../contexts/OrchestratorContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -293,9 +294,9 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
     if (isLoading) return;
 
     let userContent = text;
-    if (hasImage) userContent = `[📷 Image: ${attachedImage.file.name}] ${text}`;
-    if (hasFile) userContent = `[📎 ${attachedFile.file.name}] ${text}`;
-    if (hasAudio) userContent = `[🎤 Voice message] ${text}`;
+    if (hasImage) userContent = `[Image: ${attachedImage.file.name}] ${text}`;
+    if (hasFile) userContent = `[Attachment: ${attachedFile.file.name}] ${text}`;
+    if (hasAudio) userContent = `[Voice message] ${text}`;
 
     const userMessage = { id: Date.now(), type: 'user', content: userContent, timestamp: new Date().toISOString() };
     setMessages((prev) => [...prev, userMessage]);
@@ -405,8 +406,8 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
     } catch (e) {
       console.error('Chat error:', e);
       let errorMessage = e.message || 'Could not connect to AI. Ensure backend is running.';
-      if (e.message?.includes('429')) errorMessage = "Experiencing heavy traffic (API rate limit). Please wait a moment and try your query again. 🌱";
-      if (e.message?.includes('500') || e.message?.includes('503')) errorMessage = "The farm orchestrator is currently unavailable. We're working on getting it back online! 🚜";
+      if (e.message?.includes('429')) errorMessage = "Experiencing heavy traffic (API rate limit). Please wait a moment and try your query again.";
+      if (e.message?.includes('500') || e.message?.includes('503')) errorMessage = "The farm orchestrator is currently unavailable. We're working on getting it back online!";
 
       setMessages((prev) => prev.map(msg =>
         msg.id === assistantMessageId
@@ -463,7 +464,7 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
     setMessages((prev) => [...prev, {
       id: Date.now(),
       type: 'system',
-      content: `✅ Smart Journey Complete! All 7 stages processed. Your farming plan is ready.`,
+      content: `Smart Journey Complete! All 7 stages processed. Your farming plan is ready.`,
       timestamp: new Date().toISOString()
     }]);
   };
@@ -511,7 +512,7 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
       {/* ── Main Chat Area ── */}
       <main className="farm-chat-main">
         <header className="farm-chat-header">
-          <h2><span>🚜</span> Farm Orchestrator</h2>
+          <h2><Bot size={22} className="chat-header-icon" /> Farm Orchestrator</h2>
         </header>
 
         <div className="farm-messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
@@ -523,11 +524,11 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
                 <div className="farm-welcome-inner">
                   <div className="farm-welcome-icon-wrapper">
                     <div className="farm-welcome-icon-bg" />
-                    <img 
-                      src={theme === 'dark' ? "/dark_theme_logo-removebg-preview.png" : "/White_theme_logo-removebg-preview.png"} 
-                      alt="FarmXpert AI" 
-                      className="farm-welcome-bot" 
-                      style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '12px', padding: '12px' }} 
+                    <dotlottie-player 
+                      src="/animations/Re fork farmer.lottie" 
+                      autoplay 
+                      loop 
+                      style={{ width: '130px', height: '130px' }} 
                     />
                   </div>
                   <h1 className="farm-welcome-title">Welcome to FarmXpert AI</h1>
@@ -554,10 +555,10 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
                       <span>Market Intel</span>
                     </div>
                     <div className="farm-feature-item" onClick={startSmartJourney} style={{ cursor: 'pointer' }}>
-                      <div className="feature-icon-box" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-                        <Map size={18} />
+                      <div className="feature-icon-box" style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}>
+                        <Rocket size={18} />
                       </div>
-                      <span>🚀 Smart Journey</span>
+                      <span>Smart Journey</span>
                     </div>
                   </div>
 
@@ -602,7 +603,7 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
                       {m.audioUrl && !m.isStreaming && (
                         <div className="farm-audio-block">
                           <audio controls autoPlay src={m.audioUrl} className="farm-audio-player" />
-                          {m.transcript && <div className="farm-audio-transcript">🎤 Heard: "{m.transcript}"</div>}
+                          {m.transcript && <div className="farm-audio-transcript"><Mic size={14} style={{ display: 'inline', marginRight: '6px' }} /> Heard: "{m.transcript}"</div>}
                         </div>
                       )}
 
@@ -636,7 +637,19 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
             {/* Agent Drawer Controls */}
             <div className="farm-agent-selector">
               <button className={`farm-agent-toggle ${selectedAgents.length > 0 ? 'active' : ''}`} onClick={() => setShowAgentDrawer(!showAgentDrawer)}>
-                {selectedAgents.length === 0 ? '✨ Auto-Route (SuperAgent) ▼' : `👥 ${selectedAgents.length} Agent(s) Selected ▼`}
+                {selectedAgents.length === 0 ? (
+                  <>
+                    <Sparkles size={13} className="agent-toggle-icon" />
+                    <span>Auto-Route (SuperAgent)</span>
+                    <ChevronDown size={13} className={`agent-chevron ${showAgentDrawer ? 'open' : ''}`} />
+                  </>
+                ) : (
+                  <>
+                    <Users size={13} className="agent-toggle-icon" />
+                    <span>{selectedAgents.length} Agent(s) Selected</span>
+                    <ChevronDown size={13} className={`agent-chevron ${showAgentDrawer ? 'open' : ''}`} />
+                  </>
+                )}
               </button>
             </div>
             

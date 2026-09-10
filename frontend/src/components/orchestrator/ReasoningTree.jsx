@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  FlaskConical, CloudSun, TrendingUp, Sprout, Wheat, Pill, Droplets,
+  Bug, BarChart3, DollarSign, Calendar, Truck, Map, Package, Shield,
+  User, ClipboardList, Users, Bot, Lightbulb, AlertTriangle, Search, FileText
+} from 'lucide-react';
 
 const TreeContainer = styled.div`
   margin: 1rem 0;
@@ -182,27 +187,27 @@ const ReasoningTree = ({
 
   const getAgentIcon = (agentName) => {
     const iconMap = {
-      'soil_health_agent': '🧪',
-      'weather_watcher_agent': '🌦️',
-      'market_intelligence_agent': '💹',
-      'crop_selector_agent': '🌱',
-      'seed_selection_agent': '🌾',
-      'fertilizer_advisor_agent': '💊',
-      'irrigation_planner_agent': '💧',
-      'pest_disease_diagnostic_agent': '🐛',
-      'yield_predictor_agent': '📊',
-      'profit_optimization_agent': '💰',
-      'task_scheduler_agent': '📅',
-      'machinery_equipment_agent': '🚜',
-      'farm_layout_mapping_agent': '🗺️',
-      'logistics_storage_agent': '📦',
-      'crop_insurance_risk_agent': '🛡️',
-      'farmer_coach_agent': '👨‍🌾',
-      'compliance_certification_agent': '📋',
-      'community_engagement_agent': '👥'
+      'soil_health_agent': <FlaskConical size={16} />,
+      'weather_watcher_agent': <CloudSun size={16} />,
+      'market_intelligence_agent': <TrendingUp size={16} />,
+      'crop_selector_agent': <Sprout size={16} />,
+      'seed_selection_agent': <Wheat size={16} />,
+      'fertilizer_advisor_agent': <Pill size={16} />,
+      'irrigation_planner_agent': <Droplets size={16} />,
+      'pest_disease_diagnostic_agent': <Bug size={16} />,
+      'yield_predictor_agent': <BarChart3 size={16} />,
+      'profit_optimization_agent': <DollarSign size={16} />,
+      'task_scheduler_agent': <Calendar size={16} />,
+      'machinery_equipment_agent': <Truck size={16} />,
+      'farm_layout_mapping_agent': <Map size={16} />,
+      'logistics_storage_agent': <Package size={16} />,
+      'crop_insurance_risk_agent': <Shield size={16} />,
+      'farmer_coach_agent': <User size={16} />,
+      'compliance_certification_agent': <ClipboardList size={16} />,
+      'community_engagement_agent': <Users size={16} />
     };
     
-    return iconMap[agentName] || '🤖';
+    return iconMap[agentName] || <Bot size={16} />;
   };
 
   const getAgentDisplayName = (agentName) => {
@@ -242,8 +247,8 @@ const ReasoningTree = ({
       >
         {output.recommendations && output.recommendations.length > 0 && (
           <ContentSection>
-            <SectionTitle>
-              💡 Recommendations
+            <SectionTitle style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Lightbulb size={15} color="#f59e0b" /> Recommendations
             </SectionTitle>
             <RecommendationList>
               {output.recommendations.map((rec, index) => (
@@ -255,8 +260,8 @@ const ReasoningTree = ({
 
         {output.warnings && output.warnings.length > 0 && (
           <ContentSection>
-            <SectionTitle>
-              ⚠️ Warnings
+            <SectionTitle style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <AlertTriangle size={15} color="#ef4444" /> Warnings
             </SectionTitle>
             <WarningList>
               {output.warnings.map((warning, index) => (
@@ -268,8 +273,8 @@ const ReasoningTree = ({
 
         {output.insights && output.insights.length > 0 && (
           <ContentSection>
-            <SectionTitle>
-              🔍 Insights
+            <SectionTitle style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Search size={15} color="#06b6d4" /> Insights
             </SectionTitle>
             <SectionContent>
               {output.insights.map((insight, index) => (
@@ -281,8 +286,8 @@ const ReasoningTree = ({
 
         {output.summary && (
           <ContentSection>
-            <SectionTitle>
-              📋 Summary
+            <SectionTitle style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FileText size={15} color="#10b981" /> Summary
             </SectionTitle>
             <SectionContent>{output.summary}</SectionContent>
           </ContentSection>

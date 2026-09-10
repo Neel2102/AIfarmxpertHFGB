@@ -427,6 +427,125 @@
   box-shadow: 0 0 12px var(--dash-glow-subtle);
 }
 
+.agent-chevron {
+  transition: transform 0.2s ease;
+}
+
+.agent-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Agent Drawer */
+.farm-agent-drawer {
+  background: var(--dash-card-bg-elevated);
+  backdrop-filter: var(--dash-backdrop-blur-deep);
+  -webkit-backdrop-filter: var(--dash-backdrop-blur-deep);
+  border: 1px solid var(--dash-card-border);
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: var(--dash-card-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: dashCardEntrance 0.2s ease-out;
+}
+
+.farm-agent-drawer-header span {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--dash-emerald);
+}
+
+.farm-agent-pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.farm-agent-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--dash-card-border);
+  background: var(--dash-card-bg);
+  color: var(--dash-text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.farm-agent-pill:hover {
+  border-color: var(--dash-emerald);
+  color: var(--dash-text-heading);
+}
+
+.farm-agent-pill.selected {
+  border-color: var(--dash-emerald);
+  background: rgba(16, 185, 129, 0.16);
+  color: var(--dash-emerald);
+  box-shadow: 0 0 10px var(--dash-glow-subtle);
+}
+
+/* Attachments Preview */
+.farm-input-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 2px 10px 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 6px;
+}
+
+.farm-attachment-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--dash-text-heading);
+  font-size: 0.78rem;
+  max-width: 240px;
+}
+
+.farm-attachment-pill img {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.farm-attachment-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.farm-attachment-close {
+  background: transparent;
+  border: none;
+  color: var(--dash-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: all 0.15s ease;
+}
+
+.farm-attachment-close:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
+
 /* Input Box */
 .farm-input-box {
   background: var(--dash-card-bg-elevated);

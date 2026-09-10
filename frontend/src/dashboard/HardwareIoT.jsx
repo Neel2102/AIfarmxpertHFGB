@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Cpu, Wifi, AlertCircle, Loader2, Trash2 } from "lucide-react";
+import { Cpu, Wifi, AlertCircle, Loader2, Trash2, ThermometerSun, Droplets, FlaskConical, BarChart3 } from "lucide-react";
 import "../styles/Dashboard/HardwareIoT.css";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -347,10 +347,10 @@ export default function HardwareIoT() {
           <div className="blynk-features">
             <span className="blynk-features-title">What you'll get:</span>
             <div className="blynk-features-grid">
-              <span>🌡️ Air temp & humidity</span>
-              <span>💧 Soil moisture</span>
-              <span>🧪 pH, EC, NPK</span>
-              <span>📊 Historical trends</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><ThermometerSun size={15} color="#10b981" /> Air temp & humidity</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Droplets size={15} color="#06b6d4" /> Soil moisture</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><FlaskConical size={15} color="#a855f7" /> pH, EC, NPK</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><BarChart3 size={15} color="#f59e0b" /> Historical trends</span>
             </div>
           </div>
         </div>

@@ -17,7 +17,7 @@ const Register = () => {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { register } = useAuth();
+  const { register, login } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -66,10 +66,19 @@ const Register = () => {
       });
 
       if (result.success) {
-        setSuccess('Registration successful! Please sign in.');
+        setSuccess('Registration successful! Setting up your farm...');
+        try {
+          const loginRes = await login(formData.username, formData.password);
+          if (loginRes?.success) {
+            navigate('/onboarding');
+            return;
+          }
+        } catch (loginErr) {
+          console.warn('Auto-login failed after registration:', loginErr);
+        }
         setTimeout(() => {
           navigate('/login');
-        }, 2000);
+        }, 1500);
       } else {
         setError(result.error || 'Registration failed');
       }

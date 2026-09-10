@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Bot } from 'lucide-react';
 import '../styles/Dashboard/AgentDetails.css';
 
 const AGENT_INFO = {
@@ -175,7 +176,7 @@ const AgentDetails = ({ agent }) => {
         </div>
         <div className={`content-AgentDetail ${hasLongContent ? 'always-visible-scroll-AgentDetail' : ''}`}>
           <div className="info-AgentDetail">
-            <div className="avatar-large-AgentDetail">🤖</div>
+            <div className="avatar-large-AgentDetail"><Bot size={36} color="#10b981" /></div>
             <h4>{info.name}</h4>
             <p>{info.description}</p>
           </div>

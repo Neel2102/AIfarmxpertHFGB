@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  FlaskConical, CloudSun, TrendingUp, Sprout, Wheat, Pill, Droplets,
+  Bug, BarChart3, DollarSign, Calendar, Truck, Map, Package, Shield,
+  User, ClipboardList, Users, Bot, RefreshCw, Zap, Check, X
+} from 'lucide-react';
 
 const WorkflowContainer = styled.div`
   margin: 2rem 0;
@@ -209,27 +214,27 @@ const WorkflowVisualizer = ({
 
   const getStepIcon = (agentName) => {
     const iconMap = {
-      'soil_health_agent': '🧪',
-      'weather_watcher_agent': '🌦️',
-      'market_intelligence_agent': '💹',
-      'crop_selector_agent': '🌱',
-      'seed_selection_agent': '🌾',
-      'fertilizer_advisor_agent': '💊',
-      'irrigation_planner_agent': '💧',
-      'pest_disease_diagnostic_agent': '🐛',
-      'yield_predictor_agent': '📊',
-      'profit_optimization_agent': '💰',
-      'task_scheduler_agent': '📅',
-      'machinery_equipment_agent': '🚜',
-      'farm_layout_mapping_agent': '🗺️',
-      'logistics_storage_agent': '📦',
-      'crop_insurance_risk_agent': '🛡️',
-      'farmer_coach_agent': '👨‍🌾',
-      'compliance_certification_agent': '📋',
-      'community_engagement_agent': '👥'
+      'soil_health_agent': <FlaskConical size={18} />,
+      'weather_watcher_agent': <CloudSun size={18} />,
+      'market_intelligence_agent': <TrendingUp size={18} />,
+      'crop_selector_agent': <Sprout size={18} />,
+      'seed_selection_agent': <Wheat size={18} />,
+      'fertilizer_advisor_agent': <Pill size={18} />,
+      'irrigation_planner_agent': <Droplets size={18} />,
+      'pest_disease_diagnostic_agent': <Bug size={18} />,
+      'yield_predictor_agent': <BarChart3 size={18} />,
+      'profit_optimization_agent': <DollarSign size={18} />,
+      'task_scheduler_agent': <Calendar size={18} />,
+      'machinery_equipment_agent': <Truck size={18} />,
+      'farm_layout_mapping_agent': <Map size={18} />,
+      'logistics_storage_agent': <Package size={18} />,
+      'crop_insurance_risk_agent': <Shield size={18} />,
+      'farmer_coach_agent': <User size={18} />,
+      'compliance_certification_agent': <ClipboardList size={18} />,
+      'community_engagement_agent': <Users size={18} />
     };
     
-    return iconMap[agentName] || '🤖';
+    return iconMap[agentName] || <Bot size={18} />;
   };
 
   const getStepTitle = (agentName) => {
@@ -306,8 +311,9 @@ const WorkflowVisualizer = ({
     <WorkflowContainer className={className}>
       <WorkflowHeader>
         <HeaderTitle>
-          🔄 Workflow Progress
-          {isActive && <span style={{ fontSize: '1rem' }}>⚡</span>}
+          <RefreshCw size={18} style={{ display: 'inline', marginRight: '8px' }} />
+          Workflow Progress
+          {isActive && <Zap size={16} style={{ display: 'inline', marginLeft: '6px', color: '#f59e0b' }} />}
         </HeaderTitle>
         
         <ProgressIndicator>
@@ -339,9 +345,9 @@ const WorkflowVisualizer = ({
               style={{ cursor: onStepClick ? 'pointer' : 'default' }}
             >
               <StepNumber status={task.status || 'pending'}>
-                {task.status === 'completed' ? '✓' : 
-                 task.status === 'running' ? '⟳' : 
-                 task.status === 'failed' ? '✗' : 
+                {task.status === 'completed' ? <Check size={14} /> : 
+                 task.status === 'running' ? <RefreshCw size={14} className="animate-spin" /> : 
+                 task.status === 'failed' ? <X size={14} /> : 
                  index + 1}
               </StepNumber>
               

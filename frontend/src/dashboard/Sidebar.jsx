@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, MessageSquare, Map, Mic, Users, Cpu, Settings,
-  History, Plus, Trash2
+  History, Plus, Trash2, ChevronLeft
 } from 'lucide-react';
 import { useOrchestrator } from '../contexts/OrchestratorContext';
 import apiService from '../services/api';
@@ -215,11 +215,9 @@ const Sidebar = ({ onLogout }) => {
               </div>
             </div>
 
-            {isMobile && (
-              <button className="close-btn-sidebar" onClick={closeSidebar}>
-                <span className="close-icon-sidebar">×</span>
-              </button>
-            )}
+            <button className="close-btn-sidebar" onClick={closeSidebar} title="Collapse Sidebar">
+              <ChevronLeft size={16} />
+            </button>
           </div>
 
           <div className="theme-toggle-container-sidebar">
@@ -507,6 +505,20 @@ const Sidebar = ({ onLogout }) => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          <div className="sidebar-animation-card">
+            <video
+              src="/animations/gardener-digging-ground-animation-gif-download-14008527.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="sidebar-gardener-video"
+            />
+            <div className="sidebar-animation-caption">
+              <span>Autonomous Cultivation</span>
             </div>
           </div>
 

@@ -82,27 +82,6 @@ const Profile = () => {
     setActiveTab('profile');
   };
 
-  // Inject heading into header-left
-  useEffect(() => {
-    const headerLeft = document.querySelector('.header-left');
-    if (headerLeft) {
-      headerLeft.innerHTML = `
-        <div className="page-header">
-          <h1 className="page-title">Settings</h1>
-          <p className="page-subtitle">Manage your profile information and account settings</p>
-        </div>
-      `;
-    }
-
-    return () => {
-      // Cleanup on unmount
-      const headerLeft = document.querySelector('.header-left');
-      if (headerLeft) {
-        headerLeft.innerHTML = '';
-      }
-    };
-  }, []);
-
   const handleInputChange = (field, value) => {
     setEditData(prev => ({
       ...prev,
@@ -325,6 +304,11 @@ const Profile = () => {
   return (
     <div className="container-profile">
       <div className="wrapper-profile">
+        <div className="page-header">
+          <h1 className="page-title">Farmer Profile & Settings</h1>
+          <p className="page-subtitle">Manage your credentials, farm identity, and security configuration</p>
+        </div>
+
         <div className="card-profile">
           <div className="tab-navigation">
             {tabs.map((tab) => {

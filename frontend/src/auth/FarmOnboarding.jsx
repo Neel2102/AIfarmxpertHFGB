@@ -227,10 +227,36 @@ const FarmOnboarding = () => {
       const result = await completeOnboarding(formData);
       
       if (result.success) {
+        // Map and persist farm layout parameters for the Farm Layout / Farm Map dashboard
+        const farmLayoutData = {
+          soil_type: formData.soilType ? formData.soilType.toLowerCase() : 'black',
+          water_source: formData.irrigationMethod ? formData.irrigationMethod.toLowerCase() : 'borewell',
+          season: 'kharif',
+          land_area: formData.farmSize ? String(formData.farmSize) : '5.0',
+          crop_preferences: formData.specificCrop || formData.mainCropCategory || 'cotton,soybean'
+        };
+        localStorage.setItem('farm_layout_data', JSON.stringify(farmLayoutData));
+
+        const token = localStorage.getItem('access_token');
+        if (token) {
+          try {
+            await fetch(`${API_BASE_URL}/auth/farm-layout`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ form_data: farmLayoutData })
+            });
+          } catch (e) {
+            console.warn('Could not sync farm layout to backend:', e);
+          }
+        }
+
         if ((user?.role || '').toLowerCase() === 'admin') {
           navigate('/admin');
         } else {
-          navigate('/dashboard');
+          navigate('/dashboard/farm-map');
         }
       } else {
         setError(result.error || 'Failed to complete onboarding');

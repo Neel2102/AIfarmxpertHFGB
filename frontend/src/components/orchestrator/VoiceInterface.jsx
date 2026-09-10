@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Square, Mic, Volume2, FileText, AlertTriangle } from 'lucide-react';
 
 const VoiceContainer = styled.div`
   display: flex;
@@ -422,7 +423,7 @@ const VoiceInterface = ({
           whileTap={{ scale: 0.95 }}
           title={isRecording ? 'Stop Recording' : 'Start Recording'}
         >
-          {isRecording ? '⏹️' : '🎤'}
+          {isRecording ? <Square size={16} /> : <Mic size={16} />}
         </VoiceButton>
         
         <VoiceButton
@@ -433,7 +434,7 @@ const VoiceInterface = ({
           whileTap={{ scale: 0.95 }}
           title={isPlaying ? 'Stop Speaking' : 'Speak Response'}
         >
-          {isPlaying ? '⏹️' : '🔊'}
+          {isPlaying ? <Square size={16} /> : <Volume2 size={16} />}
         </VoiceButton>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -465,8 +466,8 @@ const VoiceInterface = ({
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <span style={{ fontSize: '1.25rem' }}>
-              {isRecording ? '🎤' : '📝'}
+            <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+              {isRecording ? <Mic size={18} /> : <FileText size={18} />}
             </span>
             <VoiceText isRecording={isRecording}>
               {transcript || (isRecording ? 'Listening...' : '')}
@@ -483,9 +484,13 @@ const VoiceInterface = ({
           padding: '1rem',
           background: '#fef2f2',
           borderRadius: '8px',
-          border: '1px solid #fecaca'
+          border: '1px solid #fecaca',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px'
         }}>
-          ⚠️ Speech recognition is not supported in this browser
+          <AlertTriangle size={16} /> Speech recognition is not supported in this browser
         </div>
       )}
       
@@ -497,9 +502,13 @@ const VoiceInterface = ({
           padding: '1rem',
           background: '#fffbeb',
           borderRadius: '8px',
-          border: '1px solid #fed7aa'
+          border: '1px solid #fed7aa',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px'
         }}>
-          ⚠️ Speech synthesis is not supported in this browser
+          <AlertTriangle size={16} /> Speech synthesis is not supported in this browser
         </div>
       )}
     </VoiceContainer>
