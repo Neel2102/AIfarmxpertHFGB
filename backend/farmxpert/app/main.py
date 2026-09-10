@@ -22,9 +22,7 @@ _db_status = "initializing"
 from farmxpert.interfaces.api.routes import health_routes, farm_routes, auth_routes, agent_info_routes, agent_routes
 from farmxpert.interfaces.api.routes import super_agent
 from farmxpert.interfaces.api.routes import llm_usage_routes, blynk_routes, soil_routes, iot_routes, admin_routes
-from farmxpert.interfaces.api.routes import chat_routes, market_routes, task_routes, journey_routes
-from farmxpert.interfaces.api.routes.journey_graph_routes import router as journey_graph_router
-from farmxpert.interfaces.api.routes.admin_dashboard_routes import router as admin_dashboard_router
+from farmxpert.interfaces.api.routes import chat_routes, market_routes, task_routes
 from farmxpert.interfaces.api.middleware.logging_middleware import RequestLoggingMiddleware
 import farmxpert.models.user_models  # noqa: F401
 import farmxpert.models.farm_models  # noqa: F401
@@ -71,10 +69,7 @@ app.include_router(admin_routes.router, prefix="/api")
 app.include_router(chat_routes.router, prefix="/api")
 app.include_router(market_routes.router, prefix="/api")
 app.include_router(task_routes.router, prefix="/api")
-app.include_router(journey_routes.router, prefix="/api")
-app.include_router(journey_graph_router, prefix="/api")
 app.include_router(voice_router, prefix="/api")
-app.include_router(admin_dashboard_router, prefix="/api")
 
 
 @app.on_event("startup")
