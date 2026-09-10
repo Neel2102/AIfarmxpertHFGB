@@ -16,9 +16,11 @@ class GeminiService:
         self._cache = {}  # Fallback in-memory cache
         self._cache_ttl = 300  # 5 minutes TTL
         self._rate_limit_window_seconds = 60
-        self._rate_limit_max_requests = 20
+        self._rate_limit_max_requests = 120
         self._request_timestamps: List[float] = []
         self._rate_limit_lock = asyncio.Lock()
+        self._candidate_models: List[str] = []
+        self.current_model_name: str = "gemini-2.5-flash"
         self._usage_events: List[Dict[str, Any]] = []
         self._usage_events_max = 500
         self._usage_lock = asyncio.Lock()
@@ -98,29 +100,42 @@ class GeminiService:
             
             genai.configure(api_key=settings.gemini_api_key)
             
-            # Try the configured model first, then fallback models
-            fallback_models = [
-                settings.gemini_model,
+            preferred_model = getattr(settings, "gemini_model", None) or "gemini-2.5-flash"
+            self._candidate_models = [
+                preferred_model,
+                "gemini-2.5-flash",
                 "gemini-flash-latest",
+                "gemini-3.5-flash-lite",
+                "gemini-3.5-flash",
+                "gemini-2.5-pro",
                 "gemini-pro-latest",
-                "gemini-pro"
             ]
+            seen = set()
+            self._candidate_models = [m for m in self._candidate_models if m and not (m in seen or seen.add(m))]
             
-            for model_name in fallback_models:
-                try:
-                    self.model = genai.GenerativeModel(model_name)
-                    self.logger.info(f"Gemini API initialized successfully with model: {model_name}")
-                    return
-                except Exception as model_error:
-                    self.logger.warning(f"Failed to initialize with model {model_name}: {model_error}")
-                    continue
-            
-            # If all models fail
-            self.logger.error("Failed to initialize with any available model")
-            self.model = None
+            self.current_model_name = self._candidate_models[0]
+            self.model = genai.GenerativeModel(self.current_model_name)
+            self.logger.info(f"Gemini API initialized successfully with model: {self.current_model_name}")
             
         except Exception as e:
             self.logger.error(f"Failed to initialize Gemini API: {e}")
+            self.model = None
+
+    def _rotate_to_next_model(self) -> Optional[str]:
+        """Switch self.model to the next candidate model if current one fails (e.g. 404/deprecated)"""
+        try:
+            if not hasattr(self, "_candidate_models") or not self._candidate_models:
+                return None
+            current_idx = self._candidate_models.index(self.current_model_name) if self.current_model_name in self._candidate_models else -1
+            if current_idx + 1 < len(self._candidate_models):
+                next_model = self._candidate_models[current_idx + 1]
+                self.current_model_name = next_model
+                self.model = genai.GenerativeModel(next_model)
+                self.logger.info(f"Rotated Gemini model to fallback candidate: {next_model}")
+                return next_model
+        except Exception as err:
+            self.logger.warning(f"Error rotating Gemini model: {err}")
+        return None
     
     async def generate_response(self, prompt: str, context: Dict[str, Any] = None) -> str:
         """Generate response using Gemini API (non-streaming for backward compatibility)"""
@@ -194,8 +209,17 @@ class GeminiService:
 
             except Exception as e:
                 msg = str(e)
-                if "quota exceeded" in msg.lower() or "free_tier_requests" in msg.lower():
-                    self.logger.warning(f"Gemini quota exceeded: {e}")
+                if "404" in msg.lower() or "no longer available" in msg.lower() or "not found" in msg.lower() or "deprecated" in msg.lower():
+                    self.logger.warning(f"Gemini model {self.current_model_name} unavailable ({msg}). Rotating to next candidate.")
+                    next_m = self._rotate_to_next_model()
+                    if next_m:
+                        continue
+
+                if "quota exceeded" in msg.lower() or "free_tier_requests" in msg.lower() or "429" in msg.lower():
+                    self.logger.warning(f"Gemini quota exceeded on {self.current_model_name}: {e}. Rotating to next candidate model.")
+                    next_m = self._rotate_to_next_model()
+                    if next_m:
+                        continue
                     cached_response = await self._get_cached_response(self._get_cache_key(prompt, context or {}))
                     if cached_response:
                         return cached_response
@@ -440,10 +464,20 @@ class GeminiService:
         async with self._rate_limit_lock:
             window_start = now - self._rate_limit_window_seconds
             self._request_timestamps = [t for t in self._request_timestamps if t >= window_start]
-            if len(self._request_timestamps) >= self._rate_limit_max_requests:
-                return False
-            self._request_timestamps.append(now)
-            return True
+            if len(self._request_timestamps) < self._rate_limit_max_requests:
+                self._request_timestamps.append(now)
+                return True
+        
+        # Non-blocking slight backoff for parallel agents
+        await asyncio.sleep(0.3)
+        now = time.time()
+        async with self._rate_limit_lock:
+            window_start = now - self._rate_limit_window_seconds
+            self._request_timestamps = [t for t in self._request_timestamps if t >= window_start]
+            if len(self._request_timestamps) < self._rate_limit_max_requests + 40:
+                self._request_timestamps.append(now)
+                return True
+            return False
     
     def _build_prompt(self, farmer_question: str, context: Dict[str, Any] = None) -> str:
         """Build a prompt with formatting rules for FarmXpert.

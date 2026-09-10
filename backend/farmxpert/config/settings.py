@@ -38,7 +38,7 @@ class Settings(BaseSettings):
 
     blynk_token: Optional[str] = Field(default=None, validation_alias=AliasChoices("BLYNK_TOKEN", "blynk_token"))
     blynk_base_url: Optional[str] = Field(default=None, validation_alias=AliasChoices("BLYNK_BASE_URL", "blynk_base_url"))
-    gemini_model: str = Field(default="gemini-2.0-flash")
+    gemini_model: str = Field(default="gemini-2.5-flash", validation_alias=AliasChoices("GEMINI_MODEL", "gemini_model"))
     gemini_temperature: float = Field(default=0.4)  # Lower for faster, more consistent responses
     gemini_request_timeout: int = Field(default=30)  # Generous timeout for complete responses
     gemini_max_output_tokens: int = Field(default=2048)  # Allow full detailed responses
