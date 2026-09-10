@@ -107,40 +107,50 @@ const SettingsPage = () => {
 
   return (
     <div className="settings-page-container">
-      <div className="settings-sidebar">
-        <div className="sidebar-header">
+      {/* ── Top User Profile HUD Card ── */}
+      <div className="settings-top-card">
+        <div className="settings-top-user">
           <div className="avatar-large">{initials}</div>
-          <h3>{form.name}</h3>
-          <p>{user?.email}</p>
+          <div className="settings-top-meta">
+            <h2>{form.name || 'Farmer'}</h2>
+            <p>{user?.email || 'farmer@farmxpert.ai'}</p>
+            <span className="settings-badge">{user?.role || 'Verified Farmer'}</span>
+          </div>
         </div>
-        <nav className="sidebar-nav">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              className={`nav-item ${activeTab === t.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(t.id)}
-            >
-              <t.icon size={18} />
-              {t.label}
-            </button>
-          ))}
-        </nav>
-        <button className="nav-item-logout" onClick={handleLogout}>
-          <LogOut size={18} />
-          Sign Out
-        </button>
+
+        <div className="settings-top-actions">
+          <button className="save-btn" onClick={handleSave} disabled={saving}>
+            <Save size={18} />
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+          <button className="nav-item-logout" onClick={handleLogout} title="Sign Out">
+            <LogOut size={18} />
+            Sign Out
+          </button>
+        </div>
       </div>
 
+      {/* ── Horizontal Navigation Tabs ── */}
+      <div className="settings-tabs-bar">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            className={`settings-tab-btn ${activeTab === t.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(t.id)}
+          >
+            <t.icon size={18} />
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* ── Main Tab Content ── */}
       <div className="settings-main-content">
         <header className="content-header">
           <div>
             <h1>{tabs.find(t => t.id === activeTab)?.label}</h1>
-            <p>Manage your account preferences and information</p>
+            <p>Manage your account preferences, farm parameters, and security</p>
           </div>
-          <button className="save-btn" onClick={handleSave} disabled={saving}>
-            <Save size={18} />
-            {saving ? 'Saved' : 'Save Changes'}
-          </button>
         </header>
 
         <div className="content-shell">

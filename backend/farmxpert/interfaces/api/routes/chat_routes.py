@@ -22,6 +22,10 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from sqlalchemy.orm import Session
+from farmxpert.models.database import get_db
+from farmxpert.models.farm_profile_models import FarmProfile
+from farmxpert.models.farm_models import Farm, SoilTest
 from farmxpert.app.shared.utils import logger
 from farmxpert.interfaces.api.routes.auth_routes import get_current_user
 from farmxpert.models.user_models import User
@@ -99,6 +103,7 @@ class ChatRequest(BaseModel):
 async def chat_orchestrate(
     request: ChatRequest,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Unified text chat endpoint (requires authentication).
@@ -115,6 +120,104 @@ async def chat_orchestrate(
         extra = {}
         if request.context:
             extra.update(request.context)
+
+        # ── Fetch User Farm Profile, Farm Layout Coordinates, and Live Sensors ──
+        try:
+            farm_profile = db.query(FarmProfile).filter(FarmProfile.user_id == current_user.id).first()
+            farm = db.query(Farm).filter(Farm.user_id == current_user.id).first()
+
+            # Coordinates resolution
+            lat = None
+            lon = None
+            if farm_profile:
+                lat = farm_profile.latitude
+                lon = farm_profile.longitude
+                if (not lat or not lon) and isinstance(farm_profile.farm_polygon, dict):
+                    coords = farm_profile.farm_polygon.get("coordinates")
+                    if coords and isinstance(coords, list) and len(coords) > 0:
+                        first_ring = coords[0]
+                        if isinstance(first_ring, list) and len(first_ring) > 0:
+                            first_pt = first_ring[0]
+                            if isinstance(first_pt, list) and len(first_pt) >= 2:
+                                lon = float(first_pt[0])
+                                lat = float(first_pt[1])
+            if (not lat or not lon) and farm:
+                lat = float(farm.latitude) if farm.latitude else None
+                lon = float(farm.longitude) if farm.longitude else None
+
+            # Location string resolution
+            loc_str = None
+            district = None
+            state = None
+            if farm_profile:
+                loc_str = farm_profile.location or (f"{farm_profile.district}, {farm_profile.state}" if farm_profile.district and farm_profile.state else None)
+                district = farm_profile.district
+                state = farm_profile.state
+            if not loc_str and farm:
+                loc_str = f"{farm.district}, {farm.state}" if farm.district and farm.state else farm.state or farm.district
+                district = farm.district
+                state = farm.state
+            if not loc_str and hasattr(current_user, "location") and current_user.location:
+                loc_str = current_user.location
+
+            # Crop list resolution
+            crops = []
+            if farm_profile and farm_profile.primary_crops:
+                if isinstance(farm_profile.primary_crops, list):
+                    crops.extend([str(c) for c in farm_profile.primary_crops])
+                elif isinstance(farm_profile.primary_crops, str):
+                    crops.extend([c.strip() for c in farm_profile.primary_crops.split(",") if c.strip()])
+            if farm_profile and farm_profile.specific_crop and farm_profile.specific_crop not in crops:
+                crops.append(farm_profile.specific_crop)
+            if farm and farm.crop_type and farm.crop_type not in crops:
+                crops.append(farm.crop_type)
+
+            soil_type = farm_profile.soil_type if farm_profile and farm_profile.soil_type else (farm.soil_type if farm and farm.soil_type else None)
+
+            # Latest soil sensor test
+            soil_test = None
+            if farm:
+                soil_test = db.query(SoilTest).filter(SoilTest.farm_id == farm.id).order_by(SoilTest.test_date.desc()).first()
+            if not soil_test:
+                soil_test = db.query(SoilTest).order_by(SoilTest.test_date.desc()).first()
+
+            soil_telemetry = {}
+            if soil_test:
+                soil_telemetry = {
+                    "moisture": soil_test.soil_moisture,
+                    "temperature": soil_test.soil_temperature or soil_test.air_temperature,
+                    "ph": soil_test.soil_ph,
+                    "nitrogen": soil_test.nitrogen,
+                    "phosphorus": soil_test.phosphorus,
+                    "potassium": soil_test.potassium,
+                    "ec": soil_test.soil_ec,
+                    "humidity": soil_test.air_humidity,
+                    "tested_at": soil_test.test_date.isoformat() if soil_test.test_date else None
+                }
+
+            # Enriched Context Attributes
+            extra["farmer_name"] = current_user.full_name or current_user.username or "Farmer"
+            if lat and lon:
+                extra["latitude"] = lat
+                extra["longitude"] = lon
+                extra["location"] = {"latitude": lat, "longitude": lon, "name": loc_str or "Local Farm"}
+            elif loc_str:
+                extra["location"] = loc_str
+            extra["location_text"] = loc_str or "India"
+            extra["district"] = district
+            extra["state"] = state
+            extra["crops"] = crops
+            extra["crop"] = crops[0] if crops else None
+            extra["soil_type"] = soil_type
+            extra["soil_data"] = soil_telemetry
+            extra["soil_telemetry"] = soil_telemetry
+            if farm_profile:
+                extra["farm_size"] = f"{farm_profile.farm_size} {farm_profile.farm_size_unit or 'acres'}" if farm_profile.farm_size else None
+                extra["water_source"] = farm_profile.water_source
+                extra["irrigation_method"] = farm_profile.irrigation_method
+                extra["season"] = farm_profile.cropping_season
+        except Exception as err:
+            logger.warning(f"Error enriching user farm context in chat_orchestrate: {err}")
             
         # Extract chat history so we can pass it to the AI for conversational memory
         try:

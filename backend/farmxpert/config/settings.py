@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     )
 
     # "openai" or "gemini" — controls which LLM is tried first in core_agent
-    primary_llm: str = Field(default="openai", validation_alias=AliasChoices("PRIMARY_LLM", "primary_llm"))
+    primary_llm: str = Field(default="gemini", validation_alias=AliasChoices("PRIMARY_LLM", "primary_llm"))
 
     openweather_api_key: Optional[str] = Field(default=None, validation_alias=AliasChoices("OPENWEATHER_API_KEY", "openweather_api_key"))
     weatherapi_key: Optional[str] = Field(default=None, validation_alias=AliasChoices("WEATHERAPI_KEY", "weatherapi_key"))

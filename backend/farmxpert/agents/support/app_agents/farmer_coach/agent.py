@@ -9,46 +9,113 @@ class FarmerCoachAgent(BaseAgent):
     description = "A conversational mentor that educates and supports the farmer with localized advice and seasonal tips"
 
     async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Provide coaching and educational support to farmers"""
+        """Provide personalized agronomic coaching and educational support to farmers"""
         farmer_query = inputs.get("query", "")
         context = inputs.get("context") or {}
 
-        # Keep original imports pointing to the support package
-        from farmxpert.agents.support.farmcoach_agent_pkg.agent.farmer_coach import (
-            FarmerCoachAgent as _SchemeCoach,
-        )
-        from farmxpert.agents.support.farmcoach_agent_pkg.services.web_search_service import (
-            WebSearchService as _WebSearchService,
-        )
-        from farmxpert.agents.support.farmcoach_agent_pkg.models.input_model import (
-            FarmerQueryInput as _FarmerQueryInput,
-        )
+        # If user explicitly asks about government schemes/subsidies/yojana
+        is_scheme_query = any(w in farmer_query.lower() for w in ["scheme", "subsid", "yojana", "pm-kisan", "fasal bima", "grant"])
+        if is_scheme_query:
+            try:
+                from farmxpert.agents.support.farmcoach_agent_pkg.agent.farmer_coach import (
+                    FarmerCoachAgent as _SchemeCoach,
+                )
+                from farmxpert.agents.support.farmcoach_agent_pkg.services.web_search_service import (
+                    WebSearchService as _WebSearchService,
+                )
+                from farmxpert.agents.support.farmcoach_agent_pkg.models.input_model import (
+                    FarmerQueryInput as _FarmerQueryInput,
+                )
+                svc = _WebSearchService()
+                schemes = svc.search_schemes(farmer_query)
+                language = context.get("language") or inputs.get("language") or "English"
+                coach = _SchemeCoach()
+                out = coach.process_query(
+                    _FarmerQueryInput(farmer_query=farmer_query, language=language, schemes_data=schemes)
+                )
+                data = out.model_dump() if hasattr(out, "model_dump") else out.dict()
+                recs = []
+                if isinstance(data, dict) and isinstance(data.get("schemes"), list):
+                    for s in data["schemes"][:3]:
+                        if isinstance(s, dict) and s.get("scheme_name"):
+                            recs.append(f"Check eligibility for: {s['scheme_name']}")
+                return {
+                    "agent": self.name,
+                    "success": True,
+                    "response": data.get("response") or "Government scheme information based on your query.",
+                    "recommendations": recs or ["Verify required land records and Aadhaar details."],
+                    "warnings": [],
+                    "next_steps": ["Open official portal or visit local Krishi Vigyan Kendra."],
+                    "data": data,
+                    "metadata": {"mode": "scheme_coach"},
+                }
+            except Exception as e:
+                self.logger.warning(f"Scheme query fallback: {e}")
 
-        svc = _WebSearchService()
-        schemes = svc.search_schemes(farmer_query)
+        # For agronomy, yield improvement, practices, guidance: use Gemini with user farm context
+        crops = context.get("crops") or []
+        location = context.get("location_text") or context.get("district") or context.get("state") or "India"
+        soil_type = context.get("soil_type") or "Loamy"
+        soil_data = context.get("soil_data") or {}
+        season = context.get("season") or "Current Season"
 
-        language = context.get("language") or inputs.get("language") or "English"
-        coach = _SchemeCoach()
-        out = coach.process_query(
-            _FarmerQueryInput(farmer_query=farmer_query, language=language, schemes_data=schemes)
-        )
+        crops_str = ", ".join(crops) if isinstance(crops, list) and crops else (str(crops) if crops else "General Crops")
+        telemetry_str = f"Moisture: {soil_data.get('moisture')}%, Temp: {soil_data.get('temperature')}°C, pH: {soil_data.get('ph')}, N-P-K: {soil_data.get('nitrogen')}-{soil_data.get('phosphorus')}-{soil_data.get('potassium')}" if soil_data else "No live telemetry"
 
-        data = out.model_dump() if hasattr(out, "model_dump") else out.dict()
-        recs = []
-        if isinstance(data, dict) and isinstance(data.get("schemes"), list):
-            for s in data["schemes"][:3]:
-                if isinstance(s, dict) and s.get("scheme_name"):
-                    recs.append(f"Check eligibility for: {s['scheme_name']}")
+        prompt = f"""You are the Farmer Coach Agent at FarmXpert, a knowledgeable and encouraging agricultural mentor.
+Farmer Query: "{farmer_query}"
 
+FARMER'S PROFILE & REAL-TIME CONTEXT:
+- Location: {location}
+- Crops: {crops_str}
+- Soil Type: {soil_type}
+- Soil Sensor Readings: {telemetry_str}
+- Season: {season}
+
+TASK:
+Provide personalized, practical, step-by-step coaching directly addressing the farmer's question.
+If they ask how to increase yields, improve profits, or care for crops:
+1. Give specific agronomic steps (soil conditioning, nutrient management, micro-irrigation timing, weed/pest prevention).
+2. Ground your advice in their actual soil conditions and crop type.
+3. Keep the tone respectful, direct, and actionable.
+
+Format your response as a JSON object:
+{{
+  "response": "Detailed, encouraging explanation and step-by-step guidance",
+  "recommendations": ["Actionable step 1", "Actionable step 2", "Actionable step 3"],
+  "warnings": ["Important risk or precaution to take"],
+  "next_steps": ["Immediate next task for this week"]
+}}
+"""
+        try:
+            from farmxpert.services.gemini_service import gemini_service
+            raw_response = await gemini_service.generate_response(prompt, {"agent": self.name, "task": "farmer_coaching"})
+            parsed = gemini_service._parse_json_response(raw_response)
+            if isinstance(parsed, dict) and (parsed.get("response") or parsed.get("answer")):
+                return {
+                    "agent": self.name,
+                    "success": True,
+                    "response": parsed.get("response") or parsed.get("answer"),
+                    "recommendations": parsed.get("recommendations") or [],
+                    "warnings": parsed.get("warnings") or [],
+                    "next_steps": parsed.get("next_steps") or [],
+                    "data": parsed,
+                    "metadata": {"mode": "gemini_coach"}
+                }
+        except Exception as err:
+            self.logger.warning(f"Gemini coaching failed, using rule-based coach: {err}")
+
+        # Rule-based fallback if Gemini is unreachable
+        coaching = self._generate_coaching_response(farmer_query, "intermediate", str(location), str(season), crops if isinstance(crops, list) else [str(crops)])
         return {
             "agent": self.name,
             "success": True,
-            "response": "Government scheme information based on your query.",
-            "recommendations": recs,
-            "warnings": [],
-            "next_steps": ["Open the official scheme link and verify eligibility documents."],
-            "data": data,
-            "metadata": {"mode": "scheme_coach"},
+            "response": coaching.get("answer", "Here are customized recommendations for your farm."),
+            "recommendations": coaching.get("personalized_advice", []),
+            "warnings": coaching.get("common_mistakes_to_avoid", []),
+            "next_steps": ["Inspect crop foliage and check soil moisture today."],
+            "data": coaching,
+            "metadata": {"mode": "rule_coach"}
         }
     
     def _generate_coaching_response(self, query: str, experience: str, location: str, 

@@ -28,11 +28,25 @@ class MarketIntelligenceAgent(EnhancedBaseAgent):
     async def handle(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Provide market intelligence using mandi+global prices and trend charts"""
         tools = self.tools
-        context = inputs.get("context", inputs)
+        context = inputs.get("context") or inputs
         query = inputs.get("query", "")
 
-        crops = context.get("crops", inputs.get("crops", []))
-        location = context.get("farm_location", context.get("location", inputs.get("location", "unknown")))
+        crops = context.get("crops") or inputs.get("crops") or []
+        if isinstance(crops, str):
+            crops = [c.strip() for c in crops.split(",") if c.strip()]
+        elif not isinstance(crops, list):
+            crops = []
+
+        if not crops:
+            common_crops = ["wheat", "cotton", "rice", "paddy", "maize", "soybean", "mustard", "sugarcane", "groundnut", "chana", "onion", "potato", "tomato"]
+            for c in common_crops:
+                if c in query.lower():
+                    crops.append(c.title())
+
+        if not crops:
+            crops = ["Wheat", "Cotton", "Mustard"]
+
+        location = context.get("location_text") or context.get("district") or context.get("state") or context.get("farm_location") or "Gujarat, India"
 
         mandi = {}
         global_prices = {}

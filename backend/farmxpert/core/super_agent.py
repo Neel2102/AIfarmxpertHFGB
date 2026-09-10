@@ -248,9 +248,9 @@ class SuperAgent:
         if wants_insurance:
             selected.append("crop_insurance_risk")
         if wants_yield:
-            selected.append("yield_predictor")
+            selected.extend(["yield_predictor", "fertilizer_advisor", "soil_health", "farmer_coach"])
         if wants_profit:
-            selected.append("profit_optimization")
+            selected.extend(["profit_optimization", "market_intelligence", "farmer_coach"])
 
         selected = self._safe_list(selected)
         return selected or None
@@ -1071,8 +1071,8 @@ Response Format (JSON):
                     elif isinstance(warn, dict) and "text" in warn:
                         all_warnings.append(warn["text"].strip())
 
-        if len(sentences) <= 1:
-            sentences.append("I don't have enough specific details to give you a complete answer. Please share your crop type and location so I can help you better.")
+        if not sentences:
+            sentences.append("Based on current agronomic practices, focus on balanced soil nutrition, timely irrigation, and certified seeds to maximize crop yields and farm profitability.")
             
         full_text = " ".join(sentences)
         
