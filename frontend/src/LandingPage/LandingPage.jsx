@@ -1,309 +1,45 @@
-/* ============================================ */
-/* FILE 2: LandingPage.jsx (Complete) */
-/* ============================================ */
+import React, { useEffect } from 'react';
 
-import React from 'react';
-import { ArrowRight, Droplets, Thermometer, FlaskRound } from 'lucide-react';
-import '../styles/LandingPage/LandingPage.css';
-import NavbarLanding from './NavbarLanding';
+import Navbar from './Navbar';
+import HeroSection from './sections/HeroSection';
+import AgentsSection from './sections/AgentsSection';
+import FeaturesSection from './sections/FeaturesSection';
+import HowItWorksSection from './sections/HowItWorksSection';
+import TechSection from './sections/TechSection';
+import ChipSceneSection from './sections/ChipSceneSection';
+import CTASection from './sections/CTASection';
+import Footer from './Footer';
 
-export default function Home() {
-  // Remove automatic redirection to allow landing page visibility as requested
-  // Redirection will be handled by explicit navigation and route guards
-  // Function to render animated hero title
-  const renderAnimatedTitle = (text) => {
-    const words = text.split(' ');
-    
-    return (
-      <h1 className="hero-title-animated-landingpage">
-        {words.map((word, wordIndex) => (
-          <span key={wordIndex} className="hero-title-word-landingpage">
-            {word.split('').map((char, charIndex) => {
-              // Calculate delay based on word and character position
-              const totalCharsBeforeWord = words
-                .slice(0, wordIndex)
-                .reduce((sum, w) => sum + w.length, 0);
-              const charDelay = (totalCharsBeforeWord + charIndex) * 0.05;
+import '../styles/landingpage.css';
 
-              return (
-                <span
-                  key={charIndex}
-                  className="hero-title-char-landingpage"
-                  style={{
-                    animationDelay: `${charDelay}s`,
-                  }}
-                >
-                  {char}
-                </span>
-              );
-            })}
-          </span>
-        ))}
-      </h1>
+export default function LandingPage() {
+  useEffect(() => {
+    // ══ SCROLL REVEAL ══
+    const reveals = document.querySelectorAll('.reveal');
+    const revObs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => { if (e.isIntersecting) e.target.classList.add('visible'); });
+      },
+      { threshold: 0.12 }
     );
-  };
+    reveals.forEach((r) => revObs.observe(r));
 
-  // Function to handle smooth scroll to features section
-  const scrollToFeatures = (e) => {
-    e.preventDefault();
-    const featuresSection = document.querySelector('.features-section-landingpage');
-    if (featuresSection) {
-      featuresSection.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start'
-      });
-    }
-  };
+    return () => {
+      revObs.disconnect();
+    };
+  }, []);
 
   return (
-    <div className="landing-page-wrapper-landingpage">
-      <NavbarLanding />
-
-      {/* Fixed Background Image */}
-      <div className="landing-fixed-bg-landingpage">
-        <img
-          src="/landingPage-background-image.jpeg"
-          alt="Hero Background"
-          className="landing-hero-bg-landingpage"
-        />
-      </div>
-
-      {/* Scrollable Content */}
-      <div className="landing-scrollable-content-landingpage">
-        {/* Hero Section */}
-        <section className="hero-section-landingpage">
-          <div className="hero-content-landingpage">
-            {renderAnimatedTitle("Smart Agriculture for the Modern Farmer")}
-            
-            <p className="hero-subtitle-landingpage">
-              Monitor your soil conditions, receive personalized recommendations, and optimize your crop yield with our
-              advanced farming platform powered by cutting-edge technology.
-            </p>
-            <div className="hero-actions-landingpage">
-              <a href="/register" className="btn-landingpage btn-primary-landingpage">
-                Get Started <ArrowRight className="ml-2" style={{ width: "16px", height: "16px" }} />
-              </a>
-              <button onClick={scrollToFeatures} className="btn-landingpage btn-secondary-1-landingpage">
-                Learn More
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* Features Section */}
-        <section className="features-section-landingpage">
-          <div className="container">
-            <div className="section-header-landingpage">
-              <h2 className="section-title-landingpage">Smart Farming Features</h2>
-              <p className="section-subtitle-landingpage">
-                Our platform provides everything you need to monitor and optimize your farm's performance with real-time
-                data and AI-powered insights.
-              </p>
-            </div>
-            <div className="features-grid-landingpage">
-              <div className="feature-card-landingpage animate-fade-in-up">
-                <div className="feature-icon-landingpage">
-                  <Droplets />
-                </div>
-                <h3 className="feature-title-landingpage">Soil Moisture Monitoring</h3>
-                <p className="feature-description-landingpage">
-                  Track soil moisture levels in real-time with precision sensors and receive intelligent watering
-                  recommendations based on crop type and weather conditions.
-                </p>
-              </div>
-              <div className="feature-card-landingpage animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
-                <div className="feature-icon-landingpage">
-                  <FlaskRound />
-                </div>
-                <h3 className="feature-title-landingpage">pH Level Analysis</h3>
-                <p className="feature-description-landingpage">
-                  Monitor soil pH levels continuously and get personalized fertilizer recommendations for optimal crop
-                  growth and maximum yield potential.
-                </p>
-              </div>
-              <div className="feature-card-landingpage animate-fade-in-up" style={{ animationDelay: "0.4s" }}>
-                <div className="feature-icon-landingpage">
-                  <Thermometer />
-                </div>
-                <h3 className="feature-title-landingpage">Temperature Tracking</h3>
-                <p className="feature-description-landingpage">
-                  Keep track of soil temperature variations and receive alerts for extreme conditions that could affect
-                  your crops' health and growth.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-        
-        {/* Logo with Text Section */}
-        <section className="logo-section-landingpage">
-          <div className="container" style={{ textAlign: 'center' }}>
-            <img
-              className="logo-with-text-img-landingpage"
-              src={document.documentElement.getAttribute('data-theme') === 'dark' ? "/dark_theme_logo-removebg-preview.png" : "/White_theme_logo-removebg-preview.png"}
-              alt="FarmXpert"
-              style={{ maxWidth: '300px', height: 'auto' }}
-            />
-          </div>
-        </section>
-
-        {/* How It Works Section */}
-        <section className="how-it-works-section-landingpage">
-          <div className="container">
-            <div className="section-header-landingpage">
-              <h2 className="section-title-landingpage">How It Works</h2>
-              <p className="section-subtitle-landingpage">
-                Our platform makes it easy to monitor and optimize your farm's performance with a simple three-step
-                process.
-              </p>
-            </div>
-            <div className="features-grid-landingpage">
-              <div className="feature-card-landingpage glass" style={{ animationDelay: "0s" }}>
-                <div className="feature-icon-landingpage">
-                  <span>1</span>
-                </div>
-                <h3 className="feature-title-landingpage">Create an Account</h3>
-                <p className="feature-description-landingpage">
-                  Sign up as a farmer and verify your email to get started with our comprehensive agriculture platform.
-                </p>
-              </div>
-              <div className="feature-card-landingpage glass" style={{ animationDelay: "0.2s" }}>
-                <div className="feature-icon-landingpage">
-                  <span>2</span>
-                </div>
-                <h3 className="feature-title-landingpage">Set Up Your Farm</h3>
-                <p className="feature-description-landingpage">
-                  Add your farm details and let our admin team input your soil data while we prepare sensor integration.
-                </p>
-              </div>
-              <div className="feature-card-landingpage glass" style={{ animationDelay: "0.4s" }}>
-                <div className="feature-icon-landingpage">
-                  <span>3</span>
-                </div>
-                <h3 className="feature-title-landingpage">Get Insights</h3>
-                <p className="feature-description-landingpage">
-                  View your dashboard for real-time soil data, personalized recommendations, and actionable farming
-                  insights.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="getting-started-section-landingpage">
-          <div className="container">
-            <div className="section-header-landingpage">
-              <h2 className="section-title-landingpage">Quick Start Guide</h2>
-              <p className="section-subtitle-landingpage">
-                New here? Follow this exact flow to get value in under 5 minutes.
-              </p>
-            </div>
-
-            <div className="guide-grid-landingpage">
-              <div className="guide-card-landingpage">
-                <div className="guide-step-badge-landingpage">Step 1</div>
-                <h3 className="guide-title-landingpage">Create your account</h3>
-                <p className="guide-text-landingpage">
-                  Start by signing up. You’ll be able to securely access your farm workspace and AI tools.
-                </p>
-                <div className="guide-actions-landingpage">
-                  <a href="/register" className="btn-landingpage btn-primary-landingpage">
-                    Sign Up <ArrowRight className="ml-2" style={{ width: "16px", height: "16px" }} />
-                  </a>
-                  <a href="/login" className="btn-landingpage btn-secondary-landingpage">
-                    Log In
-                  </a>
-                </div>
-              </div>
-
-              <div className="guide-card-landingpage">
-                <div className="guide-step-badge-landingpage">Step 2</div>
-                <h3 className="guide-title-landingpage">Complete onboarding</h3>
-                <p className="guide-text-landingpage">
-                  Add basic farm info once. This helps the system personalize recommendations and keep your dashboard
-                  consistent.
-                </p>
-                <div className="guide-note-landingpage">
-                  Tip: if you see an onboarding screen after login, just follow it—it's required once.
-                </div>
-              </div>
-
-              <div className="guide-card-landingpage">
-                <div className="guide-step-badge-landingpage">Step 3</div>
-                <h3 className="guide-title-landingpage">Use the tools inside the dashboard</h3>
-                <p className="guide-text-landingpage">
-                  After onboarding you’ll land in the dashboard where you can navigate everything from the left sidebar.
-                </p>
-              </div>
-            </div>
-
-            <div className="module-grid-landingpage">
-              <div className="module-card-landingpage">
-                <div className="module-icon-landingpage"><Droplets /></div>
-                <h4 className="module-title-landingpage">Decision Engine</h4>
-                <p className="module-text-landingpage">
-                  Enter soil values or fetch from IoT, then generate actionable recommendations.
-                </p>
-              </div>
-
-              <div className="module-card-landingpage">
-                <div className="module-icon-landingpage"><FlaskRound /></div>
-                <h4 className="module-title-landingpage">Smart Chat (Orchestrator)</h4>
-                <p className="module-text-landingpage">
-                  Ask questions naturally. The orchestrator routes your query to the best specialist agents.
-                </p>
-              </div>
-
-              <div className="module-card-landingpage">
-                <div className="module-icon-landingpage"><Thermometer /></div>
-                <h4 className="module-title-landingpage">Farm Map & Voice</h4>
-                <p className="module-text-landingpage">
-                  Draw your farm layout, save it, and use voice to interact hands‑free when you’re in the field.
-                </p>
-              </div>
-            </div>
-
-            <div className="landing-cta-row-landingpage">
-              <a href="/register" className="btn-landingpage btn-primary-landingpage">
-                Start Now <ArrowRight className="ml-2" style={{ width: "16px", height: "16px" }} />
-              </a>
-              <a href="/login" className="btn-landingpage btn-secondary-landingpage">
-                Continue Existing Account
-              </a>
-            </div>
-          </div>
-        </section>
-
-        {/* CTA Section */}
-        <section className="cta-dark-bg-landingpage" style={{ padding: "6rem 0", color: "white" }}>
-          <div className="container text-center">
-            <h2 className="section-title-landingpage">Ready to Optimize Your Farm?</h2>
-            <p
-              style={{
-                fontSize: "1.125rem",
-                marginBottom: "2rem",
-                opacity: 0.9,
-                maxWidth: "600px",
-                margin: "0 auto 2rem",
-                color: "var(--landing-subtitle-color)",
-              }}
-            >
-              Join thousands of farmers who are already using our platform to improve their crop yield and farming
-              efficiency.
-            </p>
-            <a
-              href="/register"
-              className="btn-landingpage-new"
-              style={{
-                fontSize: "1.125rem",
-                padding: "16px 32px",
-              }}
-            >
-              Get Started Today
-            </a>
-          </div>
-        </section>
-      </div>
-    </div>
+    <>
+      <Navbar />
+      <HeroSection />
+      <AgentsSection />
+      <FeaturesSection />
+      <HowItWorksSection />
+      <TechSection />
+      <ChipSceneSection />
+      <CTASection />
+      <Footer />
+    </>
   );
 }

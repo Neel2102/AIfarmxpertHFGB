@@ -250,23 +250,25 @@ Always provide practical, science-based recommendations with clear implementatio
 
         # Optional static JSON fallback: {static_data_dir}/soil/{session_id}.json or {user_id}.json
         if not soil_data:
-            static_dir = os.path.join(settings.static_data_dir, "soil")
-            candidates = []
-            if session_id:
-                candidates.append(os.path.join(static_dir, f"{session_id}.json"))
-            user_id = context.get("user_id")
-            if user_id:
-                candidates.append(os.path.join(static_dir, f"{user_id}.json"))
-            for path in candidates:
-                try:
-                    if os.path.exists(path):
-                        with open(path, "r", encoding="utf-8") as f:
-                            payload = json.load(f)
-                            soil_data = (payload.get("soil_data") or payload.get("soil") or {})
-                            if soil_data:
-                                break
-                except Exception:
-                    pass
+            static_dir_path = getattr(settings, "static_data_dir", None)
+            if static_dir_path:
+                static_dir = os.path.join(static_dir_path, "soil")
+                candidates = []
+                if session_id:
+                    candidates.append(os.path.join(static_dir, f"{session_id}.json"))
+                user_id = context.get("user_id")
+                if user_id:
+                    candidates.append(os.path.join(static_dir, f"{user_id}.json"))
+                for path in candidates:
+                    try:
+                        if os.path.exists(path):
+                            with open(path, "r", encoding="utf-8") as f:
+                                payload = json.load(f)
+                                soil_data = (payload.get("soil_data") or payload.get("soil") or {})
+                                if soil_data:
+                                    break
+                    except Exception:
+                        pass
         
         # Default soil data if none provided
         if not soil_data:

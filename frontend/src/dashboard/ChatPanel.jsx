@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { 
   BarChart3, Droplets, ThermometerSun, FlaskConical, Sprout, 
   Calendar, Circle, Bug, Cloud, TrendingUp, Clock, Truck, 
@@ -64,13 +64,19 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
   const [journeySessionId, setJourneySessionId] = useState(null);
   const [journeyComplete, setJourneyComplete] = useState(false);
 
+  const lastLoadedSessionRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const isNearBottomRef = useRef(true);
+
+  // Re-sync chat history only when switching agents or sessions (avoid duplicate fetch loops)
   useEffect(() => {
-    // Re-sync chat history when switching agents or sessions
-    if (sessionId && loadSessionMessages) {
+    const sessionKey = `${sessionId}_${agent}`;
+    if (sessionId && loadSessionMessages && lastLoadedSessionRef.current !== sessionKey) {
+      lastLoadedSessionRef.current = sessionKey;
       loadSessionMessages(sessionId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, agent, session?.id]);
+  }, [sessionId, agent]);
 
   // Process messages for display
   const messages = useMemo(() => {
@@ -84,12 +90,20 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
       : [];
   }, [contextMessages]);
 
-  // Debug: log messages to see if they are loaded
-  console.log('[ChatPanel] contextMessages length:', contextMessages.length, contextMessages);
-  console.log('[ChatPanel] processed messages length:', messages.length, messages);
+  // Track scroll position to keep messages positioned at bottom only when appropriate
+  const handleScroll = useCallback(() => {
+    if (!messagesContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    // Within 100px from bottom is considered "near bottom"
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    isNearBottomRef.current = distanceFromBottom <= 100;
+  }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Only auto-scroll to bottom if the user was already near the bottom
+    if (isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   useEffect(() => {
@@ -236,11 +250,19 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
-      const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') 
+        ? 'audio/webm' 
+        : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
+      const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mr.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const blob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' });
         setAudioBlob(blob);
+        stream.getTracks().forEach(t => t.stop());
+      };
+      mr.onerror = (err) => {
+        console.error('MediaRecorder error:', err);
+        setIsRecording(false);
         stream.getTracks().forEach(t => t.stop());
       };
       mr.start();
@@ -250,6 +272,7 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
       setAttachedFile(null);
     } catch (err) {
       console.error('Microphone access denied:', err);
+      alert('Microphone access was denied or not available. Please allow microphone permissions in your browser settings to record voice.');
     }
   };
 
@@ -279,6 +302,12 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
     setInputValue('');
     setIsLoading(true);
 
+    // Position conversation at latest message when user explicitly sends a message
+    isNearBottomRef.current = true;
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
+
     const assistantMessageId = Date.now() + 1;
     setMessages((prev) => [...prev, { id: assistantMessageId, type: 'assistant', content: '', timestamp: '', isStreaming: true }]);
 
@@ -290,6 +319,8 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
         const formData = new FormData();
         formData.append('file', audioBlob, 'recording.webm');
         formData.append('language', 'en');
+        if (sessionId) formData.append('session_id', sessionId);
+        if (user?.id) formData.append('user_id', user.id);
 
         const response = await fetch(`${API_BASE_URL}/chat/voice`, { method: 'POST', body: formData, headers: getAuthHeaders() });
         if (!response.ok) throw new Error(`Voice error: ${response.status}`);
@@ -313,6 +344,8 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
         const formData = new FormData();
         formData.append('file', attachedImage.file);
         if (text) formData.append('prompt', text);
+        if (sessionId) formData.append('session_id', sessionId);
+        if (user?.id) formData.append('user_id', user.id);
 
         const response = await fetch(`${API_BASE_URL}/chat/vision`, { method: 'POST', body: formData, headers: getAuthHeaders() });
         if (!response.ok) throw new Error(`Vision error: ${response.status}`);
@@ -332,6 +365,8 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
         const formData = new FormData();
         formData.append('file', attachedFile.file);
         formData.append('prompt', text || 'Analyze this document');
+        if (sessionId) formData.append('session_id', sessionId);
+        if (user?.id) formData.append('user_id', user.id);
 
         const response = await fetch(`${API_BASE_URL}/chat/document`, { method: 'POST', body: formData, headers: getAuthHeaders() });
         if (!response.ok) throw new Error(`Document error: ${response.status}`);
@@ -479,7 +514,7 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
           <h2><span>🚜</span> Farm Orchestrator</h2>
         </header>
 
-        <div className="farm-messages-container">
+        <div className="farm-messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
           {messages.length <= 1 && (messages.length === 0 || messages[0].type === 'system') && (
             <div className="farm-welcome-overlay">
               <div className="farm-welcome-content">

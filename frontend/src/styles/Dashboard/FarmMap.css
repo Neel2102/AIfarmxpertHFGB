@@ -192,8 +192,8 @@
   transform: none;
 }
 
-.btn-primary {
-  background: linear-gradient(135deg, #007bff, #0056b3);
+.farm-map-btn.btn-primary {
+  background: linear-gradient(135deg, #10b981, #059669);
   color: white;
 }
 

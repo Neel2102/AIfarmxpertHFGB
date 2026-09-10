@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import ChatPanel from './ChatPanel';
 // import OfflineIndicator from '../components/OfflineIndicator';
+import { useAuth } from '../contexts/AuthContext';
 import { useOrchestrator } from '../contexts/OrchestratorContext';
 import { dataService } from '../services/apiService';
 import '../styles/Dashboard/SmartChatLayout.css';
@@ -14,37 +15,42 @@ const SmartChatLayout = () => {
     size_acres: 15,
     weather: { temperature: 27, humidity: 85, condition: 'Partly Cloudy' }
   });
-  const { session, loadSessionMessages } = useOrchestrator();
+  const { user } = useAuth();
+  const { session } = useOrchestrator();
+
+  const getStorageKey = () => user?.id ? `farmxpert_session_id_${user.id}` : 'farmxpert_session_id';
+
   const [sessionId, setSessionId] = useState(() => {
-    const saved = localStorage.getItem('farmxpert_session_id');
+    const key = user?.id ? `farmxpert_session_id_${user.id}` : 'farmxpert_session_id';
+    const saved = localStorage.getItem(key);
     if (saved) return saved;
     const newSession = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    localStorage.setItem('farmxpert_session_id', newSession);
+    localStorage.setItem(key, newSession);
     return newSession;
   });
 
-  // On mount, load history for this session
+  // Sync session when user logs in or switches account
   useEffect(() => {
-    if (sessionId) {
-      loadSessionMessages(sessionId);
+    const key = getStorageKey();
+    const saved = localStorage.getItem(key);
+    if (saved && saved !== sessionId) {
+      setSessionId(saved);
+    } else if (!saved) {
+      const newSession = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem(key, newSession);
+      setSessionId(newSession);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user?.id]);
 
+  // Keep sessionId synced when selected from sidebar
   useEffect(() => {
     if (session?.id && session.id !== sessionId) {
-        setSessionId(session.id);
-        localStorage.setItem('farmxpert_session_id', session.id);
-    }
-  }, [session?.id, sessionId]);
-
-  // When context session changes, ensure we reload messages in ChatPanel via sessionId update
-  useEffect(() => {
-    if (session?.id && loadSessionMessages) {
-      loadSessionMessages(session.id);
+      setSessionId(session.id);
+      localStorage.setItem(getStorageKey(), session.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.id]);
+  }, [session?.id, sessionId]);
 
   useEffect(() => {
     (async () => {

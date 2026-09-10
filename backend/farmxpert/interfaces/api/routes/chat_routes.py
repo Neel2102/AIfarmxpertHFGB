@@ -126,6 +126,8 @@ async def chat_orchestrate(
             logger.warning(f"Failed to fetch chat history context: {e}")
             extra["chat_history"] = []
                 
+        extra["session_id"] = session_id
+                
         response = await _call_orchestrator(
             request.message,
             user_id=current_user.id,
@@ -159,6 +161,7 @@ async def chat_vision(
     prompt: Optional[str] = Form(None, description="Optional additional context"),
     crop: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
+    session_id: Optional[str] = Form(None),
 ):
     """
     Upload a crop image and receive a structured Pest & Disease diagnosis
@@ -236,6 +239,15 @@ Respond ONLY with a valid JSON object in this exact format (no markdown, no code
             f"Severity: {vision_result.get('severity', 'unknown')}."
         )
 
+        if session_id:
+            try:
+                from farmxpert.interfaces.api.routes.super_agent import _db_save_message
+                user_msg = f"[📷 Image: {file.filename}] {prompt or ''}".strip()
+                _db_save_message(session_id, "user", user_msg, user_id=current_user.id)
+                _db_save_message(session_id, "assistant", human_summary, user_id=current_user.id)
+            except Exception as e:
+                logger.warning(f"Failed to save vision chat history: {e}")
+
         return {
             "success": True,
             "vision_result": vision_result,
@@ -260,6 +272,7 @@ async def chat_voice(
     current_user: User = Depends(get_current_user),
     file: UploadFile = File(..., description="Audio blob (webm, mp3, wav, ogg)"),
     language: Optional[str] = Form("en"),
+    session_id: Optional[str] = Form(None),
 ):
     """
     Voice Super Agent loop (requires authentication):
@@ -284,8 +297,18 @@ async def chat_voice(
             transcript = "Could not understand audio, please try again."
 
         # ---- Step 2: Route to Orchestrator (with real user_id) ---------------
-        orch_result = await _call_orchestrator(transcript, user_id=current_user.id)
+        extra = {"session_id": session_id} if session_id else None
+        orch_result = await _call_orchestrator(transcript, user_id=current_user.id, extra=extra)
         text_response = orch_result.get("response", "I processed your request.")
+
+        # Save history if session_id provided
+        if session_id:
+            try:
+                from farmxpert.interfaces.api.routes.super_agent import _db_save_message
+                _db_save_message(session_id, "user", f"[🎤 Voice] {transcript}", user_id=current_user.id)
+                _db_save_message(session_id, "assistant", text_response, user_id=current_user.id)
+            except Exception as e:
+                logger.warning(f"Failed to save voice chat history: {e}")
 
         # ---- Step 3: TTS via gTTS -------------------------------------------
         audio_mp3 = await _text_to_speech(text_response, language or "en")
@@ -361,6 +384,7 @@ async def chat_document(
     current_user: User = Depends(get_current_user),
     file: UploadFile = File(..., description="PDF, CSV, or TXT document"),
     prompt: Optional[str] = Form(None, description="What to analyze or ask about the document"),
+    session_id: Optional[str] = Form(None),
 ):
     """
     Upload a PDF, CSV, or TXT file and receive an AI-powered analysis
@@ -405,6 +429,15 @@ Format your response clearly with sections and bullet points where appropriate."
             analysis_text = response.text
         except Exception:
             analysis_text = response.candidates[0].content.parts[0].text
+
+        if session_id:
+            try:
+                from farmxpert.interfaces.api.routes.super_agent import _db_save_message
+                user_msg = f"[📎 {filename}] {user_prompt}".strip()
+                _db_save_message(session_id, "user", user_msg, user_id=current_user.id)
+                _db_save_message(session_id, "assistant", analysis_text, user_id=current_user.id)
+            except Exception as e:
+                logger.warning(f"Failed to save document chat history: {e}")
 
         return {
             "success": True,

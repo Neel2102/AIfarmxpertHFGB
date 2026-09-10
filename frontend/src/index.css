@@ -1,3 +1,6 @@
+/* Import Frozen Lake design tokens for landing page & auth */
+@import url('./styles/frozenLakeTokens.css');
+
 /* LIGHT THEME (Default) */
 :root {
   /* Primary Colors */

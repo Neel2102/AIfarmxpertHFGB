@@ -17,6 +17,7 @@ import LoadingSpinner from './components/LoadingSpinner';
 import OfflineIndicator from './components/OfflineIndicator';
 
 // Context
+import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AgentProvider } from './contexts/AgentContext';
 import { ChatProvider } from './contexts/ChatContext';
@@ -89,47 +90,50 @@ const AppContent = () => {
 // Root App Component
 function App() {
   return (
-    <AuthProvider>
-      <OfflineIndicator />
-      <OrchestratorProvider>
-        <AgentProvider>
-          <ChatProvider>
-            <Routes>
-              {/* Public routes */}
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/onboarding" element={<OnboardingRoute />} />
-              
-              {/* Protected admin routes */}
-              <Route path="/admin" element={
-                <PrivateRoute>
-                  <AdminSandbox />
-                </PrivateRoute>
-              } />
+    <ThemeProvider>
+      <AuthProvider>
+        <OfflineIndicator />
+        <OrchestratorProvider>
+          <AgentProvider>
+            <ChatProvider>
+              <AppContent />
+              <Routes>
+                {/* Public routes */}
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/onboarding" element={<OnboardingRoute />} />
+                
+                {/* Protected admin routes */}
+                <Route path="/admin" element={
+                  <PrivateRoute>
+                    <AdminSandbox />
+                  </PrivateRoute>
+                } />
 
-              {/* Admin: User Sandbox view — /admin/sandbox/:userId */}
-              <Route path="/admin/sandbox/:userId" element={
-                <PrivateRoute>
-                  <AdminUserSandbox />
-                </PrivateRoute>
-              } />
-              
-              <Route path="/dashboard/*" element={
-                <PrivateRoute>
-                  <MainDashboard />
-                </PrivateRoute>
-              } />
-              
-              {/* Catch-all route with authentication validation */}
-              <Route path="/*" element={<AppContent />} />
-            </Routes>
-          </ChatProvider>
-        </AgentProvider>
-      </OrchestratorProvider>
-    </AuthProvider>
+                {/* Admin: User Sandbox view — /admin/sandbox/:userId */}
+                <Route path="/admin/sandbox/:userId" element={
+                  <PrivateRoute>
+                    <AdminUserSandbox />
+                  </PrivateRoute>
+                } />
+                
+                <Route path="/dashboard/*" element={
+                  <PrivateRoute>
+                    <MainDashboard />
+                  </PrivateRoute>
+                } />
+
+                {/* Catch-all redirect */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </ChatProvider>
+          </AgentProvider>
+        </OrchestratorProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

@@ -36,11 +36,11 @@ def _db_get_history(session_id: str, user_id: Optional[int] = None) -> List[Dict
 
 
 def _db_save_message(session_id: str, role: str, content: str, user_id: Optional[int] = None):
-    """Save a single chat message to DB. Creates session if needed."""
+    """Save a single chat message to DB. Creates session if needed and prevents cross-user pollution."""
     with engine.connect() as conn:
         # Ensure session exists
         existing = conn.execute(
-            text("SELECT id FROM chat_sessions WHERE id = :sid"), {"sid": session_id}
+            text("SELECT id, user_id FROM chat_sessions WHERE id = :sid"), {"sid": session_id}
         ).fetchone()
         if not existing:
             title = content[:40] + "..." if len(content) > 40 else content
@@ -49,10 +49,20 @@ def _db_save_message(session_id: str, role: str, content: str, user_id: Optional
                 {"sid": session_id, "title": title, "uid": user_id}
             )
         else:
-            conn.execute(
-                text("UPDATE chat_sessions SET updated_at = NOW() WHERE id = :sid"),
-                {"sid": session_id}
-            )
+            # Prevent saving messages into a session owned by another user
+            if existing[1] is not None and user_id is not None and existing[1] != user_id:
+                logger.warning(f"Session {session_id} belongs to user {existing[1]}, refusing write from user {user_id}")
+                return
+            if user_id and existing[1] is None:
+                conn.execute(
+                    text("UPDATE chat_sessions SET user_id = :uid, updated_at = CURRENT_TIMESTAMP WHERE id = :sid"),
+                    {"sid": session_id, "uid": user_id}
+                )
+            else:
+                conn.execute(
+                    text("UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = :sid"),
+                    {"sid": session_id}
+                )
         conn.execute(
             text("INSERT INTO chat_messages (session_id, role, content) VALUES (:sid, :role, :content)"),
             {"sid": session_id, "role": role, "content": content}
@@ -473,7 +483,7 @@ async def process_user_query_ui_stream(request: QueryRequest):
                 yield f"data: {json.dumps({'type': 'start', 'session_id': session_id, 'timestamp': start_ts})}\n\n"
 
                 # Inject chat history into context for agents and synthesis
-                chat_history = _db_get_history(session_id)
+                chat_history = _db_get_history(session_id, user_id=int(request.user_id) if request.user_id else None)
                 CHAT_HISTORY_STORE[session_id] = chat_history  # cache
                 context["chat_history"] = chat_history[-10:]
                 
@@ -584,7 +594,7 @@ async def process_user_query(request: QueryRequest):
         context["session_id"] = session_id
         
         # Inject chat history from DB into context
-        chat_history = _db_get_history(session_id)
+        chat_history = _db_get_history(session_id, user_id=int(request.user_id) if request.user_id else None)
         CHAT_HISTORY_STORE[session_id] = chat_history  # cache
         context["chat_history"] = chat_history[-10:]
         

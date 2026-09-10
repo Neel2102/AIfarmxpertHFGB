@@ -183,6 +183,13 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('session_token');
     localStorage.removeItem('user');
     
+    // Clear all farmxpert chat sessions
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('farmxpert_session_id')) {
+        localStorage.removeItem(key);
+      }
+    });
+    
     // Clear all cookies (client-side attempt)
     document.cookie = 'access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     document.cookie = 'refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';

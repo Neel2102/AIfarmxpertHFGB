@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
 import apiService from '../services/api';
+import { useAuth } from './AuthContext';
 
 // Action types
 const ACTIONS = {
@@ -34,12 +35,14 @@ const initialState = {
 function orchestratorReducer(state, action) {
     switch (action.type) {
         case ACTIONS.SET_LOADING:
+            if (state.loading === action.payload) return state;
             return { ...state, loading: action.payload };
 
         case ACTIONS.SET_ERROR:
             return { ...state, error: action.payload, loading: false };
 
         case ACTIONS.SET_SESSION:
+            if (state.session?.id === action.payload?.id) return state;
             return { ...state, session: action.payload };
 
         case ACTIONS.SET_WORKFLOW:
@@ -100,6 +103,7 @@ function orchestratorReducer(state, action) {
                 ...state, 
                 session: null, 
                 messages: [],
+                chatHistory: [],
                 currentWorkflow: null,
                 agentStatuses: {},
                 reasoningTree: null 
@@ -116,12 +120,22 @@ const OrchestratorContext = createContext();
 // Provider component
 export function OrchestratorProvider({ children }) {
     const [state, dispatch] = useReducer(orchestratorReducer, initialState);
+    const { user } = useAuth();
 
     // Initialize system status on mount
     useEffect(() => {
         initializeSystem();
-        loadHistory();
     }, []);
+
+    // Watch user changes to load history or reset session
+    useEffect(() => {
+        if (user?.id) {
+            loadHistory();
+        } else {
+            dispatch({ type: ACTIONS.RESET_SESSION });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id]);
 
     const initializeSystem = async () => {
         try {
@@ -180,7 +194,7 @@ export function OrchestratorProvider({ children }) {
         }
     };
 
-    const loadHistory = async () => {
+    const loadHistory = useCallback(async () => {
         try {
             const result = await apiService.getHistory();
             const sessions = Array.isArray(result)
@@ -193,9 +207,10 @@ export function OrchestratorProvider({ children }) {
             // Don't throw to not disrupt the main flow
             return [];
         }
-    };
+    }, []);
 
-    const loadSessionMessages = async (sessionId) => {
+    const loadSessionMessages = useCallback(async (sessionId) => {
+        if (!sessionId) return [];
         console.log('[OrchestratorContext] loadSessionMessages called with sessionId:', sessionId);
         try {
             dispatch({ type: ACTIONS.SET_LOADING, payload: true });
@@ -205,13 +220,13 @@ export function OrchestratorProvider({ children }) {
                 payload: { id: sessionId }
             });
 
-            localStorage.setItem('farmxpert_session_id', sessionId);
-            console.log('[OrchestratorContext] session id saved to localStorage:', sessionId);
+            const storageKey = user?.id ? `farmxpert_session_id_${user.id}` : 'farmxpert_session_id';
+            localStorage.setItem(storageKey, sessionId);
+            console.log('[OrchestratorContext] session id saved to localStorage key:', storageKey, sessionId);
 
             // Get history for this session specifically
             const result = await apiService.request(`/super-agent/history?session_id=${sessionId}`);
             console.log('[OrchestratorContext] API result for session messages:', result);
-            console.log('[OrchestratorContext] typeof result:', typeof result, 'Array.isArray?', Array.isArray(result));
 
             // Handle different response structures
             let messagesData = null;
@@ -222,8 +237,6 @@ export function OrchestratorProvider({ children }) {
             } else if (result && result.data && Array.isArray(result.data)) {
                 messagesData = result.data;
             }
-
-            console.log('[OrchestratorContext] messagesData extracted:', messagesData);
 
             if (messagesData && messagesData.length > 0) {
                 // Convert simple text messages format to UI messages
@@ -236,20 +249,18 @@ export function OrchestratorProvider({ children }) {
 
                 dispatch({ type: 'SET_MESSAGES', payload: formattedMessages });
                 dispatch({ type: ACTIONS.SET_LOADING, payload: false });
-                console.log('[OrchestratorContext] messages loaded and dispatched:', formattedMessages.length);
                 return formattedMessages;
             }
 
             dispatch({ type: 'SET_MESSAGES', payload: [] });
             dispatch({ type: ACTIONS.SET_LOADING, payload: false });
-            console.log('[OrchestratorContext] no messages found for session:', sessionId);
             return [];
         } catch (error) {
             console.error('[OrchestratorContext] Failed to load session messages:', error);
             dispatch({ type: ACTIONS.SET_LOADING, payload: false });
             return [];
         }
-    };
+    }, [user?.id]);
 
     const getWorkflowStatus = async (workflowId) => {
         try {
@@ -339,13 +350,14 @@ export function OrchestratorProvider({ children }) {
         }
     };
 
-    const resetSession = () => {
+    const resetSession = useCallback(() => {
         const newSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        localStorage.setItem('farmxpert_session_id', newSessionId);
+        const storageKey = user?.id ? `farmxpert_session_id_${user.id}` : 'farmxpert_session_id';
+        localStorage.setItem(storageKey, newSessionId);
         dispatch({ type: ACTIONS.RESET_SESSION });
         dispatch({ type: ACTIONS.SET_SESSION, payload: { id: newSessionId } });
         return newSessionId;
-    };
+    }, [user?.id]);
 
     const clearMessages = () => {
         dispatch({ type: ACTIONS.CLEAR_MESSAGES });
@@ -367,7 +379,7 @@ export function OrchestratorProvider({ children }) {
         dispatch({ type: 'SET_MESSAGES', payload: messages });
     };
 
-    const value = {
+    const value = useMemo(() => ({
         ...state,
         processQuery,
         getWorkflowStatus,
@@ -385,7 +397,13 @@ export function OrchestratorProvider({ children }) {
         loadSessionMessages,
         resetSession,
         clearMessages,
-    };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), [
+        state,
+        loadHistory,
+        loadSessionMessages,
+        resetSession,
+    ]);
 
     return (
         <OrchestratorContext.Provider value={value}>

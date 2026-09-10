@@ -1,10 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import PasswordInput from '../common/PasswordInput';
-import '../../styles/auth/Register.css';
-import InfinityGlowBackground from '../../LandingPage/InfinityGlow';
-import NavbarLanding from '../../LandingPage/NavbarLanding';
+import AuthLayout from './AuthLayout';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -15,11 +12,11 @@ const Register = () => {
     full_name: '',
     phone: ''
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState('');
-  
+
   const { register } = useAuth();
   const navigate = useNavigate();
 
@@ -29,22 +26,7 @@ const Register = () => {
       ...prev,
       [name]: value
     }));
-    
     if (error) setError('');
-    
-    if (name === 'password') {
-      checkPasswordStrength(value);
-    }
-  };
-
-  const checkPasswordStrength = (password) => {
-    if (password.length < 6) {
-      setPasswordStrength('weak');
-    } else if (password.length < 8) {
-      setPasswordStrength('medium');
-    } else {
-      setPasswordStrength('strong');
-    }
   };
 
   const validateForm = () => {
@@ -52,17 +34,14 @@ const Register = () => {
       setError('Passwords do not match');
       return false;
     }
-    
     if (formData.password.length < 6) {
       setError('Password must be at least 6 characters long');
       return false;
     }
-    
     if (!formData.email.includes('@')) {
       setError('Please enter a valid email address');
       return false;
     }
-    
     return true;
   };
 
@@ -85,7 +64,7 @@ const Register = () => {
         full_name: formData.full_name,
         phone: formData.phone
       });
-      
+
       if (result.success) {
         setSuccess('Registration successful! Please sign in.');
         setTimeout(() => {
@@ -102,164 +81,140 @@ const Register = () => {
   };
 
   return (
-    <div className="dashboard-container-register">
-      <div className="navbar-wrapper-register">
-        <NavbarLanding />
-      </div>
-      <div className="infinity-glow-background-register">
-        <InfinityGlowBackground/>
-      </div>
-      
-      <div className="container-register">
-        <div className="card-register">
-          <div className="card-header-register">
-            <div className="icon-wrapper-register">
-              <div className="emoji-icon-register">
-                <img src="/leaf.png" alt="Leaf" className="emoji-icon-register" />
-              </div>
-            </div>
-            <h1 className="card-title-register">
-              Create Account
-            </h1>
-            <p className="card-description-register">Join FarmXpert to manage your farm with AI assistance</p>
-          </div>
+    <AuthLayout
+      artTitle={'Join\nFarmXpert'}
+      artSubtitle="Create your account to unlock AI-powered precision farming with 21+ specialized agents working for your fields."
+    >
+      <header className="form-head-auth">
+        <h1 className="form-title-auth">Create Account</h1>
+        <p className="form-sub-auth">
+          Already have an account?{' '}
+          <Link to="/login" className="link-auth">
+            Sign in
+          </Link>
+        </p>
+      </header>
 
-          <div className="form-content-register">
-            {error && (
-              <div className="alert-register alert-warning-register">
-                <span className="alert-icon-register">⚠️</span>
-                {error}
-              </div>
-            )}
-
-            {success && (
-              <div className="alert-register alert-success-register">
-                <span className="alert-icon-register">✓</span>
-                {success}
-              </div>
-            )}
-
-            <div className="form-group-register">
-              <label className="form-label-register">Full Name</label>
-              <input 
-                className="form-input-register" 
-                type="text" 
-                name="full_name"
-                placeholder="Enter your full name" 
-                value={formData.full_name}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group-register">
-              <label className="form-label-register">Username</label>
-              <input 
-                className="form-input-register" 
-                type="text" 
-                name="username"
-                placeholder="Choose a username" 
-                value={formData.username}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group-register">
-              <label className="form-label-register">Email Address</label>
-              <input 
-                className="form-input-register" 
-                type="email" 
-                name="email"
-                placeholder="Enter your email address" 
-                value={formData.email}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group-register">
-              <label className="form-label-register">Phone Number (Optional)</label>
-              <input 
-                className="form-input-register" 
-                type="tel" 
-                name="phone"
-                placeholder="Enter your phone number" 
-                value={formData.phone}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group-register">
-              <label className="form-label-register">Password</label>
-              <PasswordInput
-                className="form-input-register"
-                name="password"
-                placeholder="Create a password" 
-                value={formData.password}
-                onChange={handleChange}
-                disabled={loading}
-              />
-              {formData.password && (
-                <div 
-                  className="password-strength"
-                  style={{
-                    color: passwordStrength === 'strong' ? '#22c55e' : passwordStrength === 'medium' ? '#f59e0b' : '#ef4444'
-                  }}
-                >
-                  Password strength: {passwordStrength}
-                </div>
-              )}
-            </div>
-
-            <div className="form-group-register">
-              <label className="form-label-register">Confirm Password</label>
-              <PasswordInput
-                className="form-input-register"
-                name="confirmPassword"
-                placeholder="Confirm your password" 
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                disabled={loading}
-              />
-            </div>
-
-            <button 
-              type="button"
-              onClick={handleSubmit}
-              className="btn-register btn-primary-register" 
-              disabled={loading || !formData.username || !formData.email || !formData.password || !formData.full_name}
-            >
-              {loading ? (
-                <>
-                  <div className="spinner-inline-register" />
-                  Creating Account...
-                </>
-              ) : (
-                "Create Account"
-              )}
-            </button>
-          </div>
-
-          <div className="signup-link-register">
-            Already have an account?{" "}
-            <Link to="/login" className="signup-link-highlight-register">
-              Sign in here
-            </Link>
-          </div>
-
-          <div className="demo-section-register">
-            <p className="demo-title-register">Demo Accounts:</p>
-            <div className="demo-content-register">
-              <p>Farmer: farmer@demo.com</p>
-              <p>Admin: admin@demo.com</p>
-              <p className="demo-password-register">Password: any password</p>
-            </div>
+      {/* Error Banner */}
+      {error && (
+        <div className="error-banner-auth" role="alert">
+          <svg className="error-icon-auth" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <div className="error-content-auth">
+            <p className="error-title-auth">{error}</p>
           </div>
         </div>
-      </div>
-    </div>
+      )}
+
+      {/* Success Banner */}
+      {success && (
+        <div className="status-banner-auth">
+          <div className="status-icon-auth">✓</div>
+          <div>
+            <p className="status-title-auth">Success</p>
+            <p className="status-desc-auth">{success}</p>
+          </div>
+        </div>
+      )}
+
+      <form className="login-form-auth" onSubmit={handleSubmit} noValidate>
+        {/* 2x2 Grid: Name + Username */}
+        <div className="fields-grid-2x2-auth">
+          <div className="field-auth">
+            <label className="field-label-auth" htmlFor="reg-fullname">Full Name</label>
+            <input
+              id="reg-fullname" name="full_name" type="text" autoComplete="name"
+              placeholder="Enter your full name" className="field-input-auth"
+              value={formData.full_name} onChange={handleChange} required disabled={loading}
+            />
+          </div>
+          <div className="field-auth">
+            <label className="field-label-auth" htmlFor="reg-username">Username</label>
+            <input
+              id="reg-username" name="username" type="text" autoComplete="username"
+              placeholder="Choose a username" className="field-input-auth"
+              value={formData.username} onChange={handleChange} required disabled={loading}
+            />
+          </div>
+        </div>
+
+        {/* 2x2 Grid: Email + Phone */}
+        <div className="fields-grid-2x2-auth">
+          <div className="field-auth">
+            <label className="field-label-auth" htmlFor="reg-email">Email Address</label>
+            <input
+              id="reg-email" name="email" type="email" autoComplete="email"
+              placeholder="Enter your email" className="field-input-auth"
+              value={formData.email} onChange={handleChange} required disabled={loading}
+            />
+          </div>
+          <div className="field-auth">
+            <label className="field-label-auth" htmlFor="reg-phone">Phone (Optional)</label>
+            <input
+              id="reg-phone" name="phone" type="tel" autoComplete="tel"
+              placeholder="Enter your phone number" className="field-input-auth"
+              value={formData.phone} onChange={handleChange} disabled={loading}
+            />
+          </div>
+        </div>
+
+        {/* 2x2 Grid: Password + Confirm Password */}
+        <div className="fields-grid-2x2-auth">
+          <div className="field-auth">
+            <label className="field-label-auth" htmlFor="reg-password">Password</label>
+            <div className="field-control-auth">
+              <input
+                id="reg-password" name="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                placeholder="Create a password" className="field-input-auth"
+                value={formData.password} onChange={handleChange} required disabled={loading}
+              />
+              <button
+                type="button" className="peek-btn-auth"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showPassword} tabIndex={-1}
+              >
+                {showPassword ? (
+                  <svg className="peek-eye-auth" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path d="M3 3l14 14M9.5 9.5a2.5 2.5 0 003.5 3.5m-1.5-6.5C14 6.5 17 9.5 17 9.5s-1.2 2.3-3.2 4.1M7.5 7.8C4.5 9.2 3 10 3 10s3 6 7 6c1.5 0 2.9-.5 4.1-1.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <svg className="peek-eye-auth" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path d="M1 10s3.2-6 9-6 9 6 9 6-3.2 6-9 6-9-6-9-6Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+                    <circle cx="10" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.4" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="field-auth">
+            <label className="field-label-auth" htmlFor="reg-confirm">Confirm Password</label>
+            <input
+              id="reg-confirm" name="confirmPassword"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              placeholder="Confirm your password" className="field-input-auth"
+              value={formData.confirmPassword} onChange={handleChange} required disabled={loading}
+            />
+          </div>
+        </div>
+
+        {/* Submit Button */}
+        <button
+          type="submit"
+          className="btn-primary-auth"
+          disabled={loading || !formData.username || !formData.email || !formData.password || !formData.full_name}
+        >
+          <span>{loading ? 'Creating Account...' : 'Create Account'}</span>
+        </button>
+      </form>
+    </AuthLayout>
   );
 };
 

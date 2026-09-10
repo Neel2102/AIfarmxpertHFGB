@@ -47,6 +47,11 @@ export default function VoiceRecorder() {
     }
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch (e) {}
+      recognitionRef.current = null;
     }
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach(t => t.stop());
@@ -210,54 +215,53 @@ export default function VoiceRecorder() {
 
       const combined = (finalTranscriptRef.current + ' ' + interim).trim();
       setLiveText(combined);
-
-      // Auto-stop after 2.5s of silence
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = setTimeout(() => {
-        console.log('Silence timeout — stopping recognition');
-        try { recognition.stop(); } catch (e) { /* noop */ }
-      }, 2500);
     };
 
     recognition.onend = () => {
-      console.log('Speech recognition ended');
-      isRecordingRef.current = false;
+      console.log('Speech recognition onend event');
+      // If user has not stopped recording, automatically restart to maintain listening state
+      if (isRecordingRef.current && recognitionRef.current) {
+        console.log('Auto-restarting speech recognition to keep listening active until user stops');
+        try {
+          recognitionRef.current.start();
+          return;
+        } catch (restartErr) {
+          console.warn('Recognition auto-restart delayed/failed:', restartErr);
+        }
+      }
+
       setIsSpeakingVolume(false);
-      
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
-
-      const finalText = finalTranscriptRef.current.trim();
-      if (finalText) {
-        sendTextToOrchestrator(finalText);
-      } else {
-        resetToIdle();
-      }
     };
 
     recognition.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
+      console.warn('Speech recognition onerror:', event.error);
+
+      if (event.error === 'no-speech') {
+        // Continuous listening: ignore periodic no-speech timeouts from browser
+        console.log('No speech detected in quiet interval; keeping microphone active.');
+        return;
+      }
+
+      if (event.error === 'aborted') {
+        return;
+      }
+
       isRecordingRef.current = false;
       setIsSpeakingVolume(false);
 
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setStatus('error');
-        setErrorMessage('Microphone permission denied. Please allow and try again.');
-      } else if (event.error === 'no-speech') {
-        // No speech detected — just reset, don't show error
+        setErrorMessage('Microphone access was denied. Please allow microphone permissions in your browser and try again.');
         resetToIdle();
-      } else if (event.error === 'aborted') {
-        // User or system aborted — handled in onend
       } else if (event.error === 'network') {
         setStatus('error');
-        setErrorMessage('Network error. Speech recognition requires internet in Chrome.');
+        setErrorMessage('Network error during speech recognition. Please verify your internet connection in Chrome.');
+        resetToIdle();
       } else {
         setStatus('error');
-        setErrorMessage(`Speech error: ${event.error}`);
+        setErrorMessage(`Speech recognition error: ${event.error}. Please try again.`);
+        resetToIdle();
       }
     };
 
@@ -270,18 +274,26 @@ export default function VoiceRecorder() {
       setStatus('error');
       setErrorMessage('Could not start speech recognition. Please try again.');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sendTextToOrchestrator, resetToIdle, updateVolumeLevel]);
 
   // ── Stop Recording ──
   const stopRecording = useCallback(() => {
-    if (recognitionRef.current && isRecordingRef.current) {
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
+    isRecordingRef.current = false;
+    if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch (e) { /* noop */ }
     }
-  }, []);
+    setIsSpeakingVolume(false);
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+
+    const finalText = finalTranscriptRef.current.trim();
+    if (finalText) {
+      sendTextToOrchestrator(finalText);
+    } else {
+      setErrorMessage('No speech detected. Please speak clearly into your microphone and try again.');
+      resetToIdle();
+    }
+  }, [sendTextToOrchestrator, resetToIdle]);
 
   // ── Handle button click ──
   const handleButtonClick = () => {

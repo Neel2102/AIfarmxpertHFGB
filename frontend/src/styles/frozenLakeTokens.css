@@ -1,0 +1,365 @@
+/* ============================================================
+   FarmXpert — Design Tokens & Theming
+   Default: Light Mode (Crisp White background with Emerald Green accents)
+   Toggle: Dark Mode (Sleek Dark/Black background with Neon Green glow)
+   Green accents across all components — no blue elements.
+   ============================================================ */
+
+/* ── LIGHT THEME (DEFAULT: White background) ── */
+:root,
+[data-theme="light"] {
+  /* ── Core palette ── */
+  --bg-base:        #ffffff;
+  --bg-surface:     #f8fafc;
+  --bg-raised:      #ffffff;
+  --border-subtle:  rgba(0, 0, 0, 0.07);
+  --border-medium:  rgba(0, 0, 0, 0.12);
+
+  /* ── Accent (Emerald Green) ── */
+  --accent-primary:  #10b981;
+  --accent-light:    #059669;
+  --glow-primary:    rgba(16, 185, 129, 0.2);
+  --glow-strong:     rgba(16, 185, 129, 0.35);
+
+  /* ── Text ── */
+  --text-primary:      #0f172a;
+  --text-secondary:    #475569;
+  --fl-text-primary:   #0f172a;
+  --fl-text-secondary: #475569;
+  --fl-text-muted:     #94a3b8;
+
+  /* ── Neumorphic / Card shadows ── */
+  --nm-shadow-dark:    rgba(0, 0, 0, 0.06);
+  --nm-shadow-light:   rgba(255, 255, 255, 0.9);
+  --nm-inset-dark:     rgba(0, 0, 0, 0.04);
+  --nm-inset-light:    rgba(255, 255, 255, 0.6);
+
+  /* ── Noise overlay ── */
+  --noise-opacity: 0.12;
+
+  /* ── Buttons (landing) ── */
+  --btn-primary-bg:            #10b981;
+  --btn-primary-text:          #ffffff;
+  --btn-primary-shadow:        rgba(16, 185, 129, 0.25);
+  --btn-primary-hover-shadow:  rgba(16, 185, 129, 0.45);
+  --btn-secondary-bg:          #f1f5f9;
+  --btn-secondary-text:        #334155;
+
+  /* ── Hero ── */
+  --hero-bg:                    #ffffff;
+  --hero-grid-line:             rgba(0, 0, 0, 0.04);
+  --hero-watermark-color:       rgba(0, 0, 0, 0.02);
+  --hero-gradient-transparent:  transparent;
+  --hero-gradient-base:         #ffffff;
+
+  /* ── Canvas colors ── */
+  --canvas-branch-r: 16;
+  --canvas-branch-g: 185;
+  --canvas-branch-b: 129;
+  --canvas-soil-r:   16;
+  --canvas-soil-g:   185;
+  --canvas-soil-b:   129;
+  --canvas-seed-r:   16;
+  --canvas-seed-g:   185;
+  --canvas-seed-b:   129;
+  --canvas-pulse-r:  16;
+  --canvas-pulse-g:  185;
+  --canvas-pulse-b:  129;
+
+  /* ── Sensor nodes ── */
+  --snode-bg:            #ffffff;
+  --snode-border:        rgba(0, 0, 0, 0.1);
+  --snode-border-hover:  #10b981;
+  --snode-shadow-dark:   rgba(0, 0, 0, 0.08);
+  --snode-shadow-light:  rgba(255, 255, 255, 1);
+  --snode-shadow-hover-glow: rgba(16, 185, 129, 0.25);
+  --snode-val-color:     #0f172a;
+  --snode-sym-color:     #059669;
+  --snode-lbl-color:     #64748b;
+  --snode-dot-color:     #10b981;
+
+  /* ── Stats ── */
+  --stat-num-color:      #059669;
+
+  /* ── Surface line ── */
+  --surface-line-color:  rgba(16, 185, 129, 0.25);
+  --surface-line-mid:    rgba(16, 185, 129, 0.45);
+  --surface-lbl-color:   rgba(16, 185, 129, 0.65);
+
+  /* ── Agents ── */
+  --agent-border:        rgba(0, 0, 0, 0.08);
+  --agent-border-hover:  rgba(16, 185, 129, 0.4);
+  --agent-domain-color:  #64748b;
+
+  /* ── Features ── */
+  --fi-icon-bg:                #f1f5f9;
+  --fi-icon-shadow-dark:       rgba(0, 0, 0, 0.06);
+  --fi-icon-shadow-light:      rgba(255, 255, 255, 0.9);
+  --feature-hover-inset-dark:  rgba(0, 0, 0, 0.05);
+  --feature-hover-inset-light: rgba(255, 255, 255, 0.8);
+
+  /* ── How it works ── */
+  --how-line:           rgba(16, 185, 129, 0.22);
+  --how-circle-glow:    rgba(16, 185, 129, 0.12);
+  --how-circle-border:  rgba(0, 0, 0, 0.08);
+
+  /* ── Tech ── */
+  --tech-chip-hover-border: rgba(16, 185, 129, 0.4);
+  --tech-chip-inset-dark:   rgba(0, 0, 0, 0.05);
+  --tech-chip-inset-light:  rgba(255, 255, 255, 0.8);
+  --tech-chip-hover-glow:   rgba(16, 185, 129, 0.2);
+  --tc-dot-color:           #10b981;
+
+  /* ── CTA ── */
+  --cta-border:  rgba(0, 0, 0, 0.08);
+  --cta-radial:  rgba(16, 185, 129, 0.12);
+
+  /* ── Section transitions ── */
+  --transition-glow:     rgba(16, 185, 129, 0.06);
+  --transition-base-60:  rgba(255, 255, 255, 0.7);
+
+  /* ── Chip scene ── */
+  --chip-scene-bg:        #f8fafc;
+  --chip-grid-line:       rgba(0, 0, 0, 0.04);
+  --chip-eyebrow-color:   #059669;
+  --chip-title-color:     #0f172a;
+  --chip-brand-accent:    #10b981;
+  --chip-sub-color:       #475569;
+  --chip-wrap-bg:         #ffffff;
+  --chip-trace-color:     rgba(0, 0, 0, 0.08);
+  --chip-body-start:      #1e293b;
+  --chip-body-mid1:       #172033;
+  --chip-body-mid2:       #131a2b;
+  --chip-body-mid3:       #0f1422;
+  --chip-body-end:        #0a0f1a;
+  --chip-sheen-edge:      rgba(255, 255, 255, 0.03);
+  --chip-sheen-mid:       rgba(255, 255, 255, 0.06);
+  --chip-border:          rgba(0, 0, 0, 0.12);
+  --chip-inner-border:    rgba(255, 255, 255, 0.06);
+  --chip-shine-color:     rgba(255, 255, 255, 0.9);
+  --chip-left-glow-start: rgba(16, 185, 129, 0.0);
+  --chip-left-glow-mid:   rgba(16, 185, 129, 0.2);
+  --chip-left-glow-end:   rgba(16, 185, 129, 0.0);
+  --chip-aura-center:     rgba(16, 185, 129, 0.1);
+  --chip-aura-edge:       rgba(16, 185, 129, 0.0);
+  --chip-pin-active:      #334155;
+  --chip-pin-inactive:    #1e293b;
+  --chip-pin-stroke:      rgba(255, 255, 255, 0.1);
+  --chip-led-color:       #10b981;
+  --chip-powered-text:    rgba(255, 255, 255, 0.45);
+  --chip-brand-text:      #f8fafc;
+  --chip-tagline-text:    rgba(255, 255, 255, 0.4);
+  --chip-label-text:      rgba(255, 255, 255, 0.4);
+
+  /* ── Navbar ── */
+  --nav-bg:          rgba(255, 255, 255, 0.9);
+  --nav-border:      rgba(0, 0, 0, 0.08);
+  --nav-link-color:  #475569;
+  --nav-link-hover:  #0f172a;
+  --nav-cta-bg:      #10b981;
+  --nav-cta-text:    #ffffff;
+
+  /* ── Footer ── */
+  --footer-bg:         #f8fafc;
+  --footer-border:     rgba(0, 0, 0, 0.06);
+  --footer-text:       #64748b;
+  --footer-link:       #475569;
+  --footer-link-hover: #10b981;
+
+  /* ── Auth (Green Palette - No Blue) ── */
+  --auth-page-bg:           #f8fafc;
+  --auth-card-border:       rgba(0, 0, 0, 0.08);
+  --auth-input-border:      rgba(0, 0, 0, 0.12);
+  --auth-input-border-hover: #10b981;
+  --auth-input-border-focus: #059669;
+  --auth-input-focus-ring:   rgba(16, 185, 129, 0.2);
+  --auth-divider-line:       rgba(0, 0, 0, 0.1);
+  --auth-social-border:      rgba(0, 0, 0, 0.12);
+  --auth-btn-gradient-start: #047857;
+  --auth-btn-gradient-mid:   #059669;
+  --auth-btn-gradient-end:   #10b981;
+  --auth-btn-shadow:        rgba(5, 150, 105, 0.35);
+  --auth-art-bg-start:       #022c22;
+  --auth-art-bg-mid:         #064e3b;
+  --auth-art-bg-end:         #047857;
+  --auth-art-shade-1:        rgba(4, 120, 87, 0.3);
+}
+
+/* ── DARK THEME (Black background) ── */
+[data-theme="dark"] {
+  /* ── Core palette ── */
+  --bg-base:        #0a0c14;
+  --bg-surface:     #0e1019;
+  --bg-raised:      #12141f;
+  --border-subtle:  rgba(255, 255, 255, 0.06);
+  --border-medium:  rgba(255, 255, 255, 0.10);
+
+  /* ── Accent (Neon Emerald) ── */
+  --accent-primary:  #10b981;
+  --accent-light:    #34d399;
+  --glow-primary:    rgba(16, 185, 129, 0.25);
+  --glow-strong:     rgba(16, 185, 129, 0.5);
+
+  /* ── Text ── */
+  --text-primary:      #e2e8f0;
+  --text-secondary:    rgba(255, 255, 255, 0.6);
+  --fl-text-primary:   #e2e8f0;
+  --fl-text-secondary: rgba(255, 255, 255, 0.55);
+  --fl-text-muted:     rgba(255, 255, 255, 0.35);
+
+  /* ── Neumorphic shadows ── */
+  --nm-shadow-dark:    rgba(0, 0, 0, 0.45);
+  --nm-shadow-light:   rgba(255, 255, 255, 0.03);
+  --nm-inset-dark:     rgba(0, 0, 0, 0.35);
+  --nm-inset-light:    rgba(255, 255, 255, 0.02);
+
+  /* ── Noise overlay ── */
+  --noise-opacity: 0.35;
+
+  /* ── Buttons (landing) ── */
+  --btn-primary-bg:            #10b981;
+  --btn-primary-text:          #020617;
+  --btn-primary-shadow:        rgba(16, 185, 129, 0.25);
+  --btn-primary-hover-shadow:  rgba(16, 185, 129, 0.45);
+  --btn-secondary-bg:          #12141f;
+  --btn-secondary-text:        rgba(255, 255, 255, 0.7);
+
+  /* ── Hero ── */
+  --hero-bg:                    #0a0c14;
+  --hero-grid-line:             rgba(255, 255, 255, 0.03);
+  --hero-watermark-color:       rgba(255, 255, 255, 0.015);
+  --hero-gradient-transparent:  transparent;
+  --hero-gradient-base:         #0a0c14;
+
+  /* ── Canvas colors ── */
+  --canvas-branch-r: 16;
+  --canvas-branch-g: 185;
+  --canvas-branch-b: 129;
+  --canvas-soil-r:   16;
+  --canvas-soil-g:   185;
+  --canvas-soil-b:   129;
+  --canvas-seed-r:   16;
+  --canvas-seed-g:   185;
+  --canvas-seed-b:   129;
+  --canvas-pulse-r:  16;
+  --canvas-pulse-g:  185;
+  --canvas-pulse-b:  129;
+
+  /* ── Sensor nodes ── */
+  --snode-bg:            #12141f;
+  --snode-border:        rgba(255, 255, 255, 0.08);
+  --snode-border-hover:  #10b981;
+  --snode-shadow-dark:   rgba(0, 0, 0, 0.45);
+  --snode-shadow-light:  rgba(255, 255, 255, 0.03);
+  --snode-shadow-hover-glow: rgba(16, 185, 129, 0.2);
+  --snode-val-color:     #e2e8f0;
+  --snode-sym-color:     #10b981;
+  --snode-lbl-color:     rgba(255, 255, 255, 0.4);
+  --snode-dot-color:     #10b981;
+
+  /* ── Stats ── */
+  --stat-num-color:      #10b981;
+
+  /* ── Surface line ── */
+  --surface-line-color:  rgba(16, 185, 129, 0.15);
+  --surface-line-mid:    rgba(16, 185, 129, 0.35);
+  --surface-lbl-color:   rgba(16, 185, 129, 0.4);
+
+  /* ── Agents ── */
+  --agent-border:        rgba(255, 255, 255, 0.06);
+  --agent-border-hover:  rgba(16, 185, 129, 0.3);
+  --agent-domain-color:  rgba(255, 255, 255, 0.4);
+
+  /* ── Features ── */
+  --fi-icon-bg:                #0e1019;
+  --fi-icon-shadow-dark:       rgba(0, 0, 0, 0.3);
+  --fi-icon-shadow-light:      rgba(255, 255, 255, 0.02);
+  --feature-hover-inset-dark:  rgba(0, 0, 0, 0.3);
+  --feature-hover-inset-light: rgba(255, 255, 255, 0.02);
+
+  /* ── How it works ── */
+  --how-line:           rgba(16, 185, 129, 0.12);
+  --how-circle-glow:    rgba(16, 185, 129, 0.08);
+  --how-circle-border:  rgba(255, 255, 255, 0.06);
+
+  /* ── Tech ── */
+  --tech-chip-hover-border: rgba(16, 185, 129, 0.3);
+  --tech-chip-inset-dark:   rgba(0, 0, 0, 0.25);
+  --tech-chip-inset-light:  rgba(255, 255, 255, 0.02);
+  --tech-chip-hover-glow:   rgba(16, 185, 129, 0.15);
+  --tc-dot-color:           rgba(16, 185, 129, 0.5);
+
+  /* ── CTA ── */
+  --cta-border:  rgba(255, 255, 255, 0.06);
+  --cta-radial:  rgba(16, 185, 129, 0.06);
+
+  /* ── Section transitions ── */
+  --transition-glow:     rgba(16, 185, 129, 0.03);
+  --transition-base-60:  rgba(10, 12, 20, 0.6);
+
+  /* ── Chip scene ── */
+  --chip-scene-bg:        #0a0c14;
+  --chip-grid-line:       rgba(255, 255, 255, 0.03);
+  --chip-eyebrow-color:   #10b981;
+  --chip-title-color:     #e2e8f0;
+  --chip-brand-accent:    #10b981;
+  --chip-sub-color:       rgba(255, 255, 255, 0.55);
+  --chip-wrap-bg:         #0a0c14;
+  --chip-trace-color:     rgba(255, 255, 255, 0.06);
+  --chip-body-start:      #1a1d2e;
+  --chip-body-mid1:       #161929;
+  --chip-body-mid2:       #131624;
+  --chip-body-mid3:       #111320;
+  --chip-body-end:        #0f111c;
+  --chip-sheen-edge:      rgba(255, 255, 255, 0.02);
+  --chip-sheen-mid:       rgba(255, 255, 255, 0.05);
+  --chip-border:          rgba(255, 255, 255, 0.10);
+  --chip-inner-border:    rgba(255, 255, 255, 0.04);
+  --chip-shine-color:     rgba(255, 255, 255, 1);
+  --chip-left-glow-start: rgba(16, 185, 129, 0.0);
+  --chip-left-glow-mid:   rgba(16, 185, 129, 0.15);
+  --chip-left-glow-end:   rgba(16, 185, 129, 0.0);
+  --chip-aura-center:     rgba(16, 185, 129, 0.06);
+  --chip-aura-edge:       rgba(16, 185, 129, 0.0);
+  --chip-pin-active:      #1e2235;
+  --chip-pin-inactive:    #131520;
+  --chip-pin-stroke:      rgba(255, 255, 255, 0.08);
+  --chip-led-color:       #10b981;
+  --chip-powered-text:    rgba(255, 255, 255, 0.35);
+  --chip-brand-text:      #e2e8f0;
+  --chip-tagline-text:    rgba(255, 255, 255, 0.3);
+  --chip-label-text:      rgba(255, 255, 255, 0.3);
+
+  /* ── Navbar ── */
+  --nav-bg:          rgba(10, 12, 20, 0.85);
+  --nav-border:      rgba(255, 255, 255, 0.06);
+  --nav-link-color:  rgba(255, 255, 255, 0.6);
+  --nav-link-hover:  #e2e8f0;
+  --nav-cta-bg:      #10b981;
+  --nav-cta-text:    #020617;
+
+  /* ── Footer ── */
+  --footer-bg:         #060810;
+  --footer-border:     rgba(255, 255, 255, 0.04);
+  --footer-text:       rgba(255, 255, 255, 0.35);
+  --footer-link:       rgba(255, 255, 255, 0.45);
+  --footer-link-hover: #10b981;
+
+  /* ── Auth (Green Palette - No Blue) ── */
+  --auth-page-bg:           #0a0c14;
+  --auth-card-border:       rgba(255, 255, 255, 0.08);
+  --auth-input-border:      rgba(255, 255, 255, 0.10);
+  --auth-input-border-hover: rgba(16, 185, 129, 0.35);
+  --auth-input-border-focus: #10b981;
+  --auth-input-focus-ring:   rgba(16, 185, 129, 0.15);
+  --auth-divider-line:       rgba(255, 255, 255, 0.08);
+  --auth-social-border:      rgba(255, 255, 255, 0.10);
+  --auth-btn-gradient-start: #047857;
+  --auth-btn-gradient-mid:   #059669;
+  --auth-btn-gradient-end:   #10b981;
+  --auth-btn-shadow:        rgba(16, 185, 129, 0.4);
+  --auth-art-bg-start:       #022c22;
+  --auth-art-bg-mid:         #064e3b;
+  --auth-art-bg-end:         #047857;
+  --auth-art-shade-1:        rgba(2, 44, 34, 0.4);
+}

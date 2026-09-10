@@ -51,6 +51,10 @@ class Settings(BaseSettings):
         default="postgresql://postgres:password@localhost:5432/farmxpert",
         validation_alias=AliasChoices("DATABASE_URL", "database_url")
     )
+    secret_key: str = Field(
+        default="farmxpert-super-secret-jwt-key-2026",
+        validation_alias=AliasChoices("SECRET_KEY", "JWT_SECRET_KEY", "JWT_SECRET", "secret_key")
+    )
 
     model_config = {
         "env_file": [

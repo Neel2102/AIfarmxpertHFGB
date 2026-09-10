@@ -1,10 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import '../../styles/auth/ForgotPassword.css';
-import InfinityGlowBackground from '../../LandingPage/InfinityGlow';
-import NavbarLanding from '../../LandingPage/NavbarLanding';
-
- 
+import AuthLayout from './AuthLayout';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
@@ -38,9 +34,7 @@ const ForgotPassword = () => {
     try {
       const response = await fetch('/api/auth/forgot-password', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
 
@@ -60,86 +54,67 @@ const ForgotPassword = () => {
   };
 
   return (
-    <div className="dashboard-container-forgot">
-      <div className="navbar-wrapper-forgot">
-        <NavbarLanding />
-      </div>
-      
-      <div className="infinity-glow-background-forgot">
-        <InfinityGlowBackground/>
-      </div>
-      
-      <div className="container-forgot">
-        <div className="card-forgot">
-          <div className="card-header-forgot">
-            <div className="icon-wrapper-forgot">
-              <div className="emoji-icon-forgot">
-                🌾
-              </div>
-            </div>
-            <h1 className="card-title-forgot">
-              Forgot Password?
-            </h1>
-            <p className="card-description-forgot">No worries! Enter your email address and we'll send you a link to reset your password.</p>
-          </div>
+    <AuthLayout
+      artTitle={'Account\nRecovery'}
+      artSubtitle="Don't worry — we'll help you get back into your FarmXpert dashboard securely and quickly."
+    >
+      <header className="form-head-auth">
+        <h1 className="form-title-auth">Forgot Password?</h1>
+        <p className="form-sub-auth">
+          Enter your email address and we'll send you a link to reset your password.
+        </p>
+      </header>
 
-          <div className="form-content-forgot">
-            {error && (
-              <div className="alert-forgot alert-warning-forgot">
-                <span className="alert-icon-forgot">⚠️</span>
-                <span>{error}</span>
-              </div>
-            )}
-
-            {success && (
-              <div className="alert-forgot alert-success-forgot">
-                <span className="alert-icon-forgot">✓</span>
-                <span>{success}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit}>
-              <div className="form-group-forgot">
-                <label className="form-label-forgot" htmlFor="email">Email Address</label>
-                <input
-                  className="form-input-forgot"
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={email}
-                  onChange={handleChange}
-                  placeholder="Enter your email address"
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              <button 
-                type="submit"
-                className="btn-forgot btn-primary-forgot" 
-                disabled={loading || !email}
-              >
-                {loading ? (
-                  <>
-                    <div className="spinner-inline-forgot" />
-                    Sending...
-                  </>
-                ) : (
-                  "Send Reset Link"
-                )}
-              </button>
-            </form>
-          </div>
-
-          <div className="signup-link-forgot">
-            Remember your password?{" "}
-            <Link to="/login" className="signup-link-highlight-forgot">
-              Sign in here
-            </Link>
+      {/* Error Banner */}
+      {error && (
+        <div className="error-banner-auth" role="alert">
+          <svg className="error-icon-auth" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <div className="error-content-auth">
+            <p className="error-title-auth">{error}</p>
           </div>
         </div>
+      )}
+
+      {/* Success Banner */}
+      {success && (
+        <div className="status-banner-auth">
+          <div className="status-icon-auth">✓</div>
+          <div>
+            <p className="status-title-auth">Email Sent</p>
+            <p className="status-desc-auth">{success}</p>
+          </div>
+        </div>
+      )}
+
+      <form className="login-form-auth" onSubmit={handleSubmit} noValidate>
+        <div className="field-auth">
+          <label className="field-label-auth" htmlFor="forgot-email">Email Address</label>
+          <input
+            id="forgot-email" name="email" type="email" autoComplete="email"
+            placeholder="Enter your email address" className="field-input-auth"
+            value={email} onChange={handleChange} required disabled={loading}
+          />
+        </div>
+
+        <button
+          type="submit"
+          className="btn-primary-auth"
+          disabled={loading || !email}
+        >
+          <span>{loading ? 'Sending...' : 'Send Reset Link'}</span>
+        </button>
+      </form>
+
+      <div className="back-link-wrap-auth">
+        <Link to="/login" className="nav-back-auth">
+          ← Back to Sign In
+        </Link>
       </div>
-    </div>
+    </AuthLayout>
   );
 };
 
