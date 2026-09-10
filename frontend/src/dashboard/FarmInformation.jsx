@@ -337,6 +337,7 @@ export default function FarmerDashboard() {
                 />
                 {isLoading ? "Refreshing..." : "Refresh Data"}
               </button>
+            </div>
           </div>
 
           {(!isNum(soilData.moisture) || soilData.iot?.status === "offline") && (

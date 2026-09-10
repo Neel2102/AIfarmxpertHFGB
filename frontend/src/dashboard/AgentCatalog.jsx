@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react"
+import React, { useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   Sprout,
@@ -27,7 +27,6 @@ import {
   Search,
   ArrowRight,
   Activity,
-  Zap,
 } from "lucide-react"
 import "../styles/Dashboard/AgentCatalog.css"
 
