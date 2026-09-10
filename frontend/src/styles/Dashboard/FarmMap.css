@@ -333,9 +333,19 @@
 }
 
 .form-group select option {
-  background: #09140e;
-  color: #f1f5f9;
-  padding: 10px;
+  background-color: var(--dash-card-bg-elevated, #121626);
+  color: var(--dash-text-heading, #f8fafc);
+  padding: 12px;
+}
+
+[data-theme="dark"] .form-group select option {
+  background-color: #121626;
+  color: #f8fafc;
+}
+
+[data-theme="light"] .form-group select option {
+  background-color: #ffffff;
+  color: #0f172a;
 }
 
 .form-group select:focus,

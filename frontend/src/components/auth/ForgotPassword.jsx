@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Check } from 'lucide-react';
 import AuthLayout from './AuthLayout';
 
 const ForgotPassword = () => {
@@ -82,7 +83,7 @@ const ForgotPassword = () => {
       {/* Success Banner */}
       {success && (
         <div className="status-banner-auth">
-          <div className="status-icon-auth">✓</div>
+          <div className="status-icon-auth"><Check size={16} /></div>
           <div>
             <p className="status-title-auth">Email Sent</p>
             <p className="status-desc-auth">{success}</p>

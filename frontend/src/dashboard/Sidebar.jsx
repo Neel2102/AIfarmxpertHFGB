@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, MessageSquare, Map, Mic, Users, Cpu, Settings,
-  History, Plus, Trash2, ChevronLeft
+  History, Plus, Trash2, ChevronLeft, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 import { useOrchestrator } from '../contexts/OrchestratorContext';
 import apiService from '../services/api';
@@ -13,6 +13,9 @@ const Sidebar = ({ onLogout }) => {
   const { chatHistory, session, loadSessionMessages, resetSession, loadHistory } = useOrchestrator();
 
   const [isOpen, setIsOpen] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    return localStorage.getItem("sidebar_collapsed") === "true";
+  });
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem("theme") || "dark";
   });
@@ -61,6 +64,17 @@ const Sidebar = ({ onLogout }) => {
       root.classList.remove("sidebar-open");
     }
   }, [isOpen]);
+
+  // Reflect sidebar collapsed state on root
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isCollapsed) {
+      root.classList.add("sidebar-desktop-collapsed");
+    } else {
+      root.classList.remove("sidebar-desktop-collapsed");
+    }
+    localStorage.setItem("sidebar_collapsed", isCollapsed ? "true" : "false");
+  }, [isCollapsed]);
 
   // Handle theme
   useEffect(() => {
@@ -196,7 +210,7 @@ const Sidebar = ({ onLogout }) => {
 
       {/* Sidebar */}
       <div
-        className={`sidebar-sidebar ${isOpen ? "sidebar-open-sidebar" : ""}`}
+        className={`sidebar-sidebar ${isOpen ? "sidebar-open-sidebar" : ""} ${isCollapsed ? "sidebar-collapsed" : ""}`}
       >
         <div
           className={`sidebar-sidebar-content ${isOpen ? "sidebar-open-sidebar1" : ""
@@ -209,14 +223,26 @@ const Sidebar = ({ onLogout }) => {
                 alt="FarmXpert" 
                 className="logo-icon-sidebar" 
               />
-              <div className="logo-text-sidebar">
-                <h1 className="logo-title-sidebar">FarmXpert</h1>
-                <p className="logo-tagline-sidebar">AI-Powered Farming</p>
-              </div>
+              {!isCollapsed && (
+                <div className="logo-text-sidebar">
+                  <h1 className="logo-title-sidebar">FarmXpert</h1>
+                  <p className="logo-tagline-sidebar">AI-Powered Farming</p>
+                </div>
+              )}
             </div>
 
-            <button className="close-btn-sidebar" onClick={closeSidebar} title="Collapse Sidebar">
-              <ChevronLeft size={16} />
+            <button 
+              className="close-btn-sidebar collapse-btn-sidebar" 
+              onClick={() => {
+                if (isMobile) {
+                  closeSidebar();
+                } else {
+                  setIsCollapsed(prev => !prev);
+                }
+              }} 
+              title={isMobile ? "Close Sidebar" : isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            >
+              {isMobile ? <ChevronLeft size={16} /> : isCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
             </button>
           </div>
 
@@ -335,6 +361,7 @@ const Sidebar = ({ onLogout }) => {
                 <NavLink
                   className={({ isActive }) => `agent-item-sidebar ${isActive ? 'active' : ''}`}
                   to="/dashboard/today"
+                  title="Daily Flow"
                   onClick={() => handleNavigation("/dashboard/today")}
                 >
                   <LayoutDashboard className="agent-icon-sidebar" size={20} />
@@ -345,6 +372,7 @@ const Sidebar = ({ onLogout }) => {
                 <NavLink
                   className={({ isActive }) => `agent-item-sidebar ${isActive ? 'active' : ''}`}
                   to="/dashboard/farm-information"
+                  title="Soil & Sensors"
                   onClick={() => handleNavigation("/dashboard/farm-information")}
                 >
                   <LayoutDashboard className="agent-icon-sidebar" size={20} />
@@ -355,6 +383,7 @@ const Sidebar = ({ onLogout }) => {
                 <NavLink
                   className={({ isActive }) => `agent-item-sidebar ${isActive ? 'active' : ''}`}
                   to="/dashboard/orchestrator"
+                  title="Smart Chat"
                   onClick={() => handleNavigation("/dashboard/orchestrator")}
                 >
                   <MessageSquare className="agent-icon-sidebar" size={20} />
@@ -366,6 +395,7 @@ const Sidebar = ({ onLogout }) => {
                   className={({ isActive }) =>
                     `agent-item-sidebar ${isActive ? "active" : ""}`}
                   to="/dashboard/farm-map"
+                  title="Farm Map"
                   onClick={() => handleNavigation("/dashboard/farm-map")}
                 >
                   <Map className="agent-icon-sidebar" size={20} />
@@ -377,6 +407,7 @@ const Sidebar = ({ onLogout }) => {
                   className={({ isActive }) =>
                     `agent-item-sidebar ${isActive ? "active" : ""}`}
                   to="/dashboard/voice"
+                  title="Hands-Free Voice"
                   onClick={() => handleNavigation("/dashboard/voice")}
                 >
                   <Mic className="agent-icon-sidebar" size={20} />
@@ -388,6 +419,7 @@ const Sidebar = ({ onLogout }) => {
                   className={({ isActive }) =>
                     `agent-item-sidebar ${isActive ? "active" : ""}`}
                   to="/dashboard/agents"
+                  title="Agent Catalog"
                   onClick={() => handleNavigation("/dashboard/agents")}
                 >
                   <Users className="agent-icon-sidebar" size={20} />
@@ -399,6 +431,7 @@ const Sidebar = ({ onLogout }) => {
                   className={({ isActive }) =>
                     `agent-item-sidebar ${isActive ? "active" : ""}`}
                   to="/dashboard/hardware-iot"
+                  title="Hardware IoT"
                   onClick={() => handleNavigation("/dashboard/hardware-iot")}
                 >
                   <Cpu className="agent-icon-sidebar" size={20} />
@@ -410,6 +443,7 @@ const Sidebar = ({ onLogout }) => {
                   className={({ isActive }) =>
                     `agent-item-sidebar ${isActive ? "active" : ""}`}
                   to="/dashboard/setting"
+                  title="Settings"
                   onClick={() => handleNavigation("/dashboard/setting")}
                 >
                   <Settings className="agent-icon-sidebar" size={20} />
@@ -464,12 +498,14 @@ const Sidebar = ({ onLogout }) => {
                       className={`agent-item-sidebar ${session?.id === s.session_id ? "active" : ""}`}
                       role="button"
                       tabIndex={0}
+                      title={s.title || "New chat"}
                       onClick={async (e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         console.log('[Sidebar] Clicked history session:', s.session_id, s.title);
-                        await loadSessionMessages(s.session_id);
-                        console.log('[Sidebar] loadSessionMessages completed, navigating to orchestrator');
+                        if (session?.id !== s.session_id) {
+                          await loadSessionMessages(s.session_id);
+                        }
                         handleNavigation("/dashboard/orchestrator");
                       }}
                       onKeyDown={async (e) => {
@@ -477,8 +513,9 @@ const Sidebar = ({ onLogout }) => {
                           e.preventDefault();
                           e.stopPropagation();
                           console.log('[Sidebar] Clicked history session:', s.session_id, s.title);
-                          await loadSessionMessages(s.session_id);
-                          console.log('[Sidebar] loadSessionMessages completed, navigating to orchestrator');
+                          if (session?.id !== s.session_id) {
+                            await loadSessionMessages(s.session_id);
+                          }
                           handleNavigation("/dashboard/orchestrator");
                         }
                       }}
@@ -505,20 +542,6 @@ const Sidebar = ({ onLogout }) => {
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-
-          <div className="sidebar-animation-card">
-            <video
-              src="/animations/gardener-digging-ground-animation-gif-download-14008527.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="sidebar-gardener-video"
-            />
-            <div className="sidebar-animation-caption">
-              <span>Autonomous Cultivation</span>
             </div>
           </div>
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Check } from 'lucide-react';
 import AuthLayout from './AuthLayout';
 
 const ResetPassword = () => {
@@ -198,7 +199,7 @@ const ResetPassword = () => {
       {/* Success Banner */}
       {success && (
         <div className="status-banner-auth">
-          <div className="status-icon-auth">✓</div>
+          <div className="status-icon-auth"><Check size={16} /></div>
           <div>
             <p className="status-title-auth">Success</p>
             <p className="status-desc-auth">{success}</p>

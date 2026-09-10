@@ -24,6 +24,10 @@ import {
   Users,
   BrainCircuit,
   HelpCircle,
+  Search,
+  ArrowRight,
+  Activity,
+  Zap,
 } from "lucide-react"
 import "../styles/Dashboard/AgentCatalog.css"
 
@@ -352,40 +356,27 @@ export default function AgentCatalog() {
     })
   }, [activeCategory, query])
 
-  // Inject heading into header-left
-  useEffect(() => {
-    const headerLeft = document.querySelector('.header-left');
-    if (headerLeft) {
-      headerLeft.innerHTML = `
-        <div class="agent-catalog-header-left">
-          <h1 class="agent-catalog-title">Agent Swarm Catalog</h1>
-          <div class="agent-catalog-subtitle">22 specialized AI agents ready to assist.</div>
-        </div>
-      `;
-    }
-
-    return () => {
-      // Cleanup on unmount
-      const headerLeft = document.querySelector('.header-left');
-      if (headerLeft) {
-        headerLeft.innerHTML = '';
-      }
-    };
-  }, []);
-
   return (
     <div className="agent-catalog-page">
       <div className="agent-catalog-header">
+        <div className="agent-catalog-header-left">
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '999px', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.25)', marginBottom: '8px' }}>
+            <Activity size={12} style={{ color: 'var(--dash-emerald)' }} />
+            <span style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.68rem', fontWeight: 700, color: 'var(--dash-emerald)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Autonomous Agent Swarm</span>
+          </div>
+          <h1 className="agent-catalog-title">Specialized Agent Catalog</h1>
+          <p className="agent-catalog-subtitle">22 autonomous agronomist agents coordinating on crop health, soil dynamics, logistics, and harvest yield.</p>
+        </div>
         <div className="agent-catalog-header-right">
           <div className="agent-catalog-search">
             <span className="agent-catalog-search-icon" aria-hidden="true">
-              <HelpCircle size={14} />
+              <Search size={16} />
             </span>
             <input
               className="agent-catalog-search-input"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search agents..."
+              placeholder="Search by name or capability..."
               aria-label="Search agents"
             />
           </div>
@@ -430,7 +421,13 @@ export default function AgentCatalog() {
               <div className="agent-catalog-icon">
                 <AgentIcon iconName={a.icon} />
               </div>
-              <div className={`agent-catalog-badge ${a.type === "CORE" ? "core" : "agent"}`}>{a.type}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.7rem', color: 'var(--dash-emerald)', fontWeight: 600 }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--dash-emerald)', boxShadow: '0 0 6px var(--dash-emerald)' }}></span>
+                  Active
+                </span>
+                <div className={`agent-catalog-badge ${a.type === "CORE" ? "core" : "agent"}`}>{a.type}</div>
+              </div>
             </div>
 
             <div className="agent-catalog-card-body">
@@ -440,6 +437,12 @@ export default function AgentCatalog() {
 
             <div className="agent-catalog-card-footer">
               <TagPills tags={a.tags} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '14px', paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--dash-text-subtle)', fontWeight: 500 }}>{a.category}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.76rem', color: 'var(--dash-emerald)', fontWeight: 700, fontFamily: 'Orbitron, monospace' }}>
+                  Consult <ArrowRight size={13} />
+                </span>
+              </div>
             </div>
           </div>
         ))}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Check } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import AuthLayout from './AuthLayout';
 
@@ -121,7 +122,7 @@ const Register = () => {
       {/* Success Banner */}
       {success && (
         <div className="status-banner-auth">
-          <div className="status-icon-auth">✓</div>
+          <div className="status-icon-auth"><Check size={16} /></div>
           <div>
             <p className="status-title-auth">Success</p>
             <p className="status-desc-auth">{success}</p>

@@ -540,7 +540,7 @@ const AdminSandbox = () => {
             minute: '2-digit',
             second: '2-digit'
           }),
-          message: `🤖 ${item.agent_name} consumed ${item.tokens_used} tokens...`,
+          message: `[AGENT] ${item.agent_name} consumed ${item.tokens_used} tokens...`,
           tokens: item.tokens_used
         }));
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, Circle, Clock, AlertCircle, Droplets, Bug, Sprout, Hammer, Check } from 'lucide-react';
+import { CheckCircle2, Circle, Clock, AlertCircle, Droplets, Bug, Sprout, Hammer, Check, Sparkles, RefreshCw } from 'lucide-react';
 import apiService from '../services/api';
 import '../styles/Dashboard/DailyChecklist.css';
 
@@ -104,6 +104,34 @@ const DailyChecklist = () => {
         </div>
       )}
 
+      {generating && (
+        <div className="task-cultivating-card" style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px 20px',
+          background: 'rgba(16, 185, 129, 0.05)',
+          border: '1px solid rgba(16, 185, 129, 0.25)',
+          borderRadius: '16px',
+          margin: '14px 0',
+          gap: '8px'
+        }}>
+          <dotlottie-player
+            src="/animations/soil cultivating.lottie"
+            autoplay
+            loop
+            style={{ width: '90px', height: '90px' }}
+          />
+          <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.82rem', fontWeight: 700, color: 'var(--dash-emerald)', letterSpacing: '0.06em' }}>
+            Cultivating Today's Personalized Tasks...
+          </div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--dash-text-muted)' }}>
+            Synthesizing weather data, soil telemetry, and crop growth stages
+          </div>
+        </div>
+      )}
+
       {tasks.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon-wrap">
@@ -116,7 +144,8 @@ const DailyChecklist = () => {
             onClick={handleGenerateTasks}
             disabled={generating}
           >
-            {generating ? 'Generating...' : 'Generate Today\'s Tasks'}
+            <Sparkles size={16} />
+            {generating ? 'Cultivating Tasks...' : 'Generate Today\'s Tasks'}
           </button>
         </div>
       ) : (
@@ -161,7 +190,8 @@ const DailyChecklist = () => {
               onClick={handleGenerateTasks}
               disabled={generating}
             >
-              {generating ? 'Regenerating...' : 'Regenerate Tasks'}
+              <RefreshCw size={14} className={generating ? "animate-spin" : ""} />
+              {generating ? 'Cultivating Tasks...' : 'Regenerate Tasks'}
             </button>
           </div>
         </div>

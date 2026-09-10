@@ -1,6 +1,27 @@
 import React from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  FlaskConical,
+  CloudSun,
+  TrendingUp,
+  Sprout,
+  Wheat,
+  Pill,
+  Droplets,
+  Bug,
+  BarChart3,
+  DollarSign,
+  Calendar,
+  Tractor,
+  MapPin,
+  Package,
+  ShieldAlert,
+  Users,
+  ClipboardCheck,
+  MessageSquare,
+  Bot
+} from 'lucide-react';
 
 const ChipsContainer = styled.div`
   display: flex;
@@ -67,7 +88,9 @@ const AgentChip = styled(motion.div)`
 `;
 
 const AgentIcon = styled.span`
-  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 `;
 
 const AgentName = styled.span`
@@ -103,27 +126,27 @@ const AgentActivationChips = ({
 }) => {
   const getAgentIcon = (agentName) => {
     const iconMap = {
-      'soil_health_agent': '🧪',
-      'weather_watcher_agent': '🌦️',
-      'market_intelligence_agent': '💹',
-      'crop_selector_agent': '🌱',
-      'seed_selection_agent': '🌾',
-      'fertilizer_advisor_agent': '💊',
-      'irrigation_planner_agent': '💧',
-      'pest_disease_diagnostic_agent': '🐛',
-      'yield_predictor_agent': '📊',
-      'profit_optimization_agent': '💰',
-      'task_scheduler_agent': '📅',
-      'machinery_equipment_agent': '🚜',
-      'farm_layout_mapping_agent': '🗺️',
-      'logistics_storage_agent': '📦',
-      'crop_insurance_risk_agent': '🛡️',
-      'farmer_coach_agent': '👨‍🌾',
-      'compliance_certification_agent': '📋',
-      'community_engagement_agent': '👥'
+      'soil_health_agent': <FlaskConical size={14} />,
+      'weather_watcher_agent': <CloudSun size={14} />,
+      'market_intelligence_agent': <TrendingUp size={14} />,
+      'crop_selector_agent': <Sprout size={14} />,
+      'seed_selection_agent': <Wheat size={14} />,
+      'fertilizer_advisor_agent': <Pill size={14} />,
+      'irrigation_planner_agent': <Droplets size={14} />,
+      'pest_disease_diagnostic_agent': <Bug size={14} />,
+      'yield_predictor_agent': <BarChart3 size={14} />,
+      'profit_optimization_agent': <DollarSign size={14} />,
+      'task_scheduler_agent': <Calendar size={14} />,
+      'machinery_equipment_agent': <Tractor size={14} />,
+      'farm_layout_mapping_agent': <MapPin size={14} />,
+      'logistics_storage_agent': <Package size={14} />,
+      'crop_insurance_risk_agent': <ShieldAlert size={14} />,
+      'farmer_coach_agent': <Users size={14} />,
+      'compliance_certification_agent': <ClipboardCheck size={14} />,
+      'community_engagement_agent': <MessageSquare size={14} />
     };
     
-    return iconMap[agentName] || '🤖';
+    return iconMap[agentName] || <Bot size={14} />;
   };
 
   const getAgentDisplayName = (agentName) => {

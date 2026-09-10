@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react"
+import { useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
-import { Droplets, ThermometerSun, FlaskRoundIcon as Flask, Info, RefreshCw, Calendar, Sprout } from "lucide-react"
+import { Droplets, ThermometerSun, FlaskRoundIcon as Flask, Info, RefreshCw, Calendar, Sprout, AlertTriangle, Cpu } from "lucide-react"
 import MoistureSVGChart from "./Graph/moisture"
 import TemperatureSVGChart from "./Graph/tempature"
 import PhSVGChart from "./Graph/ph"
@@ -11,10 +12,13 @@ import "../styles/Dashboard/FarmInfoDashboard/farminformation.css"
 const API_BASE_URL = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api'
 
 const initialSoilData = {
-  moisture: 0,
-  temperature: 0,
-  ph: 0,
-  lastUpdated: new Date().toISOString(),
+  moisture: null,
+  temperature: null,
+  ph: null,
+  nitrogen: null,
+  phosphorus: null,
+  potassium: null,
+  lastUpdated: null,
   iot: {
     status: "loading",
     error: null,
@@ -51,6 +55,7 @@ function ResponsiveChartContainer({ selectedChart }) {
 }
 
 export default function FarmerDashboard() {
+  const navigate = useNavigate()
   const [soilData, setSoilData] = useState(initialSoilData)
   const [isLoading, setIsLoading] = useState(false)
   const [selectedChart, setSelectedChart] = useState("moisture")
@@ -59,30 +64,73 @@ export default function FarmerDashboard() {
   const fmt1 = (v) => (isNum(v) ? v.toFixed(1) : "--")
 
   const fetchLatestSoilData = async () => {
-    const response = await fetch(`${API_BASE_URL}/agents/soil-health/iot/latest`)
-    const json = await response.json()
+    const token = localStorage.getItem('access_token')
+    const headers = token ? { Authorization: `Bearer ${token}` } : {}
 
-    if (!response.ok || json?.error) {
-      const msg = json?.message || `Failed to fetch IoT data (status ${response.status})`
-      throw new Error(msg)
+    // First try user-specific soil test telemetry
+    try {
+      const response = await fetch(`${API_BASE_URL}/soil-tests/latest`, { headers })
+      if (response.ok) {
+        const json = await response.json()
+        if (json?.has_data && json?.test) {
+          const t = json.test
+          const moisture = typeof t.soil_moisture === 'number' ? t.soil_moisture : null
+          const temperature = typeof t.soil_temperature === 'number' ? t.soil_temperature : null
+          const ph = typeof t.soil_ph === 'number' ? t.soil_ph : null
+          
+          if (moisture !== null || temperature !== null || ph !== null) {
+            return {
+              moisture,
+              temperature,
+              ph,
+              nitrogen: typeof t.nitrogen === 'number' ? t.nitrogen : null,
+              phosphorus: typeof t.phosphorus === 'number' ? t.phosphorus : null,
+              potassium: typeof t.potassium === 'number' ? t.potassium : null,
+              fetchedAt: t.test_date || t.created_at || new Date().toISOString(),
+              source: t.source || "IoT Sensor",
+              hasData: true,
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Could not fetch /soil-tests/latest:", err)
     }
 
-    const payload = json?.data
-    const soil = payload?.soil_data
-    if (!payload?.success || !soil) {
-      throw new Error(payload?.error || "IoT payload missing soil_data")
+    // Try Blynk telemetry if hardware connected
+    try {
+      const blynkRes = await fetch(`${API_BASE_URL}/blynk/telemetry/live`, { headers })
+      if (blynkRes.ok) {
+        const blynkJson = await blynkRes.json()
+        if (blynkJson?.has_data && blynkJson?.data) {
+          const d = blynkJson.data
+          return {
+            moisture: typeof d.soil_moisture === 'number' ? d.soil_moisture : null,
+            temperature: typeof d.soil_temperature === 'number' ? d.soil_temperature : null,
+            ph: typeof d.soil_ph === 'number' ? d.soil_ph : null,
+            nitrogen: typeof d.nitrogen === 'number' ? d.nitrogen : null,
+            phosphorus: typeof d.phosphorus === 'number' ? d.phosphorus : null,
+            potassium: typeof d.potassium === 'number' ? d.potassium : null,
+            fetchedAt: d.recorded_at || new Date().toISOString(),
+            source: "Blynk IoT",
+            hasData: true,
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Could not fetch /blynk/telemetry/live:", err)
     }
-
-    const moisture = typeof soil.moisture === "number" ? soil.moisture : null
-    const temperature = typeof soil.temperature === "number" ? soil.temperature : null
-    const ph = typeof soil.pH === "number" ? soil.pH : null
 
     return {
-      moisture,
-      temperature,
-      ph,
-      fetchedAt: payload?.fetched_at || new Date().toISOString(),
-      source: payload?.source || "IoT",
+      moisture: null,
+      temperature: null,
+      ph: null,
+      nitrogen: null,
+      phosphorus: null,
+      potassium: null,
+      fetchedAt: null,
+      source: null,
+      hasData: false,
     }
   }
 
@@ -91,28 +139,52 @@ export default function FarmerDashboard() {
     try {
       const latest = await fetchLatestSoilData()
 
-      setSoilData((prev) => ({
-        ...prev,
-        moisture: latest.moisture !== null ? latest.moisture : prev.moisture,
-        temperature: latest.temperature !== null ? latest.temperature : prev.temperature,
-        ph: latest.ph !== null ? latest.ph : prev.ph,
-        lastUpdated: latest.fetchedAt,
-        iot: {
-          status: "live",
-          error: null,
-          source: latest.source,
-        },
-      }))
+      if (!latest.hasData || (latest.moisture === null && latest.temperature === null && latest.ph === null)) {
+        setSoilData({
+          moisture: null,
+          temperature: null,
+          ph: null,
+          nitrogen: null,
+          phosphorus: null,
+          potassium: null,
+          lastUpdated: null,
+          iot: {
+            status: "offline",
+            error: "No sensor readings detected",
+            source: null,
+          },
+        })
+      } else {
+        setSoilData({
+          moisture: latest.moisture,
+          temperature: latest.temperature,
+          ph: latest.ph,
+          nitrogen: latest.nitrogen,
+          phosphorus: latest.phosphorus,
+          potassium: latest.potassium,
+          lastUpdated: latest.fetchedAt,
+          iot: {
+            status: "live",
+            error: null,
+            source: latest.source,
+          },
+        })
+      }
     } catch (e) {
-      setSoilData((prev) => ({
-        ...prev,
-        lastUpdated: new Date().toISOString(),
+      setSoilData({
+        moisture: null,
+        temperature: null,
+        ph: null,
+        nitrogen: null,
+        phosphorus: null,
+        potassium: null,
+        lastUpdated: null,
         iot: {
           status: "offline",
           error: String(e?.message || e),
           source: null,
         },
-      }))
+      })
     }
     setIsLoading(false)
   }
@@ -120,6 +192,22 @@ export default function FarmerDashboard() {
   // Get suggestions based on soil data
   const getSuggestions = () => {
     const suggestions = []
+
+    if (!isNum(soilData.moisture) && !isNum(soilData.temperature) && !isNum(soilData.ph)) {
+      suggestions.push({
+        type: "info",
+        title: "Live Telemetry Waiting",
+        description: "Connect an IoT soil sensor to unlock automated watering schedules & condition alerts.",
+        icon: Sprout,
+      })
+      suggestions.push({
+        type: "info",
+        title: "Scheduled Maintenance",
+        description: "Remember to check your irrigation system weekly.",
+        icon: Calendar,
+      })
+      return suggestions
+    }
 
     if (isNum(soilData.moisture) && soilData.moisture < 40) {
       suggestions.push({
@@ -196,6 +284,7 @@ export default function FarmerDashboard() {
   }
 
   const formatDate = (dateString) => {
+    if (!dateString) return "No sensor data"
     const date = new Date(dateString)
     return date.toLocaleString()
   }
@@ -248,8 +337,52 @@ export default function FarmerDashboard() {
                 />
                 {isLoading ? "Refreshing..." : "Refresh Data"}
               </button>
-            </div>
           </div>
+
+          {(!isNum(soilData.moisture) || soilData.iot?.status === "offline") && (
+            <div className="sensor-unavailable-banner" style={{
+              background: 'rgba(245, 158, 11, 0.08)',
+              border: '1px solid rgba(245, 158, 11, 0.25)',
+              borderRadius: '16px',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <AlertTriangle size={24} style={{ color: '#fbbf24', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 700, color: 'var(--dash-text-heading)', fontSize: '0.94rem', fontFamily: 'Orbitron, monospace' }}>
+                    Sensor Data Unavailable
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--dash-text-muted)', marginTop: '2px' }}>
+                    No active IoT telemetry detected from your farm sensors. Connect hardware in IoT settings or stream readings to view live moisture and nutrient levels.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => navigate('/dashboard/hardware-iot')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--dash-emerald)',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  color: 'var(--dash-emerald)',
+                  fontFamily: 'Orbitron, monospace',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                <Cpu size={15} /> Configure Hardware IoT
+              </button>
+            </div>
+          )}
 
           <div className="stats-grid-farminformation">
             <motion.div
@@ -264,7 +397,9 @@ export default function FarmerDashboard() {
                 </div>
                 <div className="flex-row-space-between">
                   <div>
-                    <div className="stat-value-farminformation">{fmt1(soilData.moisture)}%</div>
+                    <div className="stat-value-farminformation">
+                      {isNum(soilData.moisture) ? `${fmt1(soilData.moisture)}%` : "--"}
+                    </div>
                     <div
                       className={`stat-status-farminformation ${isNum(soilData.moisture)
                         ? getStatusColor(soilData.moisture, "moisture")
@@ -277,9 +412,7 @@ export default function FarmerDashboard() {
                           : soilData.moisture > 80
                             ? "High"
                             : "Optimal"
-                        : soilData?.iot?.status === "offline"
-                          ? "Offline"
-                          : "--"}
+                        : "Unavailable"}
                     </div>
                   </div>
                   <SoilGauge value={isNum(soilData.moisture) ? soilData.moisture : 0} type="moisture" />
@@ -299,7 +432,9 @@ export default function FarmerDashboard() {
                 </div>
                 <div className="flex-row-space-between">
                   <div>
-                    <div className="stat-value-farminformation">{fmt1(soilData.temperature)}°C</div>
+                    <div className="stat-value-farminformation">
+                      {isNum(soilData.temperature) ? `${fmt1(soilData.temperature)}°C` : "--"}
+                    </div>
                     <div
                       className={`stat-status-farminformation ${isNum(soilData.temperature)
                         ? getStatusColor(soilData.temperature, "temperature")
@@ -312,9 +447,7 @@ export default function FarmerDashboard() {
                           : soilData.temperature > 28
                             ? "High"
                             : "Optimal"
-                        : soilData?.iot?.status === "offline"
-                          ? "Offline"
-                          : "--"}
+                        : "Unavailable"}
                     </div>
                   </div>
                   <SoilGauge value={isNum(soilData.temperature) ? soilData.temperature : 0} type="temperature" />
@@ -334,7 +467,9 @@ export default function FarmerDashboard() {
                 </div>
                 <div className="flex-row-space-between">
                   <div>
-                    <div className="stat-value-farminformation">{fmt1(soilData.ph)} pH</div>
+                    <div className="stat-value-farminformation">
+                      {isNum(soilData.ph) ? `${fmt1(soilData.ph)} pH` : "--"}
+                    </div>
                     <div
                       className={`stat-status-farminformation ${isNum(soilData.ph) ? getStatusColor(soilData.ph, "ph") : "status-warning-farminformation"
                         }`}
@@ -345,9 +480,7 @@ export default function FarmerDashboard() {
                           : soilData.ph > 7.5
                             ? "Alkaline"
                             : "Optimal"
-                        : soilData?.iot?.status === "offline"
-                          ? "Offline"
-                          : "--"}
+                        : "Unavailable"}
                     </div>
                   </div>
                   <SoilGauge value={isNum(soilData.ph) ? soilData.ph : 0} type="ph" />

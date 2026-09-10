@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Plug, ClipboardList } from 'lucide-react';
 import farmxpertAPI from '../services/farmxpertAPI';
 
 const FrontendTest = () => {
@@ -31,7 +32,7 @@ const FrontendTest = () => {
 
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      <h2>🔌 Frontend-Backend Connection Test</h2>
+      <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Plug size={22} /> Frontend-Backend Connection Test</h2>
       
       <div style={{ marginBottom: '20px' }}>
         <label>
@@ -65,19 +66,19 @@ const FrontendTest = () => {
         <div style={{ marginTop: '20px' }}>
           <h3>Response:</h3>
           <pre style={{ 
-            backgroundColor: '#f5f5f5', 
-            padding: '15px', 
-            borderRadius: '5px',
-            overflow: 'auto',
-            maxHeight: '400px'
-          }}>
-            {response}
-          </pre>
-        </div>
-      )}
-      
-      <div style={{ marginTop: '30px', padding: '15px', backgroundColor: '#e7f3ff', borderRadius: '5px' }}>
-        <h4>📋 Test Details:</h4>
+             backgroundColor: '#f5f5f5', 
+             padding: '15px', 
+             borderRadius: '5px',
+             overflow: 'auto',
+             maxHeight: '400px'
+           }}>
+             {response}
+           </pre>
+         </div>
+       )}
+       
+       <div style={{ marginTop: '30px', padding: '15px', backgroundColor: '#e7f3ff', borderRadius: '5px' }}>
+        <h4 style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '0 0 10px 0' }}><ClipboardList size={18} /> Test Details:</h4>
         <ul>
           <li><strong>Endpoint:</strong> POST /api/agent/process</li>
           <li><strong>Backend URL:</strong> {process.env.REACT_APP_API_URL || '/api'}</li>

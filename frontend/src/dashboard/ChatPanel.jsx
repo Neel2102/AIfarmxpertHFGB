@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { 
   BarChart3, Droplets, ThermometerSun, FlaskConical, Sprout, 
   Calendar, Circle, Bug, Cloud, TrendingUp, Clock, Truck, 
-  MapPin, Camera, Mic, MicOff, Paperclip, X, Check, Map,
+  MapPin, Camera, Mic, MicOff, Paperclip, X, Check,
   Sparkles, Users, ChevronDown, Rocket, Bot
 } from 'lucide-react';
 import { useOrchestrator } from '../contexts/OrchestratorContext';
@@ -225,18 +225,35 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => setAttachedImage({ file, preview: ev.target.result });
+    reader.onload = (ev) => {
+      setAttachedImage({ file, preview: ev.target.result });
+      setTimeout(() => textareaRef.current?.focus(), 50);
+    };
     reader.readAsDataURL(file);
-    setAttachedFile(null);
-    setAudioBlob(null);
   };
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setAttachedFile({ file });
+    setTimeout(() => textareaRef.current?.focus(), 50);
+  };
+
+  const removeImage = () => {
     setAttachedImage(null);
+    if (imageInputRef.current) imageInputRef.current.value = '';
+    textareaRef.current?.focus();
+  };
+
+  const removeFile = () => {
+    setAttachedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    textareaRef.current?.focus();
+  };
+
+  const removeAudio = () => {
     setAudioBlob(null);
+    textareaRef.current?.focus();
   };
 
   const clearAttachments = () => {
@@ -260,6 +277,7 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
         const blob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' });
         setAudioBlob(blob);
         stream.getTracks().forEach(t => t.stop());
+        setTimeout(() => textareaRef.current?.focus(), 50);
       };
       mr.onerror = (err) => {
         console.error('MediaRecorder error:', err);
@@ -269,8 +287,6 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
       mr.start();
       mediaRecorderRef.current = mr;
       setIsRecording(true);
-      setAttachedImage(null);
-      setAttachedFile(null);
     } catch (err) {
       console.error('Microphone access denied:', err);
       alert('Microphone access was denied or not available. Please allow microphone permissions in your browser settings to record voice.');
@@ -281,6 +297,15 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      setAudioBlob(null);
     }
   };
 
@@ -667,6 +692,25 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
             )}
 
             <div className="farm-input-box">
+              {/* Active Voice Recording Banner */}
+              {isRecording && (
+                <div className="farm-recording-banner">
+                  <div className="recording-indicator-pulse" />
+                  <span className="recording-text">Listening... Speak now</span>
+                  <div className="recording-wave">
+                    <span></span><span></span><span></span><span></span>
+                  </div>
+                  <div className="recording-actions">
+                    <button className="recording-cancel-btn" onClick={cancelRecording} title="Cancel recording">
+                      <X size={14} /> Cancel
+                    </button>
+                    <button className="recording-done-btn" onClick={stopRecording} title="Done recording">
+                      <Check size={14} /> Finish
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Attachments Preview */}
               {(attachedImage || attachedFile || audioBlob) && (
                 <div className="farm-input-attachments">
@@ -674,37 +718,37 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
                     <div className="farm-attachment-pill">
                       <img src={attachedImage.preview} alt="preview" />
                       <span>{attachedImage.file.name}</span>
-                      <button className="farm-attachment-close" onClick={clearAttachments}><X size={14} /></button>
+                      <button className="farm-attachment-close" onClick={removeImage} title="Remove image"><X size={14} /></button>
                     </div>
                   )}
                   {attachedFile && (
                     <div className="farm-attachment-pill">
                       <Paperclip size={14} /> <span>{attachedFile.file.name}</span>
-                      <button className="farm-attachment-close" onClick={clearAttachments}><X size={14} /></button>
+                      <button className="farm-attachment-close" onClick={removeFile} title="Remove document"><X size={14} /></button>
                     </div>
                   )}
                   {audioBlob && (
                     <div className="farm-attachment-pill">
-                      <Mic size={14} color="#3b82f6" /> <span>Voice recording prepared</span>
-                      <button className="farm-attachment-close" onClick={clearAttachments}><X size={14} /></button>
+                      <Mic size={14} style={{ color: 'var(--dash-emerald)' }} /> <span>Voice recording prepared</span>
+                      <button className="farm-attachment-close" onClick={removeAudio} title="Remove audio"><X size={14} /></button>
                     </div>
                   )}
                 </div>
               )}
 
               <div className="farm-input-row">
-                <button className="farm-tool-btn" onClick={() => imageInputRef.current?.click()} disabled={isLoading || isRecording}><Camera size={18} /></button>
-                <button className={`farm-tool-btn ${isRecording ? 'recording' : audioBlob ? 'has-audio' : ''}`} onClick={isRecording ? stopRecording : startRecording} disabled={isLoading}>
+                <button className="farm-tool-btn" onClick={() => imageInputRef.current?.click()} disabled={isLoading || isRecording} title="Attach Photo / Leaf Scan"><Camera size={18} /></button>
+                <button className={`farm-tool-btn ${isRecording ? 'recording' : audioBlob ? 'has-audio' : ''}`} onClick={isRecording ? stopRecording : startRecording} disabled={isLoading} title={isRecording ? "Stop recording" : "Record voice"}>
                   {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
                 </button>
-                <button className="farm-tool-btn" onClick={() => fileInputRef.current?.click()} disabled={isLoading || isRecording}><Paperclip size={18} /></button>
+                <button className="farm-tool-btn" onClick={() => fileInputRef.current?.click()} disabled={isLoading || isRecording} title="Attach Document (PDF/CSV)"><Paperclip size={18} /></button>
                 
                 <textarea
                   ref={textareaRef}
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  placeholder="Message Farm Orchestrator..."
+                  placeholder="Message Farm Orchestrator... (Press Enter to send)"
                   disabled={isLoading}
                   className="farm-textarea"
                   rows={1}

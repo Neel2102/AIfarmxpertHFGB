@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sprout, User, Bot, Zap } from 'lucide-react';
+import { Sprout, User, Bot, Zap, RefreshCw } from 'lucide-react';
 import { useOrchestrator } from '../../contexts/OrchestratorContext';
 
 // Import orchestrator components
@@ -372,7 +372,7 @@ const EnhancedChatInterface = ({ className = '' }) => {
 
           {isProcessing && (
             <Message isUser={false}>
-              <MessageAvatar isUser={false}>🤖</MessageAvatar>
+              <MessageAvatar isUser={false}><Bot size={16} /></MessageAvatar>
               <MessageContent>
                 <MessageBubble isUser={false}>
                   <LoadingDots>
@@ -384,7 +384,8 @@ const EnhancedChatInterface = ({ className = '' }) => {
                   <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Thinking...</span>
                   {workflow?.tasks?.filter(t => t.status === 'running').map(t => (
                     <SmallAgentChip key={t.id} style={{ color: '#3b82f6', borderColor: '#bfdbfe', background: '#eff6ff' }}>
-                      🔄 {t.agent_name.replace(/_/g, ' ').replace('agent', '').trim()}
+                      <RefreshCw size={10} style={{ display: 'inline', marginRight: '4px' }} className="animate-spin" />
+                      {t.agent_name.replace(/_/g, ' ').replace('agent', '').trim()}
                     </SmallAgentChip>
                   ))}
                 </ConsultedAgentsChip>

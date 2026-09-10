@@ -384,7 +384,7 @@
 //       <div className="sidebar">
 //         <div className="sidebar-header">
 //           <div className="logo">
-//             <div className="logo-icon">🌾</div>
+//             <div className="logo-icon">[icon]</div>
 //             <h1>FarmXpert</h1>
 //           </div>
 //           <p className="tagline">AI-Powered Farming Assistant</p>
@@ -396,7 +396,7 @@
 //             className={`orchestrator-card ${selectedAgent === 'orchestrator' ? 'active' : ''}`}
 //             onClick={() => setSelectedAgent('orchestrator')}
 //           >
-//             <div className="orchestrator-icon">🎯</div>
+//             <div className="orchestrator-icon">[icon]</div>
 //             <div className="orchestrator-info">
 //               <h3>Farm Orchestrator</h3>
 //               <span className="status-indicator active">Active</span>
@@ -412,7 +412,7 @@
 //               className="category-header"
 //               onClick={() => toggleCategory('crop_planning')}
 //             >
-//               <span className="category-icon">🌾</span>
+//               <span className="category-icon">[crop]</span>
 //               <span className="category-title">CROP PLANNING & GROWTH</span>
 //               <span className={`category-toggle ${expandedCategories.crop_planning ? '' : 'collapsed'}`}>▼</span>
 //             </div>
@@ -422,7 +422,7 @@
 //                       className={`agent-item ${currentAgent === 'crop_selector' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('crop_selector')}
 //                     >
-//                       <span className="agent-icon">🌱</span>
+//                       <span className="agent-icon">[crop]</span>
 //                       <span className="agent-name">Crop Selector</span>
 //                       <span className="agent-status active"></span>
 //                     </div>
@@ -430,7 +430,7 @@
 //                       className={`agent-item ${currentAgent === 'seed_selection' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('seed_selection')}
 //                     >
-//                       <span className="agent-icon">🌰</span>
+//                       <span className="agent-icon">[seed]</span>
 //                       <span className="agent-name">Seed Selection</span>
 //                       <span className="agent-status active"></span>
 //                     </div>
@@ -438,7 +438,7 @@
 //                       className={`agent-item ${currentAgent === 'soil_health' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('soil_health')}
 //                     >
-//                       <span className="agent-icon">🌍</span>
+//                       <span className="agent-icon">[soil]</span>
 //                       <span className="agent-name">Soil Health</span>
 //                       <span className="agent-status active"></span>
 //                     </div>
@@ -446,7 +446,7 @@
 //                       className={`agent-item ${currentAgent === 'fertilizer_advisor' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('fertilizer_advisor')}
 //                     >
-//                       <span className="agent-icon">💊</span>
+//                       <span className="agent-icon">[fertilizer]</span>
 //                       <span className="agent-name">Fertilizer Advisor</span>
 //                       <span className="agent-status active"></span>
 //                     </div>
@@ -454,7 +454,7 @@
 //                       className={`agent-item ${currentAgent === 'irrigation_planner' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('irrigation_planner')}
 //                     >
-//                       <span className="agent-icon">💧</span>
+//                       <span className="agent-icon">[irrigation]</span>
 //                       <span className="agent-name">Irrigation Planner</span>
 //                       <span className="agent-status active"></span>
 //                     </div>
@@ -462,7 +462,7 @@
 //                       className={`agent-item ${currentAgent === 'pest_diagnostic' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('pest_diagnostic')}
 //                     >
-//                       <span className="agent-icon">🐛</span>
+//                       <span className="agent-icon">[pest]</span>
 //                       <span className="agent-name">Pest & Disease Diagnostic</span>
 //                       <span className="agent-status active"></span>
 //                     </div>
@@ -470,7 +470,7 @@
 //                       className={`agent-item ${currentAgent === 'weather_watcher' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('weather_watcher')}
 //                     >
-//                       <span className="agent-icon">🌤️</span>
+//                       <span className="agent-icon">[weather]</span>
 //                       <span className="agent-name">Weather Watcher</span>
 //                       <span className="agent-status active"></span>
 //                     </div>
@@ -478,7 +478,7 @@
 //                       className={`agent-item ${currentAgent === 'growth_monitor' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('growth_monitor')}
 //                     >
-//                       <span className="agent-icon">📈</span>
+//                       <span className="agent-icon">[growth]</span>
 //                       <span className="agent-name">Growth Stage Monitor</span>
 //                       <span className="agent-status active"></span>
 //                     </div>
@@ -492,7 +492,7 @@
 //               className="category-header"
 //               onClick={() => toggleCategory('farm_operations')}
 //             >
-//               <span className="category-icon">🚜</span>
+//               <span className="category-icon">[ops]</span>
 //               <span className="category-title">FARM OPERATIONS & AUTOMATION</span>
 //               <span className={`category-toggle ${expandedCategories.farm_operations ? '' : 'collapsed'}`}>▼</span>
 //             </div>
@@ -502,7 +502,7 @@
 //                       className={`agent-item ${currentAgent === 'task_scheduler' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('task_scheduler')}
 //                     >
-//                       <span className="agent-icon">📅</span>
+//                       <span className="agent-icon">[tasks]</span>
 //                       <span className="agent-name">Task Scheduler</span>
 //                       <span className="agent-status active"></span>
 //                     </div>
@@ -510,7 +510,7 @@
 //                       className={`agent-item ${currentAgent === 'machinery_manager' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('machinery_manager')}
 //                     >
-//                       <span className="agent-icon">🚜</span>
+//                       <span className="agent-icon">[machinery]</span>
 //                       <span className="agent-name">Machinery & Equipment</span>
 //                       <span className="agent-status active"></span>
 //                     </div>
@@ -518,7 +518,7 @@
 //                       className={`agent-item ${currentAgent === 'drone_commander' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('drone_commander')}
 //                     >
-//                       <span className="agent-icon">🚁</span>
+//                       <span className="agent-icon">[drone]</span>
 //                       <span className="agent-name">Drone Command</span>
 //                       <span className="agent-status processing"></span>
 //                     </div>
@@ -526,7 +526,7 @@
 //                       className={`agent-item ${currentAgent === 'layout_mapper' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('layout_mapper')}
 //                     >
-//                       <span className="agent-icon">🗺️</span>
+//                       <span className="agent-icon">[layout]</span>
 //                       <span className="agent-name">Farm Layout & Mapping</span>
 //                       <span className="agent-status active"></span>
 //                     </div>
@@ -540,7 +540,7 @@
 //               className="category-header"
 //               onClick={() => toggleCategory('analytics')}
 //             >
-//               <span className="category-icon">📊</span>
+//               <span className="category-icon">[analytics]</span>
 //               <span className="category-title">ANALYTICS</span>
 //               <span className={`category-toggle ${expandedCategories.analytics ? '' : 'collapsed'}`}>▼</span>
 //             </div>
@@ -550,7 +550,7 @@
 //                       className={`agent-item ${currentAgent === 'yield_predictor' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('yield_predictor')}
 //                     >
-//                       <span className="agent-icon">📊</span>
+//                       <span className="agent-icon">[yield]</span>
 //                       <span className="agent-name">Yield Predictor</span>
 //                       <span className="agent-status active"></span>
 //                     </div>
@@ -558,7 +558,7 @@
 //                       className={`agent-item ${currentAgent === 'profit_optimizer' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('profit_optimizer')}
 //                     >
-//                       <span className="agent-icon">💰</span>
+//                       <span className="agent-icon">[profit]</span>
 //                       <span className="agent-name">Profit Optimization</span>
 //                       <span className="agent-status active"></span>
 //                     </div>
@@ -566,7 +566,7 @@
 //                       className={`agent-item ${currentAgent === 'sustainability_tracker' ? 'active' : ''}`}
 //                       onClick={() => switchToAgent('sustainability_tracker')}
 //                     >
-//                       <span className="agent-icon">🌿</span>
+//                       <span className="agent-icon">[sustainability]</span>
 //                       <span className="agent-name">Carbon & Sustainability</span>
 //                       <span className="agent-status active"></span>
 //                     </div>
@@ -586,7 +586,7 @@
 //           </div>
 //           <div className="header-right">
 //             <div className="weather-widget">
-//               <div className="weather-icon">☀️</div>
+//               <div className="weather-icon">[weather]</div>
 //               <div className="weather-info">
 //                 <div className="temperature">{farmData.weather.temperature}°F</div>
 //                 <div className="condition">{farmData.weather.condition}</div>
@@ -779,7 +779,7 @@
 //             </div>
 //             <div className="panel-content">
 //               <div className="agent-info">
-//                 <div className="agent-avatar-large">🤖</div>
+//                 <div className="agent-avatar-large">[bot]</div>
 //                 <h4>{getAgentInfo(currentAgent).name}</h4>
 //                 <p>{getAgentInfo(currentAgent).description}</p>
 //               </div>
