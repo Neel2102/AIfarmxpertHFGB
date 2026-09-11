@@ -38,13 +38,14 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 
 from farmxpert.config.settings import settings
 
-def _get_gemini_model(model_name: str = "gemini-1.5-flash"):
+def _get_gemini_model(model_name: Optional[str] = None):
     """Return a configured Gemini GenerativeModel."""
     api_key = settings.gemini_api_key or os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set")
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel(model_name)
+    chosen_model = model_name or getattr(settings, "gemini_model", "gemini-2.5-flash") or "gemini-2.5-flash"
+    return genai.GenerativeModel(chosen_model)
 
 
 # ---------------------------------------------------------------------------
@@ -95,10 +96,13 @@ async def _call_orchestrator(message: str, user_id: int, extra: Optional[Dict[st
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
-    user_id: Optional[int] = None # This field is now optional as current_user.id is used
+    farm_id: Optional[int] = None
+    user_id: Optional[int] = None # Optional; authenticated user is always derived securely from auth token
     context: Optional[Dict[str, Any]] = None
 
 
+@router.post("")
+@router.post("/")
 @router.post("/orchestrate")
 async def chat_orchestrate(
     request: ChatRequest,
@@ -106,151 +110,89 @@ async def chat_orchestrate(
     db: Session = Depends(get_db),
 ):
     """
-    Unified text chat endpoint (requires authentication).
-    Routes the user message to the SuperAgent which selects the
-    appropriate sub-agents and returns a synthesized response.
-    The authenticated user_id is forwarded so chat history is user-scoped.
+    Unified chat endpoint (requires authentication).
+    Uses FarmXpertOrchestrator with explicit intent routing, authenticated
+    farm context resolution, real tool calling, and strict response scope control.
     """
     try:
-        logger.info(f"[chat/orchestrate] user={current_user.id} message={request.message[:80]!r}")
-        
-        # Generate session ID if not provided
+        logger.info(f"[chat] user={current_user.id} message={request.message[:80]!r}")
         session_id = request.session_id or str(uuid.uuid4())
-        
-        extra = {}
-        if request.context:
-            extra.update(request.context)
 
-        # ── Fetch User Farm Profile, Farm Layout Coordinates, and Live Sensors ──
-        try:
-            farm_profile = db.query(FarmProfile).filter(FarmProfile.user_id == current_user.id).first()
-            farm = db.query(Farm).filter(Farm.user_id == current_user.id).first()
-
-            # Coordinates resolution
-            lat = None
-            lon = None
-            if farm_profile:
-                lat = farm_profile.latitude
-                lon = farm_profile.longitude
-                if (not lat or not lon) and isinstance(farm_profile.farm_polygon, dict):
-                    coords = farm_profile.farm_polygon.get("coordinates")
-                    if coords and isinstance(coords, list) and len(coords) > 0:
-                        first_ring = coords[0]
-                        if isinstance(first_ring, list) and len(first_ring) > 0:
-                            first_pt = first_ring[0]
-                            if isinstance(first_pt, list) and len(first_pt) >= 2:
-                                lon = float(first_pt[0])
-                                lat = float(first_pt[1])
-            if (not lat or not lon) and farm:
-                lat = float(farm.latitude) if farm.latitude else None
-                lon = float(farm.longitude) if farm.longitude else None
-
-            # Location string resolution
-            loc_str = None
-            district = None
-            state = None
-            if farm_profile:
-                loc_str = farm_profile.location or (f"{farm_profile.district}, {farm_profile.state}" if farm_profile.district and farm_profile.state else None)
-                district = farm_profile.district
-                state = farm_profile.state
-            if not loc_str and farm:
-                loc_str = f"{farm.district}, {farm.state}" if farm.district and farm.state else farm.state or farm.district
-                district = farm.district
-                state = farm.state
-            if not loc_str and hasattr(current_user, "location") and current_user.location:
-                loc_str = current_user.location
-
-            # Crop list resolution
-            crops = []
-            if farm_profile and farm_profile.primary_crops:
-                if isinstance(farm_profile.primary_crops, list):
-                    crops.extend([str(c) for c in farm_profile.primary_crops])
-                elif isinstance(farm_profile.primary_crops, str):
-                    crops.extend([c.strip() for c in farm_profile.primary_crops.split(",") if c.strip()])
-            if farm_profile and farm_profile.specific_crop and farm_profile.specific_crop not in crops:
-                crops.append(farm_profile.specific_crop)
-            if farm and farm.crop_type and farm.crop_type not in crops:
-                crops.append(farm.crop_type)
-
-            soil_type = farm_profile.soil_type if farm_profile and farm_profile.soil_type else (farm.soil_type if farm and farm.soil_type else None)
-
-            # Latest soil sensor test
-            soil_test = None
-            if farm:
-                soil_test = db.query(SoilTest).filter(SoilTest.farm_id == farm.id).order_by(SoilTest.test_date.desc()).first()
-            if not soil_test:
-                soil_test = db.query(SoilTest).order_by(SoilTest.test_date.desc()).first()
-
-            soil_telemetry = {}
-            if soil_test:
-                soil_telemetry = {
-                    "moisture": soil_test.soil_moisture,
-                    "temperature": soil_test.soil_temperature or soil_test.air_temperature,
-                    "ph": soil_test.soil_ph,
-                    "nitrogen": soil_test.nitrogen,
-                    "phosphorus": soil_test.phosphorus,
-                    "potassium": soil_test.potassium,
-                    "ec": soil_test.soil_ec,
-                    "humidity": soil_test.air_humidity,
-                    "tested_at": soil_test.test_date.isoformat() if soil_test.test_date else None
-                }
-
-            # Enriched Context Attributes
-            extra["farmer_name"] = current_user.full_name or current_user.username or "Farmer"
-            if lat and lon:
-                extra["latitude"] = lat
-                extra["longitude"] = lon
-                extra["location"] = {"latitude": lat, "longitude": lon, "name": loc_str or "Local Farm"}
-            elif loc_str:
-                extra["location"] = loc_str
-            extra["location_text"] = loc_str or "India"
-            extra["district"] = district
-            extra["state"] = state
-            extra["crops"] = crops
-            extra["crop"] = crops[0] if crops else None
-            extra["soil_type"] = soil_type
-            extra["soil_data"] = soil_telemetry
-            extra["soil_telemetry"] = soil_telemetry
-            if farm_profile:
-                extra["farm_size"] = f"{farm_profile.farm_size} {farm_profile.farm_size_unit or 'acres'}" if farm_profile.farm_size else None
-                extra["water_source"] = farm_profile.water_source
-                extra["irrigation_method"] = farm_profile.irrigation_method
-                extra["season"] = farm_profile.cropping_season
-        except Exception as err:
-            logger.warning(f"Error enriching user farm context in chat_orchestrate: {err}")
-            
-        # Extract chat history so we can pass it to the AI for conversational memory
+        # Extract chat history for conversational context
+        chat_history = []
         try:
             from farmxpert.interfaces.api.routes.super_agent import _db_get_history
             chat_history = _db_get_history(session_id, user_id=current_user.id)
-            # Pass the last 10 turns
-            extra["chat_history"] = chat_history[-10:] if chat_history else []
         except Exception as e:
             logger.warning(f"Failed to fetch chat history context: {e}")
-            extra["chat_history"] = []
-                
-        extra["session_id"] = session_id
-                
-        response = await _call_orchestrator(
-            request.message,
-            user_id=current_user.id,
-            extra=extra or None,
+
+        # Execute through FarmXpert Master Orchestrator
+        from farmxpert.services.orchestrator.farmxpert_orchestrator import farmxpert_orchestrator
+        orch_res = await farmxpert_orchestrator.process_request(
+            message=request.message,
+            user=current_user,
+            db=db,
+            session_id=session_id,
+            requested_farm_id=request.farm_id,
+            chat_history=chat_history[-10:] if chat_history else []
         )
-        
-        # Save chat history
+
+        # Build agent_responses list for frontend active chips (ChatPanel.jsx)
+        agent_responses = []
+        if orch_res.get("agent"):
+            agent_responses.append({
+                "agent_name": orch_res.get("agent"),
+                "success": orch_res.get("success", True),
+                "summary": orch_res.get("response", "")[:100] + "..." if len(orch_res.get("response", "")) > 100 else orch_res.get("response", "")
+            })
+        orch_res["agent_responses"] = agent_responses
+
+        # Save to chat history
         try:
             from farmxpert.interfaces.api.routes.super_agent import _db_save_message
             _db_save_message(session_id, "user", request.message, user_id=current_user.id)
-            _db_save_message(session_id, "assistant", response.get("response", ""), user_id=current_user.id)
+            _db_save_message(session_id, "assistant", orch_res.get("response", ""), user_id=current_user.id)
         except Exception as e:
             logger.warning(f"Failed to save chat history: {e}")
-            
-        # Include session_id in the response so the frontend can track it
-        response["session_id"] = session_id
-        return response
+
+        return orch_res
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"[chat/orchestrate] error: {e}")
+        logger.error(f"[chat] error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail={"success": False, "error": str(e)})
+
+
+@router.get("/debug")
+async def chat_debug(
+    query: str,
+    farm_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Observability & Debug Endpoint (STEP 25).
+    Shows structured execution trace: User Request -> Intent -> Agent -> Context -> Tool Calls -> Response.
+    Never reveals private reasoning or credentials.
+    """
+    from farmxpert.services.orchestrator.farmxpert_orchestrator import farmxpert_orchestrator
+    res = await farmxpert_orchestrator.process_request(
+        message=query,
+        user=current_user,
+        db=db,
+        session_id="debug_session",
+        requested_farm_id=farm_id
+    )
+    return {
+        "user_request": query,
+        "resolved_intent": res.get("intent"),
+        "selected_agent": res.get("agent"),
+        "context_used": res.get("context_used"),
+        "tools_executed": res.get("tool_calls"),
+        "final_response": res.get("response"),
+        "duration_ms": res.get("duration_ms")
+    }
 
 
 # ===========================================================================
@@ -303,7 +245,7 @@ Respond ONLY with a valid JSON object in this exact format (no markdown, no code
   "prevention": ["<prevention tip 1>", "<prevention tip 2>"]
 }}"""
 
-        model = _get_gemini_model("gemini-1.5-flash")
+        model = _get_gemini_model()
         image_part = {"mime_type": content_type, "data": image_bytes}
 
         import asyncio
@@ -438,7 +380,7 @@ async def _transcribe_audio(audio_bytes: bytes, content_type: str, language: Opt
     """Use Gemini's multimodal capability to transcribe audio."""
     import asyncio
     try:
-        model = _get_gemini_model("gemini-1.5-flash")
+        model = _get_gemini_model()
         lang_hint = f" The speaker is speaking in {language}." if language and language != "en" else ""
         prompt = f"Transcribe the speech in this audio file exactly as spoken.{lang_hint} Return only the transcribed text, nothing else."
 
@@ -521,7 +463,7 @@ Please analyze the document and provide:
 
 Format your response clearly with sections and bullet points where appropriate."""
 
-        model = _get_gemini_model("gemini-1.5-flash")
+        model = _get_gemini_model()
         doc_part = {"mime_type": content_type, "data": file_bytes}
 
         response = await asyncio.wait_for(

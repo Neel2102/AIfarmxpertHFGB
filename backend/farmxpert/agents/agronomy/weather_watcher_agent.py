@@ -111,10 +111,7 @@ Always provide practical, time-sensitive recommendations with real-time alerts b
                                 {"day": "Tomorrow", "condition": "Clear", "temperature_max": 33, "temperature_min": 23, "humidity": 55}
                             ],
                             "agricultural_impact": {"alerts": {}},
-                            "farming_recommendations": [
-                                "Maintain optimal soil moisture during current growth phase.",
-                                "Schedule foliar spraying during calm morning hours."
-                            ],
+                            "farming_recommendations": [],
                             "provider": "AgroWeatherModel"
                         }
 

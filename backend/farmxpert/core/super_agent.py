@@ -1126,23 +1126,15 @@ Response Format (JSON):
                             all_warnings.append(w_clean)
 
         if not sentences or (len(sentences) == 1 and sentences[0] == intro):
-            sentences.append(
-                "To optimize farm yields and net profitability, adopt balanced N-P-K soil nutrition with micronutrient supplementation, implement precision drip irrigation to regulate moisture, use certified high-germination seed varieties suited to your region, and align harvest schedules with real-time APMC mandi market pricing for maximum profit margins."
-            )
+            # Only provide a focused message based on agents actually invoked
+            if weather_data:
+                temp = weather_data.get("temperature") or weather_data.get("current_temp")
+                cond = weather_data.get("condition") or weather_data.get("weather")
+                sentences.append(f"Current weather conditions are {cond or 'stable'} with temperature around {temp or 'seasonal norms'}°C.")
+            else:
+                sentences.append("I have processed your farming inquiry with the available agent data.")
 
-        if not all_recommendations:
-            all_recommendations = [
-                "Conduct a comprehensive soil test to identify precise N-P-K and pH imbalances before sowing",
-                "Implement precision drip or micro-sprinkler irrigation to minimize water loss and optimize root zone hydration",
-                "Adopt certified disease-resistant seed varieties tailored to your local climate zone",
-                "Monitor daily APMC mandi market price trends before harvesting to sell during peak price windows"
-            ]
-
-        if not all_warnings:
-            all_warnings = [
-                "Avoid over-application of synthetic nitrogen fertilizers which can cause soil acidification and nutrient runoff",
-                "Always verify mandi modal prices and quality grades before transporting bulk harvest to grain terminals"
-            ]
+        # Keep recommendations and warnings empty unless specifically produced by specialized agents
             
         full_text = " ".join(sentences)
         
