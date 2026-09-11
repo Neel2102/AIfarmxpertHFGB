@@ -13,7 +13,8 @@ from .farm_context import (
 # Provide a default instance for older imports that expect `farm_context_resolver`
 farm_context_resolver = FarmContextResolver()
 
-from .intent_router import IntentCategory, IntentClassificationResult, intent_router
+# Intent router exposes IntentType (enum), RoutedIntent (routing result), and the singleton intent_router
+from .intent_router import IntentType, RoutedIntent, intent_router
 from .tool_registry import ToolCategory, ToolDefinition, ToolRegistry, tool_registry
 from .farmxpert_orchestrator import FarmXpertOrchestrator, farmxpert_orchestrator
 
@@ -22,8 +23,8 @@ __all__ = [
     "FarmResolutionResult",
     "FarmResolutionStatus",
     "farm_context_resolver",
-    "IntentCategory",
-    "IntentClassificationResult",
+    "IntentType",
+    "RoutedIntent",
     "intent_router",
     "ToolCategory",
     "ToolDefinition",
