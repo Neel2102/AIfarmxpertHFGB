@@ -42,6 +42,7 @@ def _get_gemini_model(model_name: Optional[str] = None):
     """Return a configured Gemini GenerativeModel."""
     api_key = settings.gemini_api_key or os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
+        # Do not raise here; caller should handle missing model gracefully.
         raise RuntimeError("GEMINI_API_KEY is not set")
     genai.configure(api_key=api_key)
     chosen_model = model_name or getattr(settings, "gemini_model", "gemini-2.5-flash") or "gemini-2.5-flash"
@@ -53,40 +54,68 @@ def _get_gemini_model(model_name: Optional[str] = None):
 # ---------------------------------------------------------------------------
 
 async def _call_orchestrator(message: str, user_id: int, extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Call SuperAgent and return a clean response dict."""
+    """Call SuperAgent and return a clean response dict.
+
+    This helper now catches internal exceptions and returns a structured
+    response object rather than letting exceptions bubble up to the HTTP layer.
+    """
     from farmxpert.core.super_agent import super_agent
-    
+
     payload: Dict[str, Any] = {
         "query": message,
         "user_id": str(user_id),
         "context": extra or {}
     }
 
-    result = await super_agent.process_query(
-        query=message,
-        context=payload,
-        session_id=extra.get("session_id") if extra else None
-    )
+    try:
+        result = await super_agent.process_query(
+            query=message,
+            context=payload,
+            session_id=extra.get("session_id") if extra else None
+        )
 
-    # Extract the best human-readable text from the result
-    response_text = result.natural_language or result.response.get("response", "") if result.success else str(result.response.get("answer", ""))
+        # Extract the best human-readable text from the result
+        # Guard against unexpected shapes by using .get with defaults
+        response_text = ""
+        try:
+            if isinstance(result, dict):
+                response_text = result.get("natural_language") or (result.get("response", {}).get("response") if isinstance(result.get("response"), dict) else result.get("response", ""))
+            else:
+                response_text = getattr(result, 'natural_language', None) or (getattr(result, 'response', {}).get('response') if getattr(result, 'response', None) else '')
+        except Exception:
+            response_text = str(result)
 
-    # Build agent_responses list for the frontend chips
-    agent_responses = []
-    for agent_response in result.agent_responses:
-        agent_responses.append({
-            "agent_name": agent_response.agent_name,
-            "success": agent_response.success,
-            "summary": agent_response.data.get("response", "")[:100] + "..." if agent_response.success else agent_response.error,
-        })
+        # Build agent_responses list for the frontend chips
+        agent_responses = []
+        try:
+            for agent_response in getattr(result, 'agent_responses', []) or result.get('agent_responses', []) or []:
+                agent_responses.append({
+                    "agent_name": getattr(agent_response, 'agent_name', agent_response.get('agent_name') if isinstance(agent_response, dict) else None),
+                    "success": getattr(agent_response, 'success', agent_response.get('success') if isinstance(agent_response, dict) else True),
+                    "summary": (agent_response.data.get('response', '')[:100] + "...") if getattr(agent_response, 'success', True) and hasattr(agent_response, 'data') else (agent_response.get('summary') if isinstance(agent_response, dict) else None),
+                })
+        except Exception:
+            agent_responses = []
 
-    return {
-        "success": result.success,
-        "response": response_text,
-        "query_type": "super_agent",
-        "agent_responses": agent_responses,
-        "timestamp": datetime.utcnow().isoformat(),
-    }
+        return {
+            "success": getattr(result, 'success', result.get('success') if isinstance(result, dict) else False),
+            "response": response_text,
+            "query_type": "super_agent",
+            "agent_responses": agent_responses,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+    except Exception as e:
+        logger.error(f"_call_orchestrator failed: {e}", exc_info=True)
+        # Return a structured failure result so callers can display the backend message
+        return {
+            "success": False,
+            "response": "The orchestrator encountered an internal error while processing your request.",
+            "error": str(e),
+            "query_type": "super_agent",
+            "agent_responses": [],
+            "timestamp": datetime.utcnow().isoformat(),
+        }
 
 
 # ===========================================================================
@@ -128,14 +157,26 @@ async def chat_orchestrate(
 
         # Execute through FarmXpert Master Orchestrator
         from farmxpert.services.orchestrator.farmxpert_orchestrator import farmxpert_orchestrator
-        orch_res = await farmxpert_orchestrator.process_request(
-            message=request.message,
-            user=current_user,
-            db=db,
-            session_id=session_id,
-            requested_farm_id=request.farm_id,
-            chat_history=chat_history[-10:] if chat_history else []
-        )
+
+        try:
+            orch_res = await farmxpert_orchestrator.process_request(
+                message=request.message,
+                user=current_user,
+                db=db,
+                session_id=session_id,
+                requested_farm_id=request.farm_id,
+                chat_history=chat_history[-10:] if chat_history else []
+            )
+        except Exception as e:
+            # Catch internal orchestrator errors and return a structured JSON instead of raising 500
+            logger.error(f"Orchestrator processing failed: {e}", exc_info=True)
+            return {
+                "success": False,
+                "response": "The farm orchestrator failed to process your request. Please try again later.",
+                "error": str(e),
+                "agent_responses": [],
+                "timestamp": datetime.utcnow().isoformat(),
+            }
 
         # Build agent_responses list for frontend active chips (ChatPanel.jsx)
         agent_responses = []
@@ -161,7 +202,12 @@ async def chat_orchestrate(
         raise
     except Exception as e:
         logger.error(f"[chat] error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail={"success": False, "error": str(e)})
+        # Return structured JSON rather than raw HTTPException detail
+        return {
+            "success": False,
+            "response": "Internal server error while handling chat request.",
+            "error": str(e),
+        }
 
 
 @router.get("/debug")
