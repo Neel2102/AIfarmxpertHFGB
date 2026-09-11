@@ -42,8 +42,6 @@ root.render(
   </React.StrictMode>
 );
 
-// If you want your app to work offline and load faster, you can change
-// unregister() to register() below. Note this comes with some pitfalls.
-// Learn more about service workers: https://cra.link/PWA
-serviceWorkerRegistration.register();
-
+// Disable service worker registration in this build to avoid MIME/redirect issues
+// If you want PWA support, ensure service-worker.js is deployed and served with correct MIME type
+serviceWorkerRegistration.unregister();
