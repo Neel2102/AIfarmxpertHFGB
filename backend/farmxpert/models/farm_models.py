@@ -8,7 +8,13 @@ class Farm(Base):
     
     id = Column(BigInteger, primary_key=True, index=True)
     user_id = Column(BigInteger, ForeignKey("auth_users.id"), nullable=False)
-    farm_name = Column(String(255), nullable=False)
+    name = Column(String(255), nullable=True, default="My Farm")
+    farm_name = Column(String(255), nullable=False, default="My Farm")
+    location = Column(String(255), nullable=True, default="Gujarat, India")
+    size_acres = Column(Float, nullable=True, default=5.0)
+    farmer_name = Column(String(255), nullable=True, default="Farmer")
+    farmer_phone = Column(String(50), nullable=True)
+    farmer_email = Column(String(255), nullable=True)
     crop_type = Column(String(100))
     state = Column(String(100))
     district = Column(String(100))
@@ -18,6 +24,28 @@ class Farm(Base):
     soil_type = Column(String(100))
     created_at = Column(DateTime(timezone=False), server_default=func.now())
     updated_at = Column(DateTime(timezone=False), onupdate=func.now())
+
+    def __init__(self, **kwargs):
+        if "name" not in kwargs and "farm_name" in kwargs:
+            kwargs["name"] = kwargs["farm_name"]
+        elif "farm_name" not in kwargs and "name" in kwargs:
+            kwargs["farm_name"] = kwargs["name"]
+        elif "name" not in kwargs and "farm_name" not in kwargs:
+            kwargs["name"] = "My Farm"
+            kwargs["farm_name"] = "My Farm"
+            
+        if "location" not in kwargs or not kwargs["location"]:
+            loc_parts = [kwargs.get("village"), kwargs.get("district"), kwargs.get("state")]
+            loc = ", ".join([str(p) for p in loc_parts if p])
+            kwargs["location"] = loc if loc else "Gujarat, India"
+            
+        if "size_acres" not in kwargs or kwargs["size_acres"] is None:
+            kwargs["size_acres"] = 5.0
+            
+        if "farmer_name" not in kwargs or not kwargs["farmer_name"]:
+            kwargs["farmer_name"] = "Farmer"
+            
+        super().__init__(**kwargs)
     
     # Relationships
     auth_user = relationship("AuthUser", back_populates="farms")

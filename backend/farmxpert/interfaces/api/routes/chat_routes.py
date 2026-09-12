@@ -126,7 +126,8 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
     farm_id: Optional[int] = None
-    user_id: Optional[int] = None # Optional; authenticated user is always derived securely from auth token
+    user_id: Optional[int] = None  # Optional; authenticated user is always derived securely from auth token
+    agent: Optional[str] = None
     context: Optional[Dict[str, Any]] = None
 
 
@@ -158,6 +159,8 @@ async def chat_orchestrate(
         # Execute through FarmXpert Master Orchestrator
         from farmxpert.services.orchestrator.farmxpert_orchestrator import farmxpert_orchestrator
 
+        forced_agent = request.agent or (request.context.get("current_agent") if isinstance(request.context, dict) else None)
+
         try:
             orch_res = await farmxpert_orchestrator.process_request(
                 message=request.message,
@@ -165,7 +168,8 @@ async def chat_orchestrate(
                 db=db,
                 session_id=session_id,
                 requested_farm_id=request.farm_id,
-                chat_history=chat_history[-10:] if chat_history else []
+                chat_history=chat_history[-10:] if chat_history else [],
+                forced_agent=forced_agent
             )
         except Exception as e:
             # Catch internal orchestrator errors and return a structured JSON instead of raising 500

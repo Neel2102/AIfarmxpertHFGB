@@ -18,11 +18,22 @@ class ApiService {
         return token ? { Authorization: `Bearer ${token}` } : {};
     }
 
+    normalizeEndpoint(endpoint) {
+        if (!endpoint) return '';
+        let clean = endpoint.trim();
+        // If baseURL ends with '/api' and endpoint starts with '/api/', remove duplicate '/api'
+        if (this.baseURL.endsWith('/api') && clean.startsWith('/api/')) {
+            clean = clean.substring(4);
+        }
+        return clean.startsWith('/') ? clean : `/${clean}`;
+    }
+
     /**
      * Generic API request method
      */
     async request(endpoint, options = {}) {
-        const url = `${this.baseURL}${endpoint}`;
+        const cleanEndpoint = this.normalizeEndpoint(endpoint);
+        const url = `${this.baseURL}${cleanEndpoint}`;
         const headers = {
             ...this.defaultHeaders,
             ...this.getAuthHeaders(),
@@ -42,15 +53,62 @@ class ApiService {
             const response = await fetch(url, config);
             
             if (!response.ok) {
-                throw new Error(`API Error: ${response.status} ${response.statusText}`);
+                let errorDetails = '';
+                try {
+                    const errJson = await response.json();
+                    errorDetails = errJson.detail || errJson.message || JSON.stringify(errJson);
+                } catch {
+                    errorDetails = response.statusText;
+                }
+                throw new Error(errorDetails || `API Error: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
             return data;
         } catch (error) {
-            console.error('API Request failed:', error);
+            console.error(`API Request failed [${options.method || 'GET'} ${url}]:`, error);
             throw error;
         }
+    }
+
+    async get(endpoint, options = {}) {
+        const data = await this.request(endpoint, { ...options, method: 'GET' });
+        return { data, status: 200 };
+    }
+
+    async post(endpoint, body = {}, options = {}) {
+        const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+        const data = await this.request(endpoint, {
+            ...options,
+            method: 'POST',
+            body: isFormData ? body : JSON.stringify(body || {}),
+        });
+        return { data, status: 200 };
+    }
+
+    async patch(endpoint, body = {}, options = {}) {
+        const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+        const data = await this.request(endpoint, {
+            ...options,
+            method: 'PATCH',
+            body: isFormData ? body : JSON.stringify(body || {}),
+        });
+        return { data, status: 200 };
+    }
+
+    async put(endpoint, body = {}, options = {}) {
+        const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+        const data = await this.request(endpoint, {
+            ...options,
+            method: 'PUT',
+            body: isFormData ? body : JSON.stringify(body || {}),
+        });
+        return { data, status: 200 };
+    }
+
+    async delete(endpoint, options = {}) {
+        const data = await this.request(endpoint, { ...options, method: 'DELETE' });
+        return { data, status: 200 };
     }
 
     /**

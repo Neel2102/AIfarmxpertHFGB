@@ -18,6 +18,17 @@ from farmxpert.core.utils.logger import get_logger
 logger = get_logger("tool_registry")
 
 
+from enum import Enum
+
+class ToolCategory(str, Enum):
+    WEATHER = "weather"
+    SOIL = "soil"
+    MARKET = "market"
+    SENSOR = "sensor"
+    TASKS = "tasks"
+    FARM = "farm"
+    CROP = "crop"
+
 @dataclass
 class ToolExecutionResult:
     tool_name: str

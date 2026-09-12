@@ -208,41 +208,62 @@ Each object must have the following string keys:
             import re
             response_text = await gemini_service.generate_response(prompt, {"agent": self.name, "task": "daily_tasks"})
             
-            # Clean response text if it contains markdown JSON blocks
-            cleaned_text = re.sub(r'```json\s*', '', response_text)
-            cleaned_text = re.sub(r'\s*```', '', cleaned_text)
+            # Extract JSON array using regex if surrounded by conversational markdown
+            json_match = re.search(r'\[\s*\{[\s\S]*\}\s*\]', response_text or "")
+            if json_match:
+                tasks = json.loads(json_match.group(0))
+            else:
+                # Clean response text if it contains markdown JSON blocks
+                cleaned_text = re.sub(r'```json\s*', '', response_text or '')
+                cleaned_text = re.sub(r'\s*```', '', cleaned_text).strip()
+                tasks = json.loads(cleaned_text)
             
-            tasks = json.loads(cleaned_text.strip())
-            
-            if isinstance(tasks, list) and len(tasks) == 3:
+            if isinstance(tasks, list) and len(tasks) >= 3:
+                return tasks[:3]
+            elif isinstance(tasks, list) and len(tasks) > 0:
                 return tasks
             else:
                 self.logger.warning(f"Unexpected task format from LLM: {tasks}")
-                raise ValueError("LLM did not return exactly 3 tasks in the expected format.")
+                raise ValueError("LLM did not return a valid list of tasks.")
                 
         except Exception as e:
-            self.logger.error(f"Failed to generate daily tasks: {e}")
-            # Fallback tasks if API fails
-            return [
-                {
-                    "title": f"Inspect {crop} for pests",
-                    "description": "Perform a walk-through to check for early signs of pest damage.",
+            self.logger.error(f"Failed to generate daily tasks via LLM: {e}. Using farm-tailored generator.")
+            
+            # Dynamic agronomic fallback tailored to the farmer's crop and real telemetry
+            crop_label = crop if crop and crop != "Unknown Crop" else "field crops"
+            moisture = soil_data.get("moisture") if isinstance(soil_data, dict) else None
+            
+            tasks = []
+            if moisture is not None and moisture < 35:
+                tasks.append({
+                    "title": f"Irrigate {crop_label} field",
+                    "description": f"Soil moisture telemetry is at {moisture}%, below optimal range. Run scheduled irrigation cycle.",
+                    "category": "irrigation",
+                    "priority": "high"
+                })
+            else:
+                tasks.append({
+                    "title": f"Inspect {crop_label} for pests and leaf spots",
+                    "description": f"Scout {crop_label} during the {growth_stage.lower()} stage to identify early pest activity or fungal infection.",
                     "category": "pest",
                     "priority": "high"
-                },
-                {
-                    "title": "Check soil moisture levels",
-                    "description": "Verify irrigation system is functioning correctly.",
-                    "category": "irrigation",
-                    "priority": "medium"
-                },
-                {
-                    "title": "Update farm log",
-                    "description": "Record any inputs or observations from today.",
-                    "category": "other",
-                    "priority": "low"
-                }
-            ]
+                })
+
+            tasks.append({
+                "title": f"Monitor root-zone soil condition for {crop_label}",
+                "description": f"Inspect soil moisture and drainage in {location or 'your field'} to maintain optimal aeration.",
+                "category": "irrigation" if moisture is None else "maintenance",
+                "priority": "medium"
+            })
+
+            tasks.append({
+                "title": f"Log daily field observations for {crop_label}",
+                "description": "Record crop canopy growth, weed pressure, and equipment status in your farm diary.",
+                "category": "other",
+                "priority": "low"
+            })
+
+            return tasks
         
         # Add crop-specific tasks
         for crop in active_crops:

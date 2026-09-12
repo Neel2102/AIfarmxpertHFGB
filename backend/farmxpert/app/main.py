@@ -26,6 +26,7 @@ from farmxpert.interfaces.api.routes import chat_routes, market_routes, task_rou
 from farmxpert.interfaces.api.middleware.logging_middleware import RequestLoggingMiddleware
 import farmxpert.models.user_models  # noqa: F401
 import farmxpert.models.farm_models  # noqa: F401
+import farmxpert.models.farm_profile_models  # noqa: F401
 import farmxpert.models.admin_models  # noqa: F401
 import farmxpert.models.blynk_models  # noqa: F401
 from farmxpert.models.database import Base, engine

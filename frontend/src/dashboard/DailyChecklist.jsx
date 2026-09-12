@@ -13,7 +13,8 @@ const DailyChecklist = () => {
     try {
       setLoading(true);
       const response = await apiService.get('/api/tasks/today');
-      setTasks(response.data);
+      const taskList = Array.isArray(response?.data) ? response.data : (Array.isArray(response) ? response : []);
+      setTasks(taskList);
       setError(null);
     } catch (err) {
       console.error('Failed to fetch tasks:', err);
@@ -31,12 +32,14 @@ const DailyChecklist = () => {
   const handleGenerateTasks = async () => {
     try {
       setGenerating(true);
+      setError(null);
       const response = await apiService.post('/api/tasks/generate');
-      setTasks(response.data);
+      const taskList = Array.isArray(response?.data) ? response.data : (Array.isArray(response) ? response : []);
+      setTasks(taskList);
       setError(null);
     } catch (err) {
       console.error('Failed to generate tasks:', err);
-      setError('Could not generate new tasks. Please try again.');
+      setError(err.message || 'Could not generate new tasks. Please try again.');
     } finally {
       setGenerating(false);
     }

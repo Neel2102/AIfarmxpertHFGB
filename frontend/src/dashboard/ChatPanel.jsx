@@ -415,7 +415,9 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
           message: text, 
           session_id: sessionId,
           user_id: user?.id,
-          context: { selected_agents: selectedAgents }
+          farm_id: farmData?.id,
+          agent: (agent && agent !== 'super-agent') ? agent : undefined,
+          context: { selected_agents: selectedAgents, current_agent: agent }
         }),
       });
       if (!response.ok) throw new Error(`HTTP error: ${response.status}`);

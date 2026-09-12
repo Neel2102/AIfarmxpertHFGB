@@ -51,6 +51,10 @@ class Settings(BaseSettings):
         default="postgresql://postgres:password@localhost:5432/farmxpert",
         validation_alias=AliasChoices("DATABASE_URL", "database_url")
     )
+    redis_url: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("REDIS_URL", "redis_url")
+    )
     secret_key: str = Field(
         default="farmxpert-super-secret-jwt-key-2026",
         validation_alias=AliasChoices("SECRET_KEY", "JWT_SECRET_KEY", "JWT_SECRET", "secret_key")

@@ -1,8 +1,9 @@
+import os
 import requests
 import json
 from datetime import datetime
 
-API_KEY = "2675dc82bdd9cf780ea9efe429a50129"
+API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 
 def check_nitrogen_status(value):
     if value < 140:
