@@ -1,5 +1,6 @@
 // API Service for fetching real data from FarmXpert backend
 import axios from 'axios';
+import { getValidAccessToken, refreshAccessToken } from './authSession';
 
 import { API_BASE_URL } from './apiBase';
 
@@ -14,8 +15,10 @@ const apiClient = axios.create({
 
 // Add request interceptor for auth tokens if needed
 apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token') || localStorage.getItem('authToken');
+  async (config) => {
+    // Renew the access token before it expires rather than letting the request
+    // come back 401 and surface as a generic "couldn't load" error.
+    const token = (await getValidAccessToken()) || localStorage.getItem('authToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -29,7 +32,18 @@ apiClient.interceptors.request.use(
 // Add response interceptor for error handling
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    // A 401 usually means the access token expired mid-flight. Renew it once
+    // and replay the request before treating this as a real failure.
+    const original = error.config;
+    if (error.response?.status === 401 && original && !original._retried) {
+      original._retried = true;
+      const renewed = await refreshAccessToken();
+      if (renewed) {
+        original.headers = { ...(original.headers || {}), Authorization: `Bearer ${renewed}` };
+        return apiClient(original);
+      }
+    }
     console.error('API Error:', error.response?.data || error.message);
     return Promise.reject(error);
   }

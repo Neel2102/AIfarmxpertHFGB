@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, CloudRain, Mic, MessageSquare, ShieldCheck, TrendingUp,
+  AlertTriangle, CloudRain, Mic, MessageSquare, TrendingUp,
   Sparkles, Calendar, CheckCircle2, Circle, Clock, Droplets, Bug, Sprout,
-  Hammer, Check, RefreshCw, Layers, ChevronRight, AlertCircle
+  Hammer, Check, RefreshCw, Layers, AlertCircle, Zap
 } from 'lucide-react';
 import { dataService } from '../services/apiService';
 import apiService from '../services/api';
@@ -566,9 +566,21 @@ const TodayDashboard = () => {
               </div>
 
               <div className="season-dates-bar">
-                <span>🌱 <strong>Sown / Planted:</strong> {new Date(seasonInfo.planting_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-                <span>🌾 <strong>Expected Harvest:</strong> {new Date(seasonInfo.expected_harvest_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-                <span>⏱️ <strong>Total Duration:</strong> {seasonInfo.duration_days} days</span>
+                <span className="season-date-item">
+                  <Sprout size={15} />
+                  <span className="season-date-label">Sown</span>
+                  <span className="season-date-value">{new Date(seasonInfo.planting_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                </span>
+                <span className="season-date-item">
+                  <Calendar size={15} />
+                  <span className="season-date-label">Expected harvest</span>
+                  <span className="season-date-value">{new Date(seasonInfo.expected_harvest_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                </span>
+                <span className="season-date-item">
+                  <Clock size={15} />
+                  <span className="season-date-label">Duration</span>
+                  <span className="season-date-value">{seasonInfo.duration_days} days</span>
+                </span>
               </div>
 
               <div className="season-progress-container">
@@ -592,7 +604,7 @@ const TodayDashboard = () => {
               className={`flow-tab-btn ${activeTab === 'today' ? 'active' : ''}`}
               onClick={() => setActiveTab('today')}
             >
-              ⚡ Today's Tasks
+              <Zap size={15} /> Today's Tasks
               <span className="flow-tab-badge">{todayCount}</span>
             </button>
 
@@ -600,7 +612,7 @@ const TodayDashboard = () => {
               className={`flow-tab-btn ${activeTab === 'upcoming' ? 'active' : ''}`}
               onClick={() => setActiveTab('upcoming')}
             >
-              📅 Tomorrow & Next 7 Days
+              <Calendar size={15} /> Next 7 Days
               <span className="flow-tab-badge">{upcomingTotal}</span>
             </button>
 
@@ -608,20 +620,17 @@ const TodayDashboard = () => {
               className={`flow-tab-btn ${activeTab === 'timeline' ? 'active' : ''}`}
               onClick={() => setActiveTab('timeline')}
             >
-              🌾 Season Flow Timeline
+              <Sprout size={15} /> Season Timeline
               <span className="flow-tab-badge">{stagesCount} Stages</span>
             </button>
 
             {overdueCount > 0 && (
               <button
-                className={`flow-tab-btn ${activeTab === 'overdue' ? 'active' : ''}`}
+                className={`flow-tab-btn danger ${activeTab === 'overdue' ? 'active' : ''}`}
                 onClick={() => setActiveTab('overdue')}
-                style={{ color: '#ef4444' }}
               >
-                ⚠️ Overdue
-                <span className="flow-tab-badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}>
-                  {overdueCount}
-                </span>
+                <AlertTriangle size={15} /> Overdue
+                <span className="flow-tab-badge">{overdueCount}</span>
               </button>
             )}
 
@@ -629,7 +638,7 @@ const TodayDashboard = () => {
               className={`flow-tab-btn ${activeTab === 'completed' ? 'active' : ''}`}
               onClick={() => setActiveTab('completed')}
             >
-              ✅ Completed
+              <CheckCircle2 size={15} /> Completed
               <span className="flow-tab-badge">{completedCount}</span>
             </button>
           </div>

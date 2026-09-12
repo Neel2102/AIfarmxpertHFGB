@@ -150,6 +150,21 @@ class FarmProfileUpdate(BaseModel):
     class Config:
         extra = "allow"
 
+class RefreshRequest(BaseModel):
+    """
+    Body for POST /auth/refresh.
+
+    This used to be a bare `refresh_token: str` parameter, which FastAPI reads
+    from the QUERY STRING, not the body. The frontend has always sent a JSON
+    body, so every refresh attempt returned 422 and the access token could
+    never be renewed — the farmer was silently signed out after 30 minutes.
+
+    A body is also the right place for it: a token in the URL leaks into access
+    logs, proxies and browser history.
+    """
+    refresh_token: str
+
+
 class ProfileUpdateRequest(BaseModel):
     """Accept both 'name' and 'full_name' so old and new UI both work."""
     name: Optional[str] = None
@@ -484,10 +499,11 @@ async def change_password(
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
-    refresh_token: str,
+    body: RefreshRequest,
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """Refresh access token using refresh token"""
+    """Refresh an access token using a valid refresh token."""
+    refresh_token = body.refresh_token
     try:
         payload = auth_service.verify_token(refresh_token)
         

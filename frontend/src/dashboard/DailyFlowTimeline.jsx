@@ -144,7 +144,7 @@ const DailyFlowTimeline = ({ stages = [], onToggleTask }) => {
                             )}
                             <div className="stage-task-footer">
                               <span className="stage-task-date">
-                                📅 Scheduled: {task.scheduled_date_str || new Date(task.scheduled_date).toLocaleDateString()}
+                                <Calendar size={12} /> {task.scheduled_date_str || new Date(task.scheduled_date).toLocaleDateString()}
                               </span>
                               <span className="stage-task-tag">
                                 {task.category?.toUpperCase() || 'OPERATION'}

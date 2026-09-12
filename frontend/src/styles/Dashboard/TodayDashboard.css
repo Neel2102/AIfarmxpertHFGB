@@ -1220,3 +1220,341 @@
 }
 
 
+
+/* ============================================================
+   DAILY FLOW — ACTION PLAN & TASK CARDS
+   ------------------------------------------------------------
+   TodayDashboard renders the same task markup as DailyChecklist
+   but never imported DailyChecklist.css, so these classes had no
+   rules at all and the tab rendered as unstyled stacked text.
+   Defined here against the shared design tokens so both themes
+   are covered.
+   ============================================================ */
+
+.daily-checklist {
+  background: var(--dash-card-bg);
+  backdrop-filter: var(--dash-backdrop-blur);
+  -webkit-backdrop-filter: var(--dash-backdrop-blur);
+  border: 1px solid var(--dash-card-border);
+  border-radius: 16px;
+  padding: 22px 24px;
+  box-shadow: var(--dash-card-shadow);
+}
+
+/* ---- Section header ---- */
+.checklist-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--dash-card-border);
+}
+
+.checklist-header h3 {
+  margin: 0;
+  font-size: 1.06rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--dash-text-heading);
+}
+
+.checklist-header .subtitle {
+  margin: 5px 0 0;
+  font-size: 0.82rem;
+  color: var(--dash-text-muted);
+}
+
+.progress-indicator {
+  flex-shrink: 0;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dash-badge-text);
+  background: var(--dash-badge-bg);
+  border: 1px solid var(--dash-badge-border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  white-space: nowrap;
+}
+
+/* ---- Task list ---- */
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 15px 18px 15px 20px;
+  background: var(--dash-card-bg-elevated);
+  border: 1px solid var(--dash-card-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+/* Priority is carried by a left accent rail rather than a coloured card, so a
+   list of high-priority tasks stays readable. */
+.task-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--dash-text-subtle);
+}
+
+.task-item.priority-high::before { background: var(--dash-status-crit); }
+.task-item.priority-medium::before { background: var(--dash-status-warn); }
+.task-item.priority-low::before { background: var(--dash-status-good); }
+
+.task-item:hover {
+  border-color: var(--dash-card-border-hover);
+  box-shadow: var(--dash-card-shadow-hover);
+  transform: translateY(-1px);
+}
+
+.task-item:focus-visible {
+  outline: 2px solid var(--dash-emerald);
+  outline-offset: 2px;
+}
+
+/* ---- Checkbox ---- */
+.task-checkbox {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+  color: var(--dash-text-subtle);
+  transition: color 0.18s ease, transform 0.18s ease;
+}
+
+.task-item:hover .task-checkbox { color: var(--dash-emerald); }
+.task-checkbox .checked { color: var(--dash-emerald); }
+.task-item:active .task-checkbox { transform: scale(0.92); }
+
+/* ---- Content ---- */
+.task-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.task-title {
+  margin: 0;
+  font-size: 0.94rem;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--dash-text-heading);
+}
+
+.task-badge {
+  flex-shrink: 0;
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+}
+
+.task-badge.high {
+  color: var(--dash-status-crit);
+  background: var(--dash-status-crit-bg);
+  border-color: var(--dash-status-crit-bg);
+}
+
+.task-badge.medium {
+  color: var(--dash-status-warn);
+  background: var(--dash-status-warn-bg);
+  border-color: var(--dash-status-warn-bg);
+}
+
+.task-badge.low {
+  color: var(--dash-status-good);
+  background: var(--dash-status-good-bg);
+  border-color: var(--dash-status-good-bg);
+}
+
+.task-desc {
+  margin: 6px 0 0;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: var(--dash-text-body);
+}
+
+/* ---- Meta chips ---- */
+.task-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.task-category,
+.task-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.045em;
+  color: var(--dash-text-muted);
+  background: var(--dash-badge-bg);
+  border: 1px solid var(--dash-card-border);
+  border-radius: 6px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+.task-category svg,
+.task-time svg { flex-shrink: 0; }
+
+/* ---- Completed ---- */
+.task-item.completed { background: transparent; }
+.task-item.completed .task-title {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  color: var(--dash-text-muted);
+}
+.task-item.completed .task-desc,
+.task-item.completed .task-meta { opacity: 0.6; }
+.task-item.completed::before { background: var(--dash-emerald); }
+
+/* ---- Empty state ---- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 40px 24px;
+}
+
+.empty-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  margin-bottom: 16px;
+  border-radius: 50%;
+  color: var(--dash-emerald);
+  background: var(--dash-badge-bg);
+  border: 1px solid var(--dash-badge-border);
+}
+
+.empty-state h4 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--dash-text-heading);
+}
+
+.empty-state p {
+  margin: 0;
+  max-width: 460px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--dash-text-muted);
+}
+
+/* ---- Inline error row ---- */
+.checklist-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  font-size: 0.84rem;
+  color: var(--dash-status-crit);
+  background: var(--dash-status-crit-bg);
+  border: 1px solid var(--dash-status-crit-bg);
+  border-radius: 10px;
+}
+
+/* ---- Season summary chips (replaces the old emoji line) ---- */
+.season-date-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8rem;
+  color: var(--dash-text-body);
+}
+
+.season-date-item svg {
+  flex-shrink: 0;
+  color: var(--dash-emerald);
+}
+
+.season-date-label {
+  color: var(--dash-text-muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.season-date-value {
+  font-weight: 650;
+  color: var(--dash-text-heading);
+}
+
+/* ---- Tab refinements ---- */
+.flow-tab-btn svg { flex-shrink: 0; }
+
+.flow-tab-btn.danger { color: var(--dash-status-crit); }
+.flow-tab-btn.danger .flow-tab-badge {
+  background: var(--dash-status-crit-bg);
+  color: var(--dash-status-crit);
+}
+.flow-tab-btn.danger.active {
+  color: var(--dash-status-crit);
+  border-bottom-color: var(--dash-status-crit);
+  background: var(--dash-status-crit-bg);
+}
+.flow-tab-btn.danger.active .flow-tab-badge {
+  background: var(--dash-status-crit);
+  color: #fff;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 720px) {
+  .daily-checklist { padding: 18px 16px; }
+
+  .checklist-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .task-item {
+    padding: 14px 14px 14px 17px;
+    gap: 12px;
+  }
+
+  .task-title { font-size: 0.9rem; }
+  .task-desc { font-size: 0.82rem; }
+
+  .season-dates-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+}

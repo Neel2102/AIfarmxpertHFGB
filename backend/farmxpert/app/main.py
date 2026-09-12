@@ -109,6 +109,16 @@ async def _ensure_tables_exist():
     except Exception as e:
         logger.warning(f"Could not log connection details: {e}")
         
+    # Fail fast if this deployment is signing tokens with the published
+    # development default. Sessions would be forgeable by anyone with the source.
+    try:
+        from farmxpert.config.settings import settings as _settings, verify_production_secret
+        verify_production_secret(_settings)
+    except RuntimeError as sec_err:
+        _startup_error = str(sec_err)
+        logger.error("FATAL: %s", sec_err)
+        raise
+
     try:
         # 1. Create any table that does not exist yet.
         Base.metadata.create_all(bind=engine)

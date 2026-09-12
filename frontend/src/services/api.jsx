@@ -4,6 +4,7 @@
  */
 
 import { API_BASE_URL } from './apiBase';
+import { authFetch } from './authSession';
 
 class ApiService {
     constructor() {
@@ -13,6 +14,9 @@ class ApiService {
         };
     }
 
+    // Kept for callers that build their own request. Live requests go through
+    // authFetch, which refreshes an expired access token before sending and
+    // retries once on a 401 — see services/authSession.js.
     getAuthHeaders() {
         const token = localStorage.getItem('access_token');
         return token ? { Authorization: `Bearer ${token}` } : {};
@@ -34,9 +38,10 @@ class ApiService {
     async request(endpoint, options = {}) {
         const cleanEndpoint = this.normalizeEndpoint(endpoint);
         const url = `${this.baseURL}${cleanEndpoint}`;
+        // authFetch attaches the Authorization header itself, after renewing the
+        // token if needed, so it is deliberately not set here.
         const headers = {
             ...this.defaultHeaders,
-            ...this.getAuthHeaders(),
             ...options.headers,
         };
 
@@ -50,7 +55,7 @@ class ApiService {
         };
 
         try {
-            const response = await fetch(url, config);
+            const response = await authFetch(url, config);
             
             if (!response.ok) {
                 let errorDetails = '';
