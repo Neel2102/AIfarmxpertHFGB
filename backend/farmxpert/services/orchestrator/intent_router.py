@@ -24,10 +24,12 @@ class IntentType(str, Enum):
     IRRIGATION = "IRRIGATION"
     PEST_DISEASE = "PEST_DISEASE"
     YIELD_PREDICTION = "YIELD_PREDICTION"
+    PROFIT_OPTIMIZATION = "PROFIT_OPTIMIZATION"
     TASK_SCHEDULING = "TASK_SCHEDULING"
     GROWTH_STAGE = "GROWTH_STAGE"
     FARM_STATUS = "FARM_STATUS"
     SENSOR_DATA = "SENSOR_DATA"
+    LOCATION_UPDATE = "LOCATION_UPDATE"
     GENERAL_FARMING = "GENERAL_FARMING"
     UNKNOWN = "UNKNOWN"
 
@@ -62,7 +64,7 @@ class IntentRouter:
     def _build_policies(self) -> Dict[IntentType, AgentPolicy]:
         return {
             IntentType.WEATHER: AgentPolicy(
-                agent_name="weather_watcher",
+                agent_name="WeatherAgent",
                 primary_intent=IntentType.WEATHER,
                 allowed_topics=[
                     "current weather", "forecast", "rainfall", "temperature",
@@ -76,7 +78,7 @@ class IntentRouter:
                 response_style="pure weather focus, clear figures and alerts"
             ),
             IntentType.SOIL_HEALTH: AgentPolicy(
-                agent_name="soil_health",
+                agent_name="SoilHealthAgent",
                 primary_intent=IntentType.SOIL_HEALTH,
                 allowed_topics=[
                     "soil pH", "NPK levels", "nitrogen", "phosphorus", "potassium",
@@ -89,7 +91,7 @@ class IntentRouter:
                 response_style="nutrient metrics and soil conditioning"
             ),
             IntentType.CROP_SELECTION: AgentPolicy(
-                agent_name="crop_selector",
+                agent_name="CropSelectorAgent",
                 primary_intent=IntentType.CROP_SELECTION,
                 allowed_topics=[
                     "crop recommendations", "season suitability", "soil compatibility",
@@ -102,7 +104,7 @@ class IntentRouter:
                 response_style="curated crop choices suited to farm soil and season"
             ),
             IntentType.FERTILIZER: AgentPolicy(
-                agent_name="fertilizer_advisor",
+                agent_name="FertilizerAdvisorAgent",
                 primary_intent=IntentType.FERTILIZER,
                 allowed_topics=[
                     "fertilizer recommendations", "NPK ratio", "urea", "DAP", "organic manure",
@@ -115,7 +117,7 @@ class IntentRouter:
                 response_style="precise fertilizer application dosage and schedule"
             ),
             IntentType.MARKET_PRICES: AgentPolicy(
-                agent_name="market_intelligence",
+                agent_name="MarketIntelligenceAgent",
                 primary_intent=IntentType.MARKET_PRICES,
                 allowed_topics=[
                     "mandi prices", "commodity rates", "modal price", "min/max price",
@@ -128,7 +130,7 @@ class IntentRouter:
                 response_style="commodity pricing per quintal, trends, and market locations"
             ),
             IntentType.IRRIGATION: AgentPolicy(
-                agent_name="irrigation_planner",
+                agent_name="IrrigationPlannerAgent",
                 primary_intent=IntentType.IRRIGATION,
                 allowed_topics=[
                     "watering needs", "irrigation timing", "rainfall compensation",
@@ -141,7 +143,7 @@ class IntentRouter:
                 response_style="specific watering guidance based on soil moisture and upcoming rain"
             ),
             IntentType.PEST_DISEASE: AgentPolicy(
-                agent_name="pest_disease_diagnostic",
+                agent_name="PestDiseaseDiagnosticAgent",
                 primary_intent=IntentType.PEST_DISEASE,
                 allowed_topics=[
                     "symptoms", "pest identification", "disease diagnosis",
@@ -154,7 +156,7 @@ class IntentRouter:
                 response_style="targeted treatment and chemical/organic controls"
             ),
             IntentType.YIELD_PREDICTION: AgentPolicy(
-                agent_name="yield_predictor",
+                agent_name="YieldPredictorAgent",
                 primary_intent=IntentType.YIELD_PREDICTION,
                 allowed_topics=["expected yield", "tonnage per acre", "yield factors", "harvest timing", "production forecast"],
                 forbidden_topics=["weather forecasts", "mandi prices"],
@@ -162,7 +164,7 @@ class IntentRouter:
                 response_style="data-driven yield estimate"
             ),
             IntentType.TASK_SCHEDULING: AgentPolicy(
-                agent_name="task_scheduler",
+                agent_name="TaskSchedulerAgent",
                 primary_intent=IntentType.TASK_SCHEDULING,
                 allowed_topics=["farm schedule", "daily tasks", "pending work", "field operations", "today's tasks"],
                 forbidden_topics=["unrelated generic farming recommendations"],
@@ -170,7 +172,7 @@ class IntentRouter:
                 response_style="organized operational checklist"
             ),
             IntentType.GROWTH_STAGE: AgentPolicy(
-                agent_name="growth_stage_monitor",
+                agent_name="GrowthStageMonitorAgent",
                 primary_intent=IntentType.GROWTH_STAGE,
                 allowed_topics=["crop stage", "vegetative", "flowering", "maturity", "harvest date"],
                 forbidden_topics=["mandi prices"],
@@ -178,7 +180,7 @@ class IntentRouter:
                 response_style="stage tracking and upcoming milestones"
             ),
             IntentType.FARM_STATUS: AgentPolicy(
-                agent_name="weather_watcher",
+                agent_name="WeatherAgent",
                 primary_intent=IntentType.FARM_STATUS,
                 allowed_topics=["farm summary", "active crops", "current fields", "system health", "farm conditions"],
                 forbidden_topics=["generic advice"],
@@ -186,23 +188,42 @@ class IntentRouter:
                 response_style="executive farm operational overview"
             ),
             IntentType.SENSOR_DATA: AgentPolicy(
-                agent_name="soil_health",
+                agent_name="SoilHealthAgent",
                 primary_intent=IntentType.SENSOR_DATA,
-                allowed_topics=["sensor values", "moisture level", "temperature", "EC", "Blynk status"],
-                forbidden_topics=["generic advice"],
+                allowed_topics=["live telemetry", "soil moisture sensor", "sensor readings", "blynk device"],
+                forbidden_topics=["mandi prices"],
                 available_tools=["get_sensor_data", "get_soil_data"],
-                response_style="direct telemetry readings"
+                response_style="real-time sensor telemetry report"
             ),
             IntentType.GENERAL_FARMING: AgentPolicy(
-                agent_name="farmer_coach",
+                agent_name="FarmerCoachAgent",
                 primary_intent=IntentType.GENERAL_FARMING,
-                allowed_topics=["agricultural guidance", "farming concepts"],
+                allowed_topics=["farming guidance", "agronomy basics", "crop planning advice"],
+                forbidden_topics=["fabricating unverified market quotes"],
+                available_tools=["get_crop_recommendations"],
+                response_style="practical, friendly advisory coaching"
+            ),
+            IntentType.PROFIT_OPTIMIZATION: AgentPolicy(
+                agent_name="ProfitOptimizationAgent",
+                primary_intent=IntentType.PROFIT_OPTIMIZATION,
+                allowed_topics=[
+                    "profit optimization", "maximum profit", "expected revenue", "input costs",
+                    "gross margin", "net profit", "cost benefit analysis", "crop profitability ranking"
+                ],
+                forbidden_topics=[],
+                available_tools=["get_farm_status", "get_crop_recommendations", "get_market_prices", "get_soil_data"],
+                response_style="rigorous agronomic financial analysis with revenue, cost, and net return per acre"
+            ),
+            IntentType.LOCATION_UPDATE: AgentPolicy(
+                agent_name="FarmerCoachAgent",
+                primary_intent=IntentType.LOCATION_UPDATE,
+                allowed_topics=["location context", "district", "region", "state", "weather location"],
                 forbidden_topics=[],
                 available_tools=[],
-                response_style="helpful, consultative"
+                response_style="conversational location acknowledgment"
             ),
             IntentType.UNKNOWN: AgentPolicy(
-                agent_name="farmer_coach",
+                agent_name="FarmerCoachAgent",
                 primary_intent=IntentType.UNKNOWN,
                 allowed_topics=[],
                 forbidden_topics=[],
@@ -293,6 +314,51 @@ class IntentRouter:
 
         def contains_word_regex(words: List[str]) -> bool:
             return any(re.search(r"\b" + re.escape(w) + r"\b", q) for w in words)
+
+        # 0A. LOCATION UPDATE / CONVERSATIONAL LOCATION STATEMENT
+        # e.g. "i am in ahmedabad", "i live in rajkot", "located in surat", "i'm in ahmedabad"
+        loc_patterns = [
+            r"\b(?:i am in|i'm in|i live in|located in|my location is)\s+([a-zA-Z\s]+)",
+            r"^(?:ahmedabad|rajkot|surat|vadodara|anand|gondal|pune|nagpur|indore|jaipur|delhi|mumbai)$"
+        ]
+        is_location_msg = any(re.search(p, q) for p in loc_patterns)
+        if is_location_msg and not contains_any(["weather", "price", "mandi", "crop", "plant", "irrigate"]):
+            policy = self._policies[IntentType.LOCATION_UPDATE]
+            return RoutedIntent(
+                primary_intent=IntentType.LOCATION_UPDATE,
+                selected_agent=policy.agent_name,
+                tools_needed=[],
+                policy=policy
+            )
+
+        # 0B. PROFIT OPTIMIZATION
+        # e.g. "give me a plan to get my maximum profit", "how can i maximize profit", "highest profit plan"
+        if contains_any([
+            "maximum profit", "maximize profit", "maximise profit", "profit plan",
+            "highest profit", "make more money", "highest return", "profit optimization",
+            "maximize my profit", "maximise my profit", "best profit"
+        ]) or (contains_word_regex(["profit", "revenue", "return"]) and contains_any(["maximum", "maximize", "maximise", "plan", "highest", "increase", "more money"])):
+            policy = self._policies[IntentType.PROFIT_OPTIMIZATION]
+            return RoutedIntent(
+                primary_intent=IntentType.PROFIT_OPTIMIZATION,
+                selected_agent=policy.agent_name,
+                tools_needed=policy.available_tools,
+                policy=policy
+            )
+
+        # 0C. MULTI-INTENT: WEATHER + IRRIGATION
+        # e.g. "what is the weather update should i irrigate or not today", "weather today and should i irrigate"
+        has_weather_keywords = contains_any(["weather", "rain", "rainfall", "forecast", "temperature", "temp"])
+        has_irrigation_keywords = contains_any(["irrigate", "irrigation", "water my", "should i water", "watering"])
+        if has_weather_keywords and has_irrigation_keywords:
+            policy = self._policies[IntentType.WEATHER]
+            return RoutedIntent(
+                primary_intent=IntentType.WEATHER,
+                secondary_intents=[IntentType.IRRIGATION],
+                selected_agent=policy.agent_name,
+                tools_needed=["get_farm_weather", "get_sensor_data", "get_soil_data"],
+                policy=policy
+            )
 
         # 1. TASK SCHEDULING (high priority match)
         # e.g. "Give me today's farming tasks.", "What tasks do I need to complete today?"
@@ -428,8 +494,12 @@ class IntentRouter:
             "precipitation", "wind speed", "heatwave", "storm", "cloudy", "sunny"
         ]) or contains_word_regex(["weather", "rain", "temp", "temperature", "forecast", "monsoon"]):
             policy = self._policies[IntentType.WEATHER]
+            secondary = []
+            if contains_any(["affect my cotton", "affect my crop", "cotton", "wheat", "crop"]):
+                secondary.append(IntentType.CROP_SELECTION)
             return RoutedIntent(
                 primary_intent=IntentType.WEATHER,
+                secondary_intents=secondary,
                 selected_agent=policy.agent_name,
                 tools_needed=policy.available_tools,
                 policy=policy

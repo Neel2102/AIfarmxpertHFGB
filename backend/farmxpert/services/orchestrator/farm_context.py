@@ -334,7 +334,7 @@ class FarmContextResolver:
         lon = farm_dict.get("longitude")
 
         # Check farm_profile polygon coords if lat/lon not directly set
-        if (not lat or not lon) and profile and isinstance(profile.farm_polygon, dict):
+        if (not lat or not lon) and profile and hasattr(profile, "farm_polygon") and isinstance(profile.farm_polygon, dict):
             coords = profile.farm_polygon.get("coordinates")
             if coords and isinstance(coords, list) and len(coords) > 0:
                 first_ring = coords[0]
@@ -345,9 +345,9 @@ class FarmContextResolver:
                         lat = float(first_pt[1])
 
         # Location text
-        district = getattr(farm, "district", None) if farm else (profile.district if profile else None)
-        state = getattr(farm, "state", None) if farm else (profile.state if profile else None)
-        village = getattr(farm, "village", None) if farm else (profile.village if profile else None)
+        district = getattr(farm, "district", None) if farm else getattr(profile, "district", None)
+        state = getattr(farm, "state", None) if farm else getattr(profile, "state", None)
+        village = getattr(farm, "village", None) if farm else getattr(profile, "village", None)
         loc_str = farm_dict.get("location") or (f"{district}, {state}" if district and state else state or district)
 
         if not district and loc_str and "," in loc_str:
@@ -360,13 +360,15 @@ class FarmContextResolver:
         crop_val = getattr(farm, "crop_type", None)
         if crop_val:
             crops.append(crop_val)
-        if profile and profile.primary_crops:
-            if isinstance(profile.primary_crops, list):
-                crops.extend([str(c) for c in profile.primary_crops if str(c) not in crops])
-            elif isinstance(profile.primary_crops, str):
-                crops.extend([c.strip() for c in profile.primary_crops.split(",") if c.strip() and c.strip() not in crops])
-        if profile and profile.specific_crop and profile.specific_crop not in crops:
-            crops.append(profile.specific_crop)
+        primary_crops = getattr(profile, "primary_crops", None)
+        if primary_crops:
+            if isinstance(primary_crops, list):
+                crops.extend([str(c) for c in primary_crops if str(c) not in crops])
+            elif isinstance(primary_crops, str):
+                crops.extend([c.strip() for c in primary_crops.split(",") if c.strip() and c.strip() not in crops])
+        specific_crop = getattr(profile, "specific_crop", None)
+        if specific_crop and specific_crop not in crops:
+            crops.append(specific_crop)
 
         # Farm crops table query
         if farm and hasattr(farm, "id"):
@@ -393,16 +395,24 @@ class FarmContextResolver:
             soil_test = None
 
         if soil_test:
+            def _clean_num(val):
+                if val is None:
+                    return None
+                try:
+                    return float(val)
+                except (ValueError, TypeError):
+                    return None
+
             soil_telemetry = {
-                "moisture": soil_test.soil_moisture,
-                "temperature": soil_test.soil_temperature or soil_test.air_temperature,
-                "ph": soil_test.soil_ph,
-                "nitrogen": soil_test.nitrogen,
-                "phosphorus": soil_test.phosphorus,
-                "potassium": soil_test.potassium,
-                "ec": soil_test.soil_ec,
-                "humidity": soil_test.air_humidity,
-                "tested_at": soil_test.test_date.isoformat() if soil_test.test_date else None,
+                "moisture": _clean_num(getattr(soil_test, "soil_moisture", None)),
+                "temperature": _clean_num(getattr(soil_test, "soil_temperature", None) or getattr(soil_test, "air_temperature", None)),
+                "ph": _clean_num(getattr(soil_test, "soil_ph", None)),
+                "nitrogen": _clean_num(getattr(soil_test, "nitrogen", None)),
+                "phosphorus": _clean_num(getattr(soil_test, "phosphorus", None)),
+                "potassium": _clean_num(getattr(soil_test, "potassium", None)),
+                "ec": _clean_num(getattr(soil_test, "soil_ec", None)),
+                "humidity": _clean_num(getattr(soil_test, "air_humidity", None)),
+                "tested_at": soil_test.test_date.isoformat() if hasattr(soil_test, "test_date") and hasattr(soil_test.test_date, "isoformat") else None,
             }
 
         # Area

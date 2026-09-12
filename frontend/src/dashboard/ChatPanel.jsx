@@ -115,23 +115,41 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
   }, [inputValue]);
 
   const getAgentDisplayName = (name) => {
+    if (!name) return 'Farm Advisor';
     const map = {
-      'super-agent': 'SuperAgent',
+      'super-agent': 'Farm Orchestrator',
+      'CropSelectorAgent': 'Crop Selector',
       'crop_selector': 'Crop Selector',
+      'SeedSelectionAgent': 'Seed Selection',
       'seed_selection': 'Seed Selection',
+      'SoilHealthAgent': 'Soil Health',
       'soil_health_agent': 'Soil Health',
+      'FertilizerAdvisorAgent': 'Fertilizer Advisor',
       'fertilizer_agent': 'Fertilizer Advisor',
+      'IrrigationPlannerAgent': 'Irrigation Planner',
       'irrigation_agent': 'Irrigation Planner',
+      'PestDiseaseDiagnosticAgent': 'Pest Diagnostic',
       'pest_disease_diagnostic': 'Pest Diagnostic',
+      'WeatherAgent': 'Weather Watcher',
       'weather_watcher': 'Weather Watcher',
+      'GrowthStageMonitorAgent': 'Growth Monitor',
       'growth_stage_monitor': 'Growth Monitor',
+      'TaskSchedulerAgent': 'Task Scheduler',
       'task_scheduler_agent': 'Task Scheduler',
+      'MachineryManagerAgent': 'Machinery Manager',
       'machinery_manager': 'Machinery Manager',
+      'LayoutMapperAgent': 'Farm Layout',
       'layout_mapper': 'Layout Mapper',
+      'YieldPredictorAgent': 'Yield Predictor',
       'yield_predictor': 'Yield Predictor',
-      'market_intelligence_agent': 'Market Intel'
+      'MarketIntelligenceAgent': 'Market Intel',
+      'market_intelligence_agent': 'Market Intel',
+      'ProfitOptimizationAgent': 'Profit Optimizer',
+      'profit_optimization': 'Profit Optimizer',
+      'FarmerCoachAgent': 'Farm Advisor',
+      'farmer_coach': 'Farm Advisor'
     };
-    return map[name] || name;
+    return map[name] || name.replace(/Agent$/i, '').replace(/_/g, ' ');
   };
 
   const agentOptions = [
@@ -636,7 +654,7 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
 
                       {!m.isStreaming && m.agent_responses && m.agent_responses.length > 0 && (
                         <div className="farm-context-block">
-                          <div className="farm-context-header"><Check size={14} color="#10b981" /> Sources Consulted</div>
+                          <div className="farm-context-header"><Check size={14} color="#10b981" /> Verified Advisory Sources</div>
                           <div className="farm-context-chips">
                             {m.agent_responses.map((a, i) => (
                               <span key={i} className={`farm-context-chip ${a.success ? 'success' : 'error'}`}>{getAgentDisplayName(a.agent_name)}</span>

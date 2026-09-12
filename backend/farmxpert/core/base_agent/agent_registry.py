@@ -76,6 +76,18 @@ class AgentRegistry:
         self.register("farmer_coach", FarmerCoachAgent)
         self.register("compliance_certification", ComplianceCertificationAgent)
         self.register("community_engagement", CommunityEngagementAgent)
+
+        # PascalCase aliases for orchestrator test suite compatibility
+        self.register("WeatherAgent", WeatherWatcherAgent)
+        self.register("SoilHealthAgent", SoilHealthAgent)
+        self.register("MarketIntelligenceAgent", MarketIntelligenceAgent)
+        self.register("CropSelectorAgent", CropSelectorAgent)
+        self.register("TaskSchedulerAgent", TaskSchedulerAgent)
+        self.register("YieldPredictorAgent", YieldPredictorAgent)
+        self.register("FertilizerAdvisorAgent", FertilizerAdvisorAgent)
+        self.register("IrrigationPlannerAgent", IrrigationPlannerAgent)
+        self.register("PestDiseaseDiagnosticAgent", PestDiseaseDiagnosticAgent)
+        self.register("FarmerCoachAgent", FarmerCoachAgent)
     
     def register(self, name: str, agent_class: Type[AgentInterface]):
         """Register a new agent"""

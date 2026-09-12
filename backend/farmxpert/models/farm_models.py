@@ -6,7 +6,7 @@ from farmxpert.models.database import Base
 class Farm(Base):
     __tablename__ = "farms"
     
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("auth_users.id"), nullable=False)
     name = Column(String(255), nullable=True, default="My Farm")
     farm_name = Column(String(255), nullable=False, default="My Farm")
