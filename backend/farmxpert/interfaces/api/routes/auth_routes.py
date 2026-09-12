@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends, status, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List, Any, Dict
 from datetime import datetime, timedelta, timezone
 from farmxpert.models.user_models import User
 from farmxpert.services.auth_service import AuthService
@@ -46,8 +46,8 @@ class OnboardingResponse(BaseModel):
     user: Optional[dict] = None
 
 class FarmProfileResponse(BaseModel):
-    id: int
-    user_id: int
+    id: Optional[int] = None
+    user_id: Optional[int] = None
     farm_name: Optional[str] = None
     farm_size: Optional[str] = None
     farm_size_unit: Optional[str] = None
@@ -55,33 +55,46 @@ class FarmProfileResponse(BaseModel):
     state: Optional[str] = None
     district: Optional[str] = None
     village: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     soil_type: Optional[str] = None
     water_source: Optional[str] = None
     irrigation_method: Optional[str] = None
     primary_crops: Optional[list] = None
     specific_crop: Optional[str] = None
+    crop_type: Optional[str] = None
     machinery: Optional[list] = None
     labor_setup: Optional[str] = None
     tech_comfort: Optional[str] = None
     farm_goals: Optional[list] = None
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 class FarmProfileUpdate(BaseModel):
     farm_name: Optional[str] = None
     farm_size: Optional[str] = None
+    farm_size_unit: Optional[str] = None
     location: Optional[str] = None
     state: Optional[str] = None
     district: Optional[str] = None
     village: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     soil_type: Optional[str] = None
     water_source: Optional[str] = None
     irrigation_method: Optional[str] = None
     primary_crops: Optional[list] = None
     specific_crop: Optional[str] = None
+    crop_type: Optional[str] = None
     machinery: Optional[list] = None
     labor_setup: Optional[str] = None
     tech_comfort: Optional[str] = None
     farm_goals: Optional[list] = None
+
+    class Config:
+        extra = "allow"
 
 class ProfileUpdateRequest(BaseModel):
     """Accept both 'name' and 'full_name' so old and new UI both work."""
@@ -94,6 +107,17 @@ class ProfileUpdateRequest(BaseModel):
 class FarmLayoutSave(BaseModel):
     polygon: Optional[Any] = None          # GeoJSON Feature or Geometry
     form_data: Optional[dict] = None       # soil_type, water_source, season, land_area, crop_preferences
+    boundaries: Optional[List[Any]] = None
+    center: Optional[List[float]] = None
+    zoom: Optional[int] = None
+    name: Optional[str] = None
+    soil_type: Optional[str] = None
+    irrigation_type: Optional[str] = None
+    area_acres: Optional[float] = None
+    notes: Optional[str] = None
+
+    class Config:
+        extra = "allow"
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 security = HTTPBearer()
@@ -613,6 +637,7 @@ async def get_farm_profile(
     return profile
 
 @router.put("/farm-profile", response_model=FarmProfileResponse)
+@router.post("/farm-profile", response_model=FarmProfileResponse)
 async def update_farm_profile(
     profile_data: FarmProfileUpdate,
     current_user: User = Depends(get_current_user),
@@ -634,6 +659,7 @@ async def update_farm_profile(
 # ── Farm Layout endpoints ─────────────────────────────────────────────────────
 
 @router.put("/farm-layout")
+@router.post("/farm-layout")
 async def save_farm_layout(
     layout: FarmLayoutSave,
     current_user: User = Depends(get_current_user),
@@ -641,7 +667,8 @@ async def save_farm_layout(
 ):
     """Save GeoJSON polygon + form data for the logged-in user's farm layout and sync to canonical Farm record."""
     from farmxpert.models.farm_profile_models import FarmProfile
-    from farmxpert.models.farm_models import Farm
+    from farmxpert.models.farm_models import Farm, Crop
+    from farmxpert.models.user_models import AuthUser
     from datetime import datetime
 
     profile = db.query(FarmProfile).filter(FarmProfile.user_id == current_user.id).first()
@@ -650,7 +677,7 @@ async def save_farm_layout(
         db.add(profile)
 
     profile.farm_polygon = layout.polygon
-    profile.farm_layout_data = layout.form_data
+    profile.farm_layout_data = layout.form_data or {}
     profile.updated_at = datetime.utcnow()
 
     # Extract centroid coordinates from GeoJSON polygon if present
@@ -670,9 +697,39 @@ async def save_farm_layout(
     except Exception as e:
         logger.warning(f"Failed to calculate polygon centroid: {e}")
 
+    if centroid_lat is None and layout.center and len(layout.center) >= 2:
+        centroid_lat = float(layout.center[0])
+        centroid_lon = float(layout.center[1])
+    elif centroid_lat is None and layout.boundaries and len(layout.boundaries) > 0:
+        try:
+            pts = layout.boundaries
+            centroid_lat = sum(float(p.get("lat") if isinstance(p, dict) else p[0]) for p in pts) / len(pts)
+            centroid_lon = sum(float(p.get("lng", p.get("lon")) if isinstance(p, dict) else p[1]) for p in pts) / len(pts)
+        except Exception:
+            pass
+
     if centroid_lat is not None and centroid_lon is not None:
         profile.latitude = centroid_lat
         profile.longitude = centroid_lon
+
+    # Ensure AuthUser exists if database foreign key constraint references auth_users(id)
+    try:
+        au = db.query(AuthUser).filter(AuthUser.id == current_user.id).first()
+        if not au:
+            au = AuthUser(
+                id=current_user.id,
+                farmer_id=f"FRM{current_user.id:04d}",
+                email=current_user.email,
+                username=current_user.username,
+                name=current_user.full_name or current_user.username,
+                phone=current_user.phone,
+                password_hash=current_user.hashed_password,
+                role=getattr(current_user, "role", "farmer"),
+            )
+            db.add(au)
+            db.flush()
+    except Exception as au_err:
+        logger.warning(f"AuthUser sync note in save_farm_layout: {au_err}")
 
     # Synchronize canonical Farm record
     farm = db.query(Farm).filter(Farm.user_id == current_user.id).first()
@@ -684,6 +741,21 @@ async def save_farm_layout(
         farm.latitude = centroid_lat
         farm.longitude = centroid_lon
 
+    if layout.name:
+        farm.farm_name = layout.name
+        profile.farm_name = layout.name
+    if layout.soil_type:
+        farm.soil_type = layout.soil_type
+        profile.soil_type = layout.soil_type
+    if layout.irrigation_type:
+        profile.irrigation_type = layout.irrigation_type
+    if layout.area_acres is not None:
+        try:
+            farm.size_acres = float(layout.area_acres)
+            profile.farm_size = float(layout.area_acres)
+        except Exception:
+            pass
+
     if layout.form_data and isinstance(layout.form_data, dict):
         fd = layout.form_data
         if fd.get("farm_name"):
@@ -692,9 +764,15 @@ async def save_farm_layout(
         if fd.get("soil_type"):
             farm.soil_type = fd["soil_type"]
             profile.soil_type = fd["soil_type"]
-        if fd.get("crop_type"):
-            farm.crop_type = fd["crop_type"]
-            profile.specific_crop = fd["crop_type"]
+        if fd.get("crop_type") or fd.get("crop_preferences"):
+            chosen_crop = fd.get("crop_type") or fd.get("crop_preferences")
+            farm.crop_type = chosen_crop
+            profile.specific_crop = chosen_crop
+        if fd.get("land_area"):
+            try:
+                farm.size_acres = float(str(fd["land_area"]).split()[0])
+            except Exception:
+                pass
         if fd.get("state"):
             farm.state = fd["state"]
             profile.state = fd["state"]
@@ -711,10 +789,35 @@ async def save_farm_layout(
             farm.location = loc_str
             profile.location = loc_str
 
+    db.flush()
+
+    # Synchronize active Crop record
+    if farm.crop_type:
+        try:
+            crop = db.query(Crop).filter(Crop.farm_id == farm.id).first()
+            if not crop:
+                crop = Crop(
+                    farm_id=farm.id,
+                    crop_type=farm.crop_type,
+                    variety="Standard",
+                    area_acres=float(farm.size_acres or 5.0),
+                    status="growing"
+                )
+                db.add(crop)
+            else:
+                crop.crop_type = farm.crop_type
+        except Exception as crop_err:
+            logger.warning(f"Crop sync note: {crop_err}")
+
     db.commit()
     db.refresh(profile)
 
-    return {"success": True, "message": "Farm layout and coordinates saved.", "latitude": centroid_lat, "longitude": centroid_lon}
+    return {
+        "success": True,
+        "message": "Farm layout and coordinates saved.",
+        "latitude": centroid_lat,
+        "longitude": centroid_lon
+    }
 
 
 @router.get("/farm-layout")
@@ -722,17 +825,52 @@ async def get_farm_layout(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Retrieve the saved GeoJSON polygon + form data for the logged-in user."""
+    """Retrieve the saved GeoJSON polygon + form data for the logged-in user, synchronized with canonical Farm record."""
     from farmxpert.models.farm_profile_models import FarmProfile
+    from farmxpert.models.farm_models import Farm
 
     profile = db.query(FarmProfile).filter(FarmProfile.user_id == current_user.id).first()
-    if not profile or not profile.farm_polygon:
-        return {"has_layout": False}
+    farm = db.query(Farm).filter(Farm.user_id == current_user.id).first()
+
+    merged_form_data = {}
+    if profile and profile.farm_layout_data and isinstance(profile.farm_layout_data, dict):
+        merged_form_data.update(profile.farm_layout_data)
+
+    if farm:
+        if farm.farm_name:
+            merged_form_data["farm_name"] = farm.farm_name
+        if farm.soil_type:
+            merged_form_data["soil_type"] = farm.soil_type
+        if farm.crop_type:
+            merged_form_data["crop_type"] = farm.crop_type
+            merged_form_data["crop_preferences"] = farm.crop_type
+        if farm.size_acres:
+            merged_form_data["land_area"] = farm.size_acres
+        if farm.location:
+            merged_form_data["location"] = farm.location
+    elif profile:
+        if profile.farm_name:
+            merged_form_data["farm_name"] = profile.farm_name
+        if profile.soil_type:
+            merged_form_data["soil_type"] = profile.soil_type
+        if profile.specific_crop:
+            merged_form_data["crop_type"] = profile.specific_crop
+            merged_form_data["crop_preferences"] = profile.specific_crop
+        if profile.location:
+            merged_form_data["location"] = profile.location
+
+    has_polygon = bool(profile and profile.farm_polygon)
+    lat = float(farm.latitude) if farm and farm.latitude else (profile.latitude if profile else None)
+    lon = float(farm.longitude) if farm and farm.longitude else (profile.longitude if profile else None)
 
     return {
-        "has_layout": True,
-        "polygon": profile.farm_polygon,
-        "form_data": profile.farm_layout_data or {},
+        "has_layout": has_polygon,
+        "polygon": profile.farm_polygon if has_polygon else None,
+        "form_data": merged_form_data,
+        "latitude": lat,
+        "longitude": lon,
+        "farm_name": merged_form_data.get("farm_name", "My Farm"),
+        "updated_at": profile.updated_at.isoformat() if profile and profile.updated_at else None,
     }
 
 

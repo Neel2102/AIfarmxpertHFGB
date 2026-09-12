@@ -17,7 +17,7 @@ class BlynkDevice(Base):
     """Blynk IoT device registered by a farmer"""
     __tablename__ = "blynk_devices"
 
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, index=True, autoincrement=True)
     farm_id = Column(BigInteger, nullable=False, index=True)  # resolved server-side, always set
     device_name = Column(String(255), default="My Blynk Device")
     blynk_device_id = Column(String(100), unique=True, nullable=True)

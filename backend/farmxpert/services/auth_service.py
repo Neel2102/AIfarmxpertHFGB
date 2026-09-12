@@ -442,7 +442,8 @@ class AuthService:
     def update_farm_profile(self, user_id: int, profile_data: dict) -> Optional[FarmProfile]:
         """Update farm profile data and synchronize with canonical Farm database record."""
         try:
-            from farmxpert.models.farm_models import Farm
+            from farmxpert.models.farm_models import Farm, Crop
+            from farmxpert.models.user_models import AuthUser
 
             profile = self.get_farm_profile(user_id)
             if not profile:
@@ -455,6 +456,27 @@ class AuthService:
                     setattr(profile, field, value)
             
             profile.updated_at = datetime.utcnow()
+
+            # Ensure AuthUser exists if database foreign key constraint references auth_users(id)
+            try:
+                u = self.db.query(User).filter(User.id == user_id).first()
+                if u:
+                    au = self.db.query(AuthUser).filter(AuthUser.id == user_id).first()
+                    if not au:
+                        au = AuthUser(
+                            id=user_id,
+                            farmer_id=f"FRM{user_id:04d}",
+                            email=u.email,
+                            username=u.username,
+                            name=u.full_name or u.username,
+                            phone=u.phone,
+                            password_hash=u.hashed_password,
+                            role=getattr(u, "role", "farmer"),
+                        )
+                        self.db.add(au)
+                        self.db.flush()
+            except Exception as au_err:
+                print(f"AuthUser sync note: {au_err}")
 
             # Synchronize canonical Farm record
             farm = self.db.query(Farm).filter(Farm.user_id == user_id).first()
@@ -475,21 +497,66 @@ class AuthService:
             if profile.soil_type:
                 farm.soil_type = profile.soil_type
 
-            if profile.latitude is not None:
+            # Check latitude/longitude from profile or incoming data
+            if profile_data.get("latitude") is not None:
+                try:
+                    lat_val = float(profile_data["latitude"])
+                    profile.latitude = lat_val
+                    farm.latitude = lat_val
+                except (ValueError, TypeError):
+                    pass
+            elif profile.latitude is not None:
                 farm.latitude = profile.latitude
-            if profile.longitude is not None:
+
+            if profile_data.get("longitude") is not None:
+                try:
+                    lon_val = float(profile_data["longitude"])
+                    profile.longitude = lon_val
+                    farm.longitude = lon_val
+                except (ValueError, TypeError):
+                    pass
+            elif profile.longitude is not None:
                 farm.longitude = profile.longitude
 
-            if profile.specific_crop:
+            # Crop sync
+            if profile_data.get("crop_type"):
+                farm.crop_type = str(profile_data["crop_type"])
+                profile.specific_crop = str(profile_data["crop_type"])
+            elif profile.specific_crop:
                 farm.crop_type = profile.specific_crop
             elif profile.primary_crops and isinstance(profile.primary_crops, list) and len(profile.primary_crops) > 0:
                 farm.crop_type = str(profile.primary_crops[0])
 
-            if profile.farm_size:
+            if profile_data.get("size_acres") is not None:
+                try:
+                    farm.size_acres = float(profile_data["size_acres"])
+                except Exception:
+                    pass
+            elif profile.farm_size:
                 try:
                     farm.size_acres = float(str(profile.farm_size).split()[0])
                 except Exception:
                     pass
+
+            self.db.flush()
+
+            # Synchronize active Crop record for this farm
+            if farm.crop_type:
+                try:
+                    crop = self.db.query(Crop).filter(Crop.farm_id == farm.id).first()
+                    if not crop:
+                        crop = Crop(
+                            farm_id=farm.id,
+                            crop_type=farm.crop_type,
+                            variety="Standard",
+                            area_acres=float(farm.size_acres or 5.0),
+                            status="growing"
+                        )
+                        self.db.add(crop)
+                    else:
+                        crop.crop_type = farm.crop_type
+                except Exception as crop_err:
+                    print(f"Crop sync note: {crop_err}")
 
             self.db.commit()
             self.db.refresh(profile)

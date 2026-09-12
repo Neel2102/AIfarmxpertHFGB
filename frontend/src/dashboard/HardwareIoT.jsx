@@ -87,7 +87,7 @@ export default function HardwareIoT() {
       const token = localStorage.getItem('access_token');
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-      await fetch(`${API_BASE_URL}/api/blynk/delete-device`, {
+      await fetch(`${API_BASE_URL}/blynk/delete-device`, {
         method: "DELETE",
         headers
       });
@@ -134,7 +134,7 @@ export default function HardwareIoT() {
         const token = localStorage.getItem('access_token');
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-        const res = await fetch(`${API_BASE_URL}/api/blynk/check-device`, { headers });
+        const res = await fetch(`${API_BASE_URL}/blynk/check-device`, { headers });
         const contentType = res.headers.get('content-type') || '';
         if (res.ok && contentType.includes('application/json')) {
           const data = await res.json();
@@ -239,7 +239,7 @@ export default function HardwareIoT() {
       };
 
       // Register with backend
-      const res = await fetch(`${API_BASE_URL}/api/blynk/register-device`, {
+      const res = await fetch(`${API_BASE_URL}/blynk/register-device`, {
         method: "POST",
         headers,
         body: JSON.stringify({

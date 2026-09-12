@@ -64,15 +64,34 @@ const RouteGuard = ({ children }) => {
           return;
         }
 
+        let payload = null;
         try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          if (payload.exp * 1000 < Date.now()) {
-            console.warn('Token expired');
-            navigate('/login', { replace: true });
-            return;
+          const parts = token.split('.');
+          if (parts.length >= 2) {
+            let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4 !== 0) {
+              base64 += '=';
+            }
+            const jsonStr = decodeURIComponent(
+              atob(base64)
+                .split('')
+                .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                .join('')
+            );
+            payload = JSON.parse(jsonStr);
           }
-        } catch (error) {
+        } catch {
+          payload = null;
+        }
+
+        if (!payload) {
           console.warn('Invalid token format');
+          navigate('/login', { replace: true });
+          return;
+        }
+
+        if (payload.exp && payload.exp * 1000 < Date.now()) {
+          console.warn('Token expired');
           navigate('/login', { replace: true });
           return;
         }

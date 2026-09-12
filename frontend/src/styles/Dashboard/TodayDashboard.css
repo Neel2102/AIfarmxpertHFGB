@@ -1119,3 +1119,104 @@
   font-weight: 600;
 }
 
+/* ===== DAILY FLOW UI STATES ===== */
+.daily-flow-card {
+  background: var(--dash-card-bg);
+  backdrop-filter: var(--dash-backdrop-blur);
+  -webkit-backdrop-filter: var(--dash-backdrop-blur);
+  border: 1px solid var(--dash-card-border);
+  border-radius: 16px;
+  padding: 44px 28px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 28px;
+  box-shadow: var(--dash-card-shadow);
+}
+
+.daily-flow-card h3 {
+  font-family: 'Orbitron', monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--dash-text-heading);
+  margin: 10px 0 8px;
+}
+
+.daily-flow-card p {
+  color: var(--dash-text-muted);
+  font-size: 0.88rem;
+  max-width: 520px;
+  margin: 0 auto 22px;
+  line-height: 1.5;
+}
+
+.daily-flow-card.state-error {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.daily-flow-card.state-uninitiated {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.daily-flow-card.state-no-farm {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.04);
+}
+
+/* Skeleton Loading State */
+.daily-flow-loading-skeleton {
+  background: var(--dash-card-bg);
+  border: 1px solid var(--dash-card-border);
+  border-radius: 16px;
+  padding: 32px 28px;
+  margin-bottom: 28px;
+}
+
+.skeleton-line {
+  height: 20px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s infinite;
+  border-radius: 8px;
+  margin-bottom: 18px;
+}
+
+.skeleton-line.title {
+  width: 38%;
+  height: 26px;
+}
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.skeleton-box {
+  height: 100px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.03) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s infinite;
+  border-radius: 12px;
+}
+
+.daily-flow-card.state-generating {
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.04);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+

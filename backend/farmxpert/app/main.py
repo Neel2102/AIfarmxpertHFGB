@@ -32,6 +32,8 @@ import farmxpert.models.blynk_models  # noqa: F401
 from farmxpert.models.database import Base, engine
 from farmxpert.voice.voice_router import router as voice_router
 
+from farmxpert.app.routers import system as system_router
+
 app = FastAPI(
     title="FarmXpert AI Platform",
     description="AI-powered agricultural monitoring and decision support system",
@@ -40,13 +42,31 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Add CORS middleware
+# Robust Production CORS configuration
+# Explicit origins + regex allow credentials to work with all Vercel previews and production
+allowed_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://a-ifarmxpert-hfgb-git-c38026-neelsutariya21-gmailcoms-projects.vercel.app",
+]
+custom_origins = os.getenv("CORS_ORIGINS", "")
+if custom_origins:
+    for o in custom_origins.split(","):
+        if o.strip():
+            allowed_origins.append(o.strip())
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"^https://.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Add middleware
@@ -71,6 +91,7 @@ app.include_router(chat_routes.router, prefix="/api")
 app.include_router(market_routes.router, prefix="/api")
 app.include_router(task_routes.router, prefix="/api")
 app.include_router(voice_router, prefix="/api")
+app.include_router(system_router.router, prefix="/api/orchestrator")
 
 
 @app.on_event("startup")

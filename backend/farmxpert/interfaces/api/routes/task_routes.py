@@ -47,17 +47,49 @@ def _resolve_farm_and_crop(
     if not farm:
         farm = db.query(Farm).filter(Farm.user_id == current_user.id).first()
     if not farm:
-        farm = db.query(Farm).first()
-    if not farm:
+        # Check FarmProfile for user's configured details
+        profile = db.query(FarmProfile).filter(FarmProfile.user_id == current_user.id).first()
+        farm_name = profile.farm_name if profile and profile.farm_name else f"{current_user.full_name or 'My'} Farm"
+        crop_type = (profile.specific_crop or (profile.primary_crops[0] if profile.primary_crops and isinstance(profile.primary_crops, list) and len(profile.primary_crops) > 0 else "Cotton")) if profile else "Cotton"
+        state = profile.state if profile and profile.state else "Gujarat"
+        district = profile.district if profile and profile.district else "Rajkot"
+        village = profile.village if profile and profile.village else ""
+        soil_type = profile.soil_type if profile and profile.soil_type else "Black Soil"
+
+        # Ensure AuthUser exists if required by DB relationships
+        try:
+            from farmxpert.models.user_models import AuthUser
+            au = db.query(AuthUser).filter(AuthUser.id == current_user.id).first()
+            if not au:
+                au = AuthUser(
+                    id=current_user.id,
+                    farmer_id=f"FRM{current_user.id:04d}",
+                    email=current_user.email,
+                    username=current_user.username,
+                    name=current_user.full_name or current_user.username,
+                    phone=current_user.phone,
+                    password_hash=current_user.hashed_password,
+                    role=getattr(current_user, "role", "farmer"),
+                )
+                db.add(au)
+                db.flush()
+        except Exception as au_err:
+            logger.warning(f"AuthUser sync note: {au_err}")
+
         farm = Farm(
             user_id=current_user.id,
-            farm_name=f"{current_user.full_name or 'My'} Farm",
-            crop_type="Cotton",
-            state="Gujarat",
-            district="Rajkot",
-            soil_type="Black Soil",
+            farm_name=farm_name,
+            crop_type=crop_type,
+            state=state,
+            district=district,
+            village=village,
+            soil_type=soil_type,
             size_acres=5.0
         )
+        if profile and profile.latitude is not None and profile.longitude is not None:
+            farm.latitude = profile.latitude
+            farm.longitude = profile.longitude
+
         db.add(farm)
         db.commit()
         db.refresh(farm)
@@ -367,7 +399,8 @@ async def get_farms_and_crops(
     try:
         farms = db.query(Farm).filter(Farm.user_id == current_user.id).all()
         if not farms:
-            farms = db.query(Farm).limit(3).all()
+            f, _ = _resolve_farm_and_crop(db, current_user)
+            farms = [f] if f else []
 
         result_farms = []
         for f in farms:

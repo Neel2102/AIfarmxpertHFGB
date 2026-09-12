@@ -8,18 +8,37 @@ from datetime import datetime, timezone
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from farmxpert.models.database import get_db
 from farmxpert.models.blynk_models import BlynkDevice, SensorReading
-from farmxpert.models.farm_models import Farm
+from farmxpert.models.farm_models import Farm, SoilTest
 from farmxpert.interfaces.api.routes.auth_routes import get_current_user
 from farmxpert.models.user_models import User
+from farmxpert.services.auth_service import AuthService
 from farmxpert.core.utils.logger import get_logger
 
 router = APIRouter(prefix="/blynk", tags=["Blynk IoT"])
 logger = get_logger("blynk_api")
+
+security_optional = HTTPBearer(auto_error=False)
+
+def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    if not credentials:
+        return None
+    try:
+        auth_service = AuthService(db)
+        payload = auth_service.verify_token(credentials.credentials)
+        if payload and "user_id" in payload:
+            return auth_service.get_user_by_id(payload["user_id"])
+    except Exception:
+        pass
+    return None
 
 
 # ── Encryption helpers ──────────────────────────────────────
@@ -268,6 +287,111 @@ async def get_latest_reading(farm_id: Optional[int] = None, db: Session = Depend
             "potassium": float(reading.potassium) if reading.potassium else None,
             "recorded_at": reading.recorded_at.isoformat() if reading.recorded_at else None,
         },
+    }
+
+
+@router.get("/telemetry/live")
+async def get_live_telemetry(
+    farm_id: Optional[int] = None,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db)
+):
+    """
+    Get live sensor telemetry from Blynk IoT device.
+    Returns a clean state without 404:
+    - If hardware not registered: connected=False, status='not_connected', message="Your IoT device is not connected yet."
+    - If hardware registered but no data: connected=True, has_data=False, status='waiting_for_data'
+    - If live data exists: connected=True, has_data=True, status='active', data={...}
+    """
+    user_id = current_user.id if current_user else None
+    
+    # 1. Check if device is registered for this user or farm
+    device_query = db.query(BlynkDevice).filter(BlynkDevice.is_active == True)
+    if user_id:
+        device_query = device_query.filter(BlynkDevice.farm_id == user_id)
+    elif farm_id:
+        device_query = device_query.filter(BlynkDevice.farm_id == farm_id)
+    
+    device = device_query.first()
+    if not device and not user_id and not farm_id:
+        device = db.query(BlynkDevice).filter(BlynkDevice.is_active == True).first()
+
+    if not device:
+        return {
+            "connected": False,
+            "has_data": False,
+            "status": "not_connected",
+            "message": "Your IoT device is not connected yet.",
+            "data": None
+        }
+
+    # 2. Retrieve latest sensor reading
+    reading = (
+        db.query(SensorReading)
+        .filter(SensorReading.device_id == device.id)
+        .order_by(SensorReading.recorded_at.desc())
+        .first()
+    )
+
+    # Fallback to latest soil test if sensor reading is empty
+    if not reading and user_id:
+        farm = db.query(Farm).filter(Farm.user_id == user_id).first()
+        if farm:
+            soil_test = (
+                db.query(SoilTest)
+                .filter(SoilTest.farm_id == farm.id)
+                .order_by(SoilTest.test_date.desc())
+                .first()
+            )
+            if soil_test:
+                return {
+                    "connected": True,
+                    "has_data": True,
+                    "status": "active",
+                    "source": "soil_test",
+                    "device": {"id": device.id, "device_name": device.device_name, "status": device.status},
+                    "data": {
+                        "air_temperature": soil_test.air_temperature,
+                        "air_humidity": soil_test.air_humidity,
+                        "soil_moisture": soil_test.soil_moisture,
+                        "soil_temperature": soil_test.soil_temperature,
+                        "soil_ec": soil_test.soil_ec,
+                        "soil_ph": soil_test.soil_ph,
+                        "nitrogen": soil_test.nitrogen,
+                        "phosphorus": soil_test.phosphorus,
+                        "potassium": soil_test.potassium,
+                        "recorded_at": soil_test.test_date.isoformat() if soil_test.test_date else None,
+                    }
+                }
+
+    if not reading:
+        return {
+            "connected": True,
+            "has_data": False,
+            "status": "waiting_for_data",
+            "message": "IoT device connected. Waiting for first telemetry reading...",
+            "device": {"id": device.id, "device_name": device.device_name, "status": device.status},
+            "data": None
+        }
+
+    return {
+        "connected": True,
+        "has_data": True,
+        "status": "active",
+        "source": "blynk",
+        "device": {"id": device.id, "device_name": device.device_name, "status": device.status},
+        "data": {
+            "air_temperature": float(reading.air_temperature) if reading.air_temperature is not None else None,
+            "air_humidity": float(reading.air_humidity) if reading.air_humidity is not None else None,
+            "soil_moisture": float(reading.soil_moisture) if reading.soil_moisture is not None else None,
+            "soil_temperature": float(reading.soil_temperature) if reading.soil_temperature is not None else None,
+            "soil_ec": float(reading.soil_ec) if reading.soil_ec is not None else None,
+            "soil_ph": float(reading.soil_ph) if reading.soil_ph is not None else None,
+            "nitrogen": float(reading.nitrogen) if reading.nitrogen is not None else None,
+            "phosphorus": float(reading.phosphorus) if reading.phosphorus is not None else None,
+            "potassium": float(reading.potassium) if reading.potassium is not None else None,
+            "recorded_at": reading.recorded_at.isoformat() if reading.recorded_at else None,
+        }
     }
 
 

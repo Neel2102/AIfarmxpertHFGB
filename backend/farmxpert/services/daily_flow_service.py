@@ -140,6 +140,47 @@ class DailyFlowService:
     """Core service for managing the season-long crop flow and daily task operations."""
 
     @staticmethod
+    def get_or_create_active_crop(db: Session, farm: Farm, current_user: User) -> Crop:
+        """
+        Resolve the active crop for the farm, or create one based on farm/profile data or sensible defaults.
+        Ensures all non-null DB constraints (area_acres) are fulfilled.
+        """
+        crop = db.query(Crop).filter(Crop.farm_id == farm.id, Crop.status == "growing").first()
+        if not crop:
+            crop = db.query(Crop).filter(Crop.farm_id == farm.id).first()
+
+        if not crop:
+            crop_name = getattr(farm, "crop_type", None)
+            if not crop_name:
+                profile = db.query(FarmProfile).filter(FarmProfile.user_id == current_user.id).first()
+                if profile:
+                    crop_name = profile.specific_crop or (
+                        profile.primary_crops[0] if profile.primary_crops and isinstance(profile.primary_crops, list) and len(profile.primary_crops) > 0 else None
+                    )
+            if not crop_name:
+                crop_name = "Cotton"
+
+            duration = DailyFlowService.get_crop_duration(crop_name)
+            # Default to 25 days into the season so active vegetative tasks exist
+            planting_date = datetime.utcnow() - timedelta(days=25)
+            expected_harvest = planting_date + timedelta(days=duration)
+
+            crop = Crop(
+                farm_id=farm.id,
+                crop_type=crop_name,
+                variety="Standard",
+                planting_date=planting_date,
+                expected_harvest_date=expected_harvest,
+                area_acres=float(getattr(farm, "size_acres", None) or 5.0),
+                status="growing"
+            )
+            db.add(crop)
+            db.commit()
+            db.refresh(crop)
+
+        return crop
+
+    @staticmethod
     def get_crop_duration(crop_name: str, variety: Optional[str] = None) -> int:
         """Derive standard crop duration in days."""
         clean = (crop_name or "").lower().strip()
@@ -624,7 +665,9 @@ Each task object MUST have:
             "today": today_tasks,
             "tomorrow": tomorrow_tasks,
             "upcoming_7_days": upcoming_7_tasks,
+            "upcoming": upcoming_7_tasks,
             "season_plan": timeline["stages"],
+            "stages": timeline["stages"],
             "overdue": overdue_tasks,
             "completed": completed_tasks,
             "total_tasks_count": len(all_tasks)

@@ -29,14 +29,35 @@ export const AuthProvider = ({ children }) => {
         if (storedToken && storedUser) {
           const parsedUser = JSON.parse(storedUser);
           
-          // Validate token expiration if possible
+          // Safely decode Base64URL JWT payload
+          let payload = null;
           try {
-            const payload = JSON.parse(atob(storedToken.split('.')[1]));
-            if (payload.exp * 1000 < Date.now()) {
-              throw new Error('Token expired');
+            const parts = storedToken.split('.');
+            if (parts.length >= 2) {
+              let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+              while (base64.length % 4 !== 0) {
+                base64 += '=';
+              }
+              const jsonStr = decodeURIComponent(
+                atob(base64)
+                  .split('')
+                  .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                  .join('')
+              );
+              payload = JSON.parse(jsonStr);
             }
-          } catch (e) {
+          } catch {
+            payload = null;
+          }
+
+          if (!payload) {
+            console.warn('Authentication token malformed. Resetting session.');
             throw new Error('Invalid token format');
+          }
+
+          if (payload.exp && payload.exp * 1000 < Date.now()) {
+            console.info('Authentication session expired. Please log in again.');
+            throw new Error('Token expired');
           }
 
           setToken(storedToken);
@@ -50,7 +71,9 @@ export const AuthProvider = ({ children }) => {
           }
         }
       } catch (error) {
-        console.error('Auth check failed:', error);
+        if (error.message !== 'Token expired') {
+          console.warn('Auth check notice:', error.message);
+        }
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('session_token');

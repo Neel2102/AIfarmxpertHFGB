@@ -396,7 +396,7 @@ const TodayDashboard = () => {
       </div>
 
       {/* Error Alert Banner */}
-      {flowError && (
+      {flowError && flowData && flowData.total_tasks_count > 0 && (
         <div className="checklist-error" style={{ marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <AlertCircle size={18} />
@@ -412,7 +412,7 @@ const TodayDashboard = () => {
         </div>
       )}
 
-      {/* Cultivating Animation Banner */}
+      {/* STATE 4 — Generating Banner */}
       {generating && (
         <div className="task-cultivating-card" style={{
           display: 'flex',
@@ -433,7 +433,7 @@ const TodayDashboard = () => {
             style={{ width: '85px', height: '85px' }}
           />
           <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '0.86rem', fontWeight: 700, color: 'var(--dash-emerald)', letterSpacing: '0.06em' }}>
-            Cultivating Season Flow & Daily Operations...
+            Generating your seasonal plan...
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--dash-text-muted)' }}>
             Calculating crop duration, stage milestones, weather alerts, and soil sensor telemetry
@@ -441,133 +441,187 @@ const TodayDashboard = () => {
         </div>
       )}
 
-      {/* Crop Season Overview Progress Card */}
-      {seasonInfo && (
-        <div className="season-overview-card">
-          <div className="season-header-row">
-            <div className="season-crop-title">
-              <Sprout size={22} style={{ color: 'var(--dash-emerald)' }} />
-              {flowData?.crop_name || currentCrop?.crop_type || 'Crop'}
-              {flowData?.crop_variety && (
-                <span style={{ fontSize: '0.86rem', color: 'var(--dash-text-muted)', fontWeight: 500 }}>
-                  ({flowData.crop_variety})
-                </span>
-              )}
-              {currentStage && (
-                <span className="stage-pill">
-                  {currentStage.name || 'Active Vegetative'}
-                </span>
-              )}
-            </div>
-
-            <div className="season-cycle-stat">
-              Day {seasonInfo.days_since_planting} of {seasonInfo.duration_days} ({seasonInfo.progress_pct}%)
-            </div>
-          </div>
-
-          <div className="season-dates-bar">
-            <span>🌱 <strong>Sown / Planted:</strong> {new Date(seasonInfo.planting_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-            <span>🌾 <strong>Expected Harvest:</strong> {new Date(seasonInfo.expected_harvest_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-            <span>⏱️ <strong>Total Duration:</strong> {seasonInfo.duration_days} days</span>
-          </div>
-
-          <div className="season-progress-container">
-            <div className="season-progress-header">
-              <span>Season Progression</span>
-              <span>{seasonInfo.progress_pct}% Completed</span>
-            </div>
-            <div className="season-progress-bar">
-              <div 
-                className="season-progress-fill" 
-                style={{ width: `${seasonInfo.progress_pct}%` }} 
-              />
-            </div>
+      {/* STATE 1 — Initial Loading Skeleton */}
+      {flowLoading && !flowData && (
+        <div className="daily-flow-loading-skeleton">
+          <div className="skeleton-line title" />
+          <div className="skeleton-line" style={{ width: '55%' }} />
+          <div className="skeleton-grid">
+            <div className="skeleton-box" />
+            <div className="skeleton-box" />
+            <div className="skeleton-box" />
+            <div className="skeleton-box" />
           </div>
         </div>
       )}
 
-      {/* Flow View Tabs */}
-      <div className="flow-tabs-nav">
-        <button
-          className={`flow-tab-btn ${activeTab === 'today' ? 'active' : ''}`}
-          onClick={() => setActiveTab('today')}
-        >
-          ⚡ Today's Tasks
-          <span className="flow-tab-badge">{todayCount}</span>
-        </button>
-
-        <button
-          className={`flow-tab-btn ${activeTab === 'upcoming' ? 'active' : ''}`}
-          onClick={() => setActiveTab('upcoming')}
-        >
-          📅 Tomorrow & Next 7 Days
-          <span className="flow-tab-badge">{upcomingTotal}</span>
-        </button>
-
-        <button
-          className={`flow-tab-btn ${activeTab === 'timeline' ? 'active' : ''}`}
-          onClick={() => setActiveTab('timeline')}
-        >
-          🌾 Season Flow Timeline
-          <span className="flow-tab-badge">{stagesCount} Stages</span>
-        </button>
-
-        {overdueCount > 0 && (
-          <button
-            className={`flow-tab-btn ${activeTab === 'overdue' ? 'active' : ''}`}
-            onClick={() => setActiveTab('overdue')}
-            style={{ color: '#ef4444' }}
-          >
-            ⚠️ Overdue
-            <span className="flow-tab-badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}>
-              {overdueCount}
-            </span>
+      {/* STATE 2 — No Farm Configured */}
+      {!flowLoading && farmsList.length === 0 && (
+        <div className="daily-flow-card state-no-farm">
+          <Sprout size={42} style={{ color: 'var(--dash-emerald)', marginBottom: '12px' }} />
+          <h3>Add your farm to generate a seasonal plan.</h3>
+          <p>Set up your farm profile, crop type, and soil details to get tailored seasonal crop timelines and daily operations.</p>
+          <button className="today-btn primary" onClick={() => navigate('/dashboard/settings')}>
+            Configure Farm Profile
           </button>
-        )}
+        </div>
+      )}
 
-        <button
-          className={`flow-tab-btn ${activeTab === 'completed' ? 'active' : ''}`}
-          onClick={() => setActiveTab('completed')}
-        >
-          ✅ Completed
-          <span className="flow-tab-badge">{completedCount}</span>
-        </button>
-      </div>
+      {/* STATE 6 — Generation / Load Failed */}
+      {!flowLoading && flowError && (!flowData || flowData.total_tasks_count === 0) && (
+        <div className="daily-flow-card state-error">
+          <AlertCircle size={38} style={{ color: '#ef4444', marginBottom: '10px' }} />
+          <h3>We couldn't generate your seasonal plan.</h3>
+          <p>{flowError}</p>
+          <button className="today-btn primary" onClick={handleGenerateDailyFlow} disabled={generating}>
+            <RefreshCw size={15} /> Try Again
+          </button>
+        </div>
+      )}
 
-      {/* Tab 1: Today's Tasks */}
-      {activeTab === 'today' && (
-        <div className="daily-checklist" style={{ margin: '0 0 28px 0' }}>
-          <div className="checklist-header">
-            <div>
-              <h3>Today's Action Plan</h3>
-              <p className="subtitle">High-priority operational tasks for {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</p>
-            </div>
-            {todayCount > 0 && (
-              <div className="progress-indicator">
-                {flowData.today.filter(t => t.is_completed).length} / {todayCount} Completed
+      {/* STATE 3 — Farm Exists, No Flow Generated Yet */}
+      {!flowLoading && !flowError && flowData && flowData.total_tasks_count === 0 && (
+        <div className="daily-flow-card state-uninitiated">
+          <Sparkles size={40} style={{ color: 'var(--dash-emerald)', marginBottom: '12px' }} />
+          <h3>Your seasonal plan hasn't been generated yet.</h3>
+          <p>Generate a complete crop lifecycle roadmap with growth stages, weather-informed irrigation, and daily farm tasks.</p>
+          <button className="today-btn primary" onClick={handleGenerateDailyFlow} disabled={generating}>
+            <Sparkles size={16} /> Generate Season Flow
+          </button>
+        </div>
+      )}
+
+      {/* STATE 4 — Generating Season Flow */}
+      {generating && (
+        <div className="daily-flow-card state-generating">
+          <RefreshCw size={36} className="spin" style={{ color: 'var(--dash-emerald)', marginBottom: '12px' }} />
+          <h3>AI is crafting your customized seasonal crop plan...</h3>
+          <p>Analyzing soil profile, historical weather patterns, and crop lifecycle milestones. This takes ~5-10 seconds.</p>
+        </div>
+      )}
+
+      {/* STATE 5 — Successfully Generated Flow */}
+      {!flowLoading && !generating && flowData && flowData.total_tasks_count > 0 && (
+        <>
+          {/* Crop Season Overview Progress Card */}
+          {seasonInfo && (
+            <div className="season-overview-card">
+              <div className="season-header-row">
+                <div className="season-crop-title">
+                  <Sprout size={22} style={{ color: 'var(--dash-emerald)' }} />
+                  {flowData?.crop_name || currentCrop?.crop_type || 'Crop'}
+                  {flowData?.crop_variety && (
+                    <span style={{ fontSize: '0.86rem', color: 'var(--dash-text-muted)', fontWeight: 500 }}>
+                      ({flowData.crop_variety})
+                    </span>
+                  )}
+                  {currentStage && (
+                    <span className="stage-pill">
+                      {currentStage.name || 'Active Vegetative'}
+                    </span>
+                  )}
+                </div>
+
+                <div className="season-cycle-stat">
+                  Day {seasonInfo.days_since_planting} of {seasonInfo.duration_days} ({seasonInfo.progress_pct}%)
+                </div>
               </div>
+
+              <div className="season-dates-bar">
+                <span>🌱 <strong>Sown / Planted:</strong> {new Date(seasonInfo.planting_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                <span>🌾 <strong>Expected Harvest:</strong> {new Date(seasonInfo.expected_harvest_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                <span>⏱️ <strong>Total Duration:</strong> {seasonInfo.duration_days} days</span>
+              </div>
+
+              <div className="season-progress-container">
+                <div className="season-progress-header">
+                  <span>Season Progression</span>
+                  <span>{seasonInfo.progress_pct}% Completed</span>
+                </div>
+                <div className="season-progress-bar">
+                  <div 
+                    className="season-progress-fill" 
+                    style={{ width: `${seasonInfo.progress_pct}%` }} 
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Flow View Tabs */}
+          <div className="flow-tabs-nav">
+            <button
+              className={`flow-tab-btn ${activeTab === 'today' ? 'active' : ''}`}
+              onClick={() => setActiveTab('today')}
+            >
+              ⚡ Today's Tasks
+              <span className="flow-tab-badge">{todayCount}</span>
+            </button>
+
+            <button
+              className={`flow-tab-btn ${activeTab === 'upcoming' ? 'active' : ''}`}
+              onClick={() => setActiveTab('upcoming')}
+            >
+              📅 Tomorrow & Next 7 Days
+              <span className="flow-tab-badge">{upcomingTotal}</span>
+            </button>
+
+            <button
+              className={`flow-tab-btn ${activeTab === 'timeline' ? 'active' : ''}`}
+              onClick={() => setActiveTab('timeline')}
+            >
+              🌾 Season Flow Timeline
+              <span className="flow-tab-badge">{stagesCount} Stages</span>
+            </button>
+
+            {overdueCount > 0 && (
+              <button
+                className={`flow-tab-btn ${activeTab === 'overdue' ? 'active' : ''}`}
+                onClick={() => setActiveTab('overdue')}
+                style={{ color: '#ef4444' }}
+              >
+                ⚠️ Overdue
+                <span className="flow-tab-badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}>
+                  {overdueCount}
+                </span>
+              </button>
             )}
+
+            <button
+              className={`flow-tab-btn ${activeTab === 'completed' ? 'active' : ''}`}
+              onClick={() => setActiveTab('completed')}
+            >
+              ✅ Completed
+              <span className="flow-tab-badge">{completedCount}</span>
+            </button>
           </div>
 
-          {todayCount === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon-wrap">
-                <Check size={30} />
+          {/* Tab 1: Today's Tasks */}
+          {activeTab === 'today' && (
+            <div className="daily-checklist" style={{ margin: '0 0 28px 0' }}>
+              <div className="checklist-header">
+                <div>
+                  <h3>Today's Action Plan</h3>
+                  <p className="subtitle">High-priority operational tasks for {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</p>
+                </div>
+                {todayCount > 0 && (
+                  <div className="progress-indicator">
+                    {flowData.today.filter(t => t.is_completed).length} / {todayCount} Completed
+                  </div>
+                )}
               </div>
-              <h4>All caught up for today!</h4>
-              <p>No pending operations scheduled for today. Click 'Generate Season Flow' to recalculate or check upcoming tasks.</p>
-              <button 
-                className="generate-btn" 
-                onClick={handleGenerateDailyFlow}
-                disabled={generating}
-              >
-                <Sparkles size={16} />
-                Generate Daily Flow
-              </button>
-            </div>
-          ) : (
-            <div className="task-list">
-              {flowData.today.map((task) => (
+
+              {todayCount === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon-wrap">
+                    <Check size={30} />
+                  </div>
+                  <h4>All caught up for today!</h4>
+                  <p>No pending operations scheduled for today. Check upcoming tasks in the Tomorrow & Next 7 Days tab or review the Season Timeline.</p>
+                </div>
+              ) : (
+                <div className="task-list">
+                  {flowData.today.map((task) => (
                 <div 
                   key={task.id} 
                   className={`task-item ${task.is_completed ? 'completed' : ''} priority-${task.priority.toLowerCase()}`}
@@ -784,6 +838,8 @@ const TodayDashboard = () => {
             </div>
           )}
         </div>
+      )}
+      </>
       )}
 
       {/* Preserved Telemetry Action Grid */}

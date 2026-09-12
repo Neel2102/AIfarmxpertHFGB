@@ -15,7 +15,7 @@ class AuthUser(Base):
     """Auth User model matching the auth_users table"""
     __tablename__ = "auth_users"
     
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, index=True, autoincrement=True)
     farmer_id = Column(String(50), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     username = Column(String(50), unique=True, nullable=False, index=True)
