@@ -639,8 +639,9 @@ async def save_farm_layout(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Save GeoJSON polygon + form data for the logged-in user's farm layout."""
+    """Save GeoJSON polygon + form data for the logged-in user's farm layout and sync to canonical Farm record."""
     from farmxpert.models.farm_profile_models import FarmProfile
+    from farmxpert.models.farm_models import Farm
     from datetime import datetime
 
     profile = db.query(FarmProfile).filter(FarmProfile.user_id == current_user.id).first()
@@ -651,9 +652,69 @@ async def save_farm_layout(
     profile.farm_polygon = layout.polygon
     profile.farm_layout_data = layout.form_data
     profile.updated_at = datetime.utcnow()
-    db.commit()
 
-    return {"success": True, "message": "Farm layout saved."}
+    # Extract centroid coordinates from GeoJSON polygon if present
+    centroid_lat = None
+    centroid_lon = None
+    try:
+        poly = layout.polygon
+        if poly and isinstance(poly, dict):
+            coords = poly.get("coordinates")
+            if coords and isinstance(coords, list) and len(coords) > 0:
+                first_ring = coords[0]
+                if isinstance(first_ring, list) and len(first_ring) > 0:
+                    pts = [pt for pt in first_ring if isinstance(pt, list) and len(pt) >= 2]
+                    if pts:
+                        centroid_lon = sum(float(pt[0]) for pt in pts) / len(pts)
+                        centroid_lat = sum(float(pt[1]) for pt in pts) / len(pts)
+    except Exception as e:
+        logger.warning(f"Failed to calculate polygon centroid: {e}")
+
+    if centroid_lat is not None and centroid_lon is not None:
+        profile.latitude = centroid_lat
+        profile.longitude = centroid_lon
+
+    # Synchronize canonical Farm record
+    farm = db.query(Farm).filter(Farm.user_id == current_user.id).first()
+    if not farm:
+        farm = Farm(user_id=current_user.id)
+        db.add(farm)
+
+    if centroid_lat is not None and centroid_lon is not None:
+        farm.latitude = centroid_lat
+        farm.longitude = centroid_lon
+
+    if layout.form_data and isinstance(layout.form_data, dict):
+        fd = layout.form_data
+        if fd.get("farm_name"):
+            farm.farm_name = fd["farm_name"]
+            profile.farm_name = fd["farm_name"]
+        if fd.get("soil_type"):
+            farm.soil_type = fd["soil_type"]
+            profile.soil_type = fd["soil_type"]
+        if fd.get("crop_type"):
+            farm.crop_type = fd["crop_type"]
+            profile.specific_crop = fd["crop_type"]
+        if fd.get("state"):
+            farm.state = fd["state"]
+            profile.state = fd["state"]
+        if fd.get("district"):
+            farm.district = fd["district"]
+            profile.district = fd["district"]
+        if fd.get("village"):
+            farm.village = fd["village"]
+            profile.village = fd["village"]
+
+        loc_parts = [fd.get("village"), fd.get("district"), fd.get("state")]
+        loc_str = ", ".join([str(p) for p in loc_parts if p])
+        if loc_str:
+            farm.location = loc_str
+            profile.location = loc_str
+
+    db.commit()
+    db.refresh(profile)
+
+    return {"success": True, "message": "Farm layout and coordinates saved.", "latitude": centroid_lat, "longitude": centroid_lon}
 
 
 @router.get("/farm-layout")

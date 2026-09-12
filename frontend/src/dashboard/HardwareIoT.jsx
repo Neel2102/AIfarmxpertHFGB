@@ -4,7 +4,8 @@ import "../styles/Dashboard/HardwareIoT.css";
 import { useAuth } from "../contexts/AuthContext";
 
 const BLYNK_CLOUD_URL = "https://blr1.blynk.cloud/external/api/get";
-const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+const RAW_BACKEND = process.env.REACT_APP_BACKEND_URL || '';
+const API_BASE_URL = RAW_BACKEND.endsWith('/api') ? RAW_BACKEND : (RAW_BACKEND ? `${RAW_BACKEND}/api` : '/api');
 
 const SENSORS = [
   { label: "Air Temperature", pin: "V0", unit: "°C", color: "#FF6B6B" },
@@ -180,7 +181,7 @@ export default function HardwareIoT() {
           ...(token && { 'Authorization': `Bearer ${token}` })
         };
 
-        await fetch(`${API_BASE_URL}/api/soil-tests/save`, {
+        await fetch(`${API_BASE_URL}/soil-tests/save`, {
           method: "POST",
           headers,
           body: JSON.stringify({

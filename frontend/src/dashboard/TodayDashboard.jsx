@@ -97,7 +97,11 @@ const TodayDashboard = () => {
       }
     } catch (e) {
       console.error('Error fetching Daily Flow:', e);
-      setFlowError(e?.message || 'Failed to load Daily Flow.');
+      const raw = e?.response?.data?.detail || e?.message || '';
+      const safe = (typeof raw === 'string' && (raw.includes('psycopg2') || raw.includes('SQL') || raw.includes('UndefinedColumn') || raw.includes('farms.')))
+        ? 'Unable to retrieve your Daily Flow schedule. Please try refreshing or generating your season plan.'
+        : (raw || 'Failed to load Daily Flow.');
+      setFlowError(safe);
     } finally {
       setFlowLoading(false);
     }
@@ -124,7 +128,11 @@ const TodayDashboard = () => {
       }
     } catch (e) {
       console.error('Error generating Daily Flow:', e);
-      setFlowError(e?.message || 'Could not generate season flow. Please check farm details.');
+      const raw = e?.response?.data?.detail || e?.message || '';
+      const safe = (typeof raw === 'string' && (raw.includes('psycopg2') || raw.includes('SQL') || raw.includes('UndefinedColumn') || raw.includes('farms.')))
+        ? 'A database synchronization issue occurred while generating your flow. Please verify your farm details and try again.'
+        : (raw || 'Could not generate season flow. Please check farm details.');
+      setFlowError(safe);
     } finally {
       setGenerating(false);
     }
@@ -389,9 +397,18 @@ const TodayDashboard = () => {
 
       {/* Error Alert Banner */}
       {flowError && (
-        <div className="checklist-error" style={{ marginBottom: '18px' }}>
-          <AlertCircle size={18} />
-          <span>{flowError}</span>
+        <div className="checklist-error" style={{ marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <AlertCircle size={18} />
+            <span>{flowError}</span>
+          </div>
+          <button 
+            className="today-btn secondary"
+            style={{ padding: '4px 12px', fontSize: '0.8rem', height: 'auto', flexShrink: 0 }}
+            onClick={() => fetchDailyFlow(selectedFarmId, selectedCropId)}
+          >
+            <RefreshCw size={13} /> Retry
+          </button>
         </div>
       )}
 

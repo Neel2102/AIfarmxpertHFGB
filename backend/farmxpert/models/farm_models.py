@@ -8,7 +8,6 @@ class Farm(Base):
     
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("auth_users.id"), nullable=False)
-    name = Column(String(255), nullable=True, default="My Farm")
     farm_name = Column(String(255), nullable=False, default="My Farm")
     location = Column(String(255), nullable=True, default="Gujarat, India")
     size_acres = Column(Float, nullable=True, default=5.0)
@@ -25,13 +24,23 @@ class Farm(Base):
     created_at = Column(DateTime(timezone=False), server_default=func.now())
     updated_at = Column(DateTime(timezone=False), onupdate=func.now())
 
+    @property
+    def name(self) -> str:
+        """Backwards compatibility alias for farm_name."""
+        return self.farm_name or "My Farm"
+
+    @name.setter
+    def name(self, val: str):
+        self.farm_name = val
+
     def __init__(self, **kwargs):
-        if "name" not in kwargs and "farm_name" in kwargs:
-            kwargs["name"] = kwargs["farm_name"]
-        elif "farm_name" not in kwargs and "name" in kwargs:
-            kwargs["farm_name"] = kwargs["name"]
-        elif "name" not in kwargs and "farm_name" not in kwargs:
-            kwargs["name"] = "My Farm"
+        # Handle legacy "name" parameter by routing to canonical farm_name
+        if "name" in kwargs and "farm_name" not in kwargs:
+            kwargs["farm_name"] = kwargs.pop("name")
+        elif "name" in kwargs and "farm_name" in kwargs:
+            kwargs.pop("name")
+            
+        if "farm_name" not in kwargs or not kwargs["farm_name"]:
             kwargs["farm_name"] = "My Farm"
             
         if "location" not in kwargs or not kwargs["location"]:

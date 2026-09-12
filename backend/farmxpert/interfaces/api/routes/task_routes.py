@@ -330,7 +330,7 @@ async def generate_daily_tasks(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error generating daily tasks: {str(e)}"
+            detail="Unable to generate daily tasks at this time. Please try again."
         )
 
 
@@ -354,7 +354,7 @@ async def get_today_tasks(
         logger.error(f"Error fetching today tasks: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching tasks: {str(e)}"
+            detail="Unable to load today's tasks. Please try again."
         )
 
 
@@ -409,7 +409,7 @@ async def get_farms_and_crops(
         logger.error(f"Error getting farms and crops: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving farm metadata: {str(e)}"
+            detail="Unable to retrieve farm details. Please try again."
         )
 
 
@@ -431,7 +431,7 @@ async def get_daily_flow(
         logger.error(f"Error fetching daily flow: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching daily flow: {str(e)}"
+            detail="Unable to retrieve your daily flow schedule. Please try again or generate a new season flow."
         )
 
 
@@ -514,7 +514,7 @@ async def generate_daily_flow(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error generating daily flow: {str(e)}"
+            detail="Unable to generate season flow right now. Please verify your farm details and try again."
         )
 
 

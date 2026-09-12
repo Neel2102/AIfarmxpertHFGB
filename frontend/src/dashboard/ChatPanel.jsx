@@ -253,6 +253,15 @@ const ChatPanel = ({ agent, farmData, sessionId: propSessionId }) => {
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.type?.startsWith('image/') || /\.(jpe?g|png|webp|bmp|gif)$/i.test(file.name)) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setAttachedImage({ file, preview: ev.target.result });
+        setTimeout(() => textareaRef.current?.focus(), 50);
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
     setAttachedFile({ file });
     setTimeout(() => textareaRef.current?.focus(), 50);
   };

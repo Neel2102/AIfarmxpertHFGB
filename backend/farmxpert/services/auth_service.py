@@ -440,19 +440,57 @@ class AuthService:
         return self.db.query(FarmProfile).filter(FarmProfile.user_id == user_id).first()
 
     def update_farm_profile(self, user_id: int, profile_data: dict) -> Optional[FarmProfile]:
-        """Update farm profile data"""
+        """Update farm profile data and synchronize with canonical Farm database record."""
         try:
+            from farmxpert.models.farm_models import Farm
+
             profile = self.get_farm_profile(user_id)
             if not profile:
                 profile = FarmProfile(user_id=user_id, created_at=datetime.utcnow())
                 self.db.add(profile)
             
-            # Update fields
+            # Update fields on profile
             for field, value in profile_data.items():
                 if hasattr(profile, field):
                     setattr(profile, field, value)
             
             profile.updated_at = datetime.utcnow()
+
+            # Synchronize canonical Farm record
+            farm = self.db.query(Farm).filter(Farm.user_id == user_id).first()
+            if not farm:
+                farm = Farm(user_id=user_id)
+                self.db.add(farm)
+
+            if profile.farm_name:
+                farm.farm_name = profile.farm_name
+            if profile.location:
+                farm.location = profile.location
+            if profile.state:
+                farm.state = profile.state
+            if profile.district:
+                farm.district = profile.district
+            if profile.village:
+                farm.village = profile.village
+            if profile.soil_type:
+                farm.soil_type = profile.soil_type
+
+            if profile.latitude is not None:
+                farm.latitude = profile.latitude
+            if profile.longitude is not None:
+                farm.longitude = profile.longitude
+
+            if profile.specific_crop:
+                farm.crop_type = profile.specific_crop
+            elif profile.primary_crops and isinstance(profile.primary_crops, list) and len(profile.primary_crops) > 0:
+                farm.crop_type = str(profile.primary_crops[0])
+
+            if profile.farm_size:
+                try:
+                    farm.size_acres = float(str(profile.farm_size).split()[0])
+                except Exception:
+                    pass
+
             self.db.commit()
             self.db.refresh(profile)
             return profile

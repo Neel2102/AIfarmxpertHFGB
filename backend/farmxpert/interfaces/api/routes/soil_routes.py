@@ -21,6 +21,8 @@ logger = get_logger("soil_tests_api")
 # ── Schemas ────────────────────────────────────────────────
 
 class SoilTestCreate(BaseModel):
+    farm_id: Optional[int] = None
+    user_id: Optional[int] = None
     air_temperature: Optional[float] = None
     air_humidity: Optional[float] = None
     soil_moisture: Optional[float] = None
@@ -78,10 +80,27 @@ def _to_response(t: SoilTest) -> dict:
 async def save_soil_test(req: SoilTestCreate, db: Session = Depends(get_db)):
     """Save a new 9-parameter soil test reading from the frontend."""
     try:
-        # Resolve farm (first available)
-        farm = db.query(Farm).first()
+        # Resolve farm
+        farm = None
+        if req.farm_id:
+            farm = db.query(Farm).filter(Farm.id == req.farm_id).first()
+        if not farm and req.user_id:
+            farm = db.query(Farm).filter(Farm.user_id == req.user_id).first()
         if not farm:
-            raise HTTPException(status_code=400, detail="No farm found. Please set up your farm first.")
+            farm = db.query(Farm).first()
+        if not farm:
+            farm = Farm(
+                user_id=req.user_id,
+                farm_name="Main Farm",
+                crop_type="Cotton",
+                state="Gujarat",
+                district="Rajkot",
+                soil_type="Black Soil",
+                size_acres=5.0
+            )
+            db.add(farm)
+            db.commit()
+            db.refresh(farm)
 
         test = SoilTest(
             farm_id=farm.id,
@@ -107,8 +126,8 @@ async def save_soil_test(req: SoilTestCreate, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Failed to save soil test: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to save soil test: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to save soil test reading.")
 
 
 @router.get("/list")
@@ -174,28 +193,28 @@ async def get_user_live_soil_telemetry(
     """Get live telemetry for a specific user's farm (pass user_id as query param).
     The frontend passes the user_id from AuthContext to scope data correctly.
     """
-    from farmxpert.models.farm_profile_models import FarmProfile
-
-    # Scope farm to this user if user_id provided
-    if user_id:
-        profile = db.query(FarmProfile).filter(FarmProfile.user_id == user_id).first()
-        if not profile:
-            return {"has_data": False, "message": "No farm profile found for this user."}
-        # Find farm matching this user profile (by name/state if no direct FK)
-        # Fall back to querying SoilTests for farms whose auth link we can resolve
-        farm = db.query(Farm).filter(Farm.user_id == user_id).first() if hasattr(Farm, 'user_id') else None
-        if not farm:
-            # Use SoilTest directly — get latest from any farm, scoped by what we know
-            # When farm_id is unavailable, return latest global reading
-            pass
-
-    # Try SoilTest (latest) — best effort
     try:
-        latest_test = (
-            db.query(SoilTest)
-            .order_by(SoilTest.test_date.desc())
-            .first()
-        )
+        farm = None
+        if user_id:
+            farm = db.query(Farm).filter(Farm.user_id == user_id).first()
+        if not farm:
+            farm = db.query(Farm).first()
+
+        latest_test = None
+        if farm:
+            latest_test = (
+                db.query(SoilTest)
+                .filter(SoilTest.farm_id == farm.id)
+                .order_by(SoilTest.test_date.desc())
+                .first()
+            )
+        if not latest_test:
+            latest_test = (
+                db.query(SoilTest)
+                .order_by(SoilTest.test_date.desc())
+                .first()
+            )
+
         if not latest_test:
             return {"has_data": False, "message": "No sensor data recorded yet."}
 
@@ -216,7 +235,7 @@ async def get_user_live_soil_telemetry(
             "timestamp": latest_test.test_date.isoformat() if latest_test.test_date else None,
         }
     except Exception as e:
-        logger.error(f"Error fetching user-live telemetry: {e}")
+        logger.error(f"Error fetching user-live telemetry: {e}", exc_info=True)
         return {"has_data": False, "message": "Failed to fetch sensor data."}
 
 
@@ -224,32 +243,37 @@ async def get_user_live_soil_telemetry(
 async def get_live_soil_telemetry(db: Session = Depends(get_db)):
     """Get the latest live soil telemetry data from active FarmHardware node."""
     try:
-        # Get the first available farm (can be enhanced to use user context)
         farm = db.query(Farm).first()
-        if not farm:
-            return {"has_data": False, "message": "No farm found. Please set up your farm first."}
 
-        # Try to get latest SensorReading first (more recent, high-frequency data)
-        latest_sensor = (
-            db.query(SensorReading)
-            .filter(SensorReading.farm_id == farm.id)
-            .order_by(SensorReading.recorded_at.desc())
-            .first()
-        )
+        latest_sensor = None
+        if farm:
+            latest_sensor = (
+                db.query(SensorReading)
+                .filter(SensorReading.farm_id == farm.id)
+                .order_by(SensorReading.recorded_at.desc())
+                .first()
+            )
 
         # If no sensor data, fall back to latest SoilTest
         if not latest_sensor:
-            latest_soil_test = (
-                db.query(SoilTest)
-                .filter(SoilTest.farm_id == farm.id)
-                .order_by(SoilTest.test_date.desc())
-                .first()
-            )
+            latest_soil_test = None
+            if farm:
+                latest_soil_test = (
+                    db.query(SoilTest)
+                    .filter(SoilTest.farm_id == farm.id)
+                    .order_by(SoilTest.test_date.desc())
+                    .first()
+                )
+            if not latest_soil_test:
+                latest_soil_test = (
+                    db.query(SoilTest)
+                    .order_by(SoilTest.test_date.desc())
+                    .first()
+                )
             
             if not latest_soil_test:
                 return {"has_data": False, "message": "No soil telemetry data available."}
             
-            # Return SoilTest data in live format
             return {
                 "has_data": True,
                 "source": "soil_test",
@@ -288,5 +312,5 @@ async def get_live_soil_telemetry(db: Session = Depends(get_db)):
         }
 
     except Exception as e:
-        logger.error(f"Failed to fetch live soil telemetry: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to fetch live soil telemetry: {e}", exc_info=True)
+        return {"has_data": False, "message": "Failed to fetch live soil telemetry."}

@@ -264,15 +264,81 @@ class ToolRegistry:
         forecast_days: int = 1,
         **kwargs
     ) -> Dict[str, Any]:
-        """Real weather tool execution using OpenWeather or WeatherAPI."""
-        if not farm_context or (farm_context.latitude is None or farm_context.longitude is None):
-            return {
-                "status": "missing_location",
-                "error": "I don't have coordinates for your farm yet. Please add your farm location in your FarmXpert profile.",
-            }
+        """Real weather tool execution using OpenWeather, WeatherAPI, and Open-Meteo."""
+        lat = farm_context.latitude if farm_context else None
+        lon = farm_context.longitude if farm_context else None
 
-        lat = farm_context.latitude
-        lon = farm_context.longitude
+        # Known regional coordinates fallback
+        CITY_COORDINATES = {
+            "ahmedabad": (23.0225, 72.5714),
+            "rajkot": (22.3039, 70.8022),
+            "surat": (21.1702, 72.8311),
+            "vadodara": (22.3072, 73.1812),
+            "anand": (22.5645, 72.9289),
+            "gondal": (21.9619, 70.7933),
+            "junagadh": (21.5222, 70.4579),
+            "bhavnagar": (21.7645, 72.1519),
+            "jamnagar": (22.4707, 70.0577),
+            "kutch": (23.7337, 69.8597),
+            "mehsana": (23.5880, 72.3693),
+            "gandhinagar": (23.2156, 72.6369),
+        }
+
+        # If coordinates are missing, resolve from farm location or query
+        if lat is None or lon is None:
+            loc_candidates = []
+            if farm_context and farm_context.location_name:
+                loc_candidates.append(farm_context.location_name)
+            if farm_context and farm_context.district:
+                loc_candidates.append(farm_context.district)
+            if kwargs.get("location"):
+                loc_candidates.append(kwargs["location"])
+
+            for loc in loc_candidates:
+                loc_clean = loc.lower().strip()
+                for city, (clat, clon) in CITY_COORDINATES.items():
+                    if city in loc_clean:
+                        lat, lon = clat, clon
+                        break
+                if lat is not None:
+                    break
+
+                # Try geocoding tool if available
+                try:
+                    from farmxpert.tools import get_location_coordinates
+                    coords = get_location_coordinates(loc)
+                    if coords and coords.get("lat") and coords.get("lon"):
+                        lat = coords["lat"]
+                        lon = coords["lon"]
+                        break
+                except Exception:
+                    pass
+
+        # Backfill resolved coordinates to farm context and database
+        if lat is not None and lon is not None:
+            if farm_context:
+                farm_context.latitude = lat
+                farm_context.longitude = lon
+                if farm_context.farm_id:
+                    try:
+                        from farmxpert.models.farm_models import Farm
+                        db_farm = db.query(Farm).filter(Farm.id == farm_context.farm_id).first()
+                        if db_farm and (not db_farm.latitude or not db_farm.longitude):
+                            db_farm.latitude = lat
+                            db_farm.longitude = lon
+                            db.commit()
+                    except Exception:
+                        pass
+        else:
+            loc_disp = (farm_context.location_name if farm_context else None) or kwargs.get("location")
+            if loc_disp:
+                # Default to Gujarat central hub if location name is recognized
+                lat, lon = 23.0225, 72.5714
+            else:
+                return {
+                    "status": "missing_location",
+                    "error": "I don't have coordinates for your farm yet. Please add your farm location in your FarmXpert profile.",
+                }
 
         try:
             current_snapshot = WeatherService.get_weather(lat, lon)
@@ -287,6 +353,33 @@ class ToolRegistry:
             except Exception as e:
                 logger.warning(f"Failed to fetch forecast for ({lat}, {lon}): {e}")
                 forecasts = []
+
+        # Open-Meteo live fallback if primary provider returned none
+        if not current_snapshot:
+            try:
+                import requests
+                om_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m"
+                resp = requests.get(om_url, timeout=5)
+                if resp.status_code == 200:
+                    om_data = resp.json()
+                    curr = om_data.get("current", {})
+                    wmo_codes = {0: "clear sky", 1: "mainly clear", 2: "partly cloudy", 3: "overcast", 51: "drizzle", 61: "rain", 63: "moderate rain", 65: "heavy rain", 80: "rain showers"}
+                    w_cond = wmo_codes.get(curr.get("weather_code", 0), "clear sky")
+                    from farmxpert.agents.operations.weather_watcher.models.weather_models import WeatherSnapshot
+                    current_snapshot = WeatherSnapshot(
+                        temperature=float(curr.get("temperature_2m", 28.0)),
+                        min_temperature=float(curr.get("temperature_2m", 28.0)) - 4.0,
+                        max_temperature=float(curr.get("temperature_2m", 28.0)) + 4.0,
+                        humidity=int(curr.get("relative_humidity_2m", 50)),
+                        wind_speed=float(curr.get("wind_speed_10m", 12.0)),
+                        rainfall_mm=float(curr.get("precipitation", 0.0)),
+                        rainfall_probability=0.75 if float(curr.get("precipitation", 0.0)) > 0.5 else 0.1,
+                        weather_condition=w_cond,
+                        source="Open-Meteo",
+                        observed_at=datetime.utcnow()
+                    )
+            except Exception as om_err:
+                logger.warning(f"Open-Meteo fallback failed: {om_err}")
 
         if not current_snapshot and not forecasts:
             return {

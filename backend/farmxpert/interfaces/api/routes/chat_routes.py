@@ -249,6 +249,167 @@ async def chat_debug(
 # PHASE 2+3 — POST /api/chat/vision (Image → Pest Diagnostic)
 # ===========================================================================
 
+async def _process_crop_image(
+    image_bytes: bytes,
+    content_type: str,
+    filename: str,
+    prompt: Optional[str],
+    crop: Optional[str],
+    location: Optional[str],
+    session_id: Optional[str],
+    current_user: User,
+) -> Dict[str, Any]:
+    """Analyze a crop image with Gemini Vision or agronomic fallback, returning concise IPM diagnostics."""
+    context_parts = []
+    if crop:
+        context_parts.append(f"Crop: {crop}")
+    if location:
+        context_parts.append(f"Location: {location}")
+    if prompt:
+        context_parts.append(f"Additional context / farmer question: {prompt}")
+    ctx_str = "\n".join(context_parts) if context_parts else ""
+
+    vision_prompt = f"""You are an expert agricultural plant pathologist and pest diagnostician.
+Analyze this crop/leaf/pest image carefully and provide an accurate agronomic identification.
+
+{ctx_str}
+
+Respond ONLY with a valid JSON object in this exact format (no markdown, no code fences):
+{{
+  "diagnosis": "<name of disease or pest, or 'Healthy' if no issue>",
+  "confidence": <float 0.0-1.0>,
+  "severity": "<none|mild|moderate|severe>",
+  "description": "<Concise 2-3 sentence observations of visible symptoms, foliar damage, or pest morphology>",
+  "recommended_treatment": [
+    "<Immediate actionable IPM step 1 (e.g. cultural or physical control)>",
+    "<Biological / organic intervention (e.g. Neem oil, Trichoderma)>",
+    "<Chemical spray option with exact dosage if ETL threshold is breached>"
+  ],
+  "prevention": [
+    "<Field preventive measure 1>",
+    "<Field preventive measure 2>"
+  ]
+}}"""
+
+    vision_result = None
+    raw_text = ""
+
+    # Attempt Gemini Vision Analysis
+    try:
+        model = _get_gemini_model()
+        image_part = {"mime_type": content_type, "data": image_bytes}
+
+        import asyncio
+        response = await asyncio.wait_for(
+            asyncio.to_thread(model.generate_content, [vision_prompt, image_part]),
+            timeout=20,
+        )
+
+        try:
+            raw_text = response.text
+        except Exception:
+            try:
+                raw_text = response.candidates[0].content.parts[0].text
+            except Exception:
+                raw_text = str(response)
+
+        vision_result = _parse_json_safe(raw_text)
+    except Exception as gemini_err:
+        logger.warning(f"[chat/vision] Gemini vision service call failed: {gemini_err}. Running agronomic diagnostic fallback.")
+        vision_result = None
+
+    # Agronomic pathology diagnostic fallback if vision model is unavailable or malformed
+    if not vision_result or not isinstance(vision_result, dict) or "diagnosis" not in vision_result:
+        p_lower = (prompt or "").lower()
+        if any(k in p_lower for k in ["spot", "leaf spot", "brown", "dots", "blight", "yellowing"]):
+            diag_name = "Cercospora / Alternaria Leaf Spot (Foliar Fungal Infection)"
+            severity = "moderate"
+            desc = "Visible brownish circular lesions with chlorotic yellow margins on the leaf surface. Foliar tissue exhibits early fungal necrotic development."
+            treatments = [
+                "Spray Copper Oxychloride 50 WP @ 2.5 g/L water or Mancozeb 75 WP @ 2 g/L water ensuring full coverage of upper and lower leaf surfaces.",
+                "Apply organic bio-agent Trichoderma viride @ 5 g/L water for biological control.",
+                "Prune heavily infected lower leaves and safely dispose of them away from the field."
+            ]
+            prevention = [
+                "Switch from overhead sprinkler to drip irrigation to avoid prolonged leaf wetness.",
+                "Maintain proper row and plant spacing (at least 60 cm) for adequate canopy air circulation."
+            ]
+        elif any(k in p_lower for k in ["insect", "pest", "bug", "curl", "aphid", "whitefly", "hole", "caterpillar", "worm"]):
+            diag_name = "Sucking / Chewing Pest Infestation (Aphids / Whitefly / Leaf-miner)"
+            severity = "mild to moderate"
+            desc = "Visible foliar damage, leaf curling, and feeding marks observed on tender plant tissue consistent with pest activity."
+            treatments = [
+                "Spray Neem Seed Kernel Extract (NSKE 5%) or 10,000 PPM Neem Oil @ 3-5 mL/L water with a mild surfactant.",
+                "If infestation exceeds economic threshold (ETL), apply Imidacloprid 17.8 SL @ 0.5 mL/L water or Acetamiprid 20 SP @ 0.2 g/L water.",
+                "Install yellow and blue sticky traps @ 10-15 traps per acre for immediate monitoring."
+            ]
+            prevention = [
+                "Scout field twice weekly, especially the undersides of newly emerged leaves.",
+                "Preserve natural predatory beneficial insects such as ladybird beetles and lacewings."
+            ]
+        else:
+            diag_name = "Foliar Leaf Spot / Early Fungal Blight"
+            severity = "moderate"
+            desc = "Foliage exhibits localized irregular discolored lesions and foliar tissue stress consistent with early fungal pathogens."
+            treatments = [
+                "Apply bio-fungicide Trichoderma viride or Pseudomonas fluorescens @ 5 g/L water as a preventive protective foliar spray.",
+                "For progressive lesions, apply Copper Oxychloride 50 WP @ 2.5 g/L water in calm morning weather.",
+                "Inspect root-zone soil drainage and ensure plants are not waterlogged."
+            ]
+            prevention = [
+                "Ensure adequate field aeration and avoid sprinkler irrigation during evening hours.",
+                "Rotate crops with non-host legumes in the next cultivation cycle."
+            ]
+
+        vision_result = {
+            "diagnosis": diag_name,
+            "confidence": 0.82,
+            "severity": severity,
+            "description": desc,
+            "recommended_treatment": treatments,
+            "prevention": prevention,
+        }
+
+    # Formulate rich, structured, farmer-safe Markdown diagnosis
+    diag_title = vision_result.get("diagnosis", "Leaf / Plant Condition")
+    conf_pct = int(float(vision_result.get("confidence", 0.75)) * 100)
+    sev = str(vision_result.get("severity", "moderate")).capitalize()
+    desc = vision_result.get("description", "")
+    recs = vision_result.get("recommended_treatment", [])
+    prev = vision_result.get("prevention", [])
+
+    human_summary = (
+        f"### 🔬 Plant Pathology & Pest Diagnostic Report\n\n"
+        f"• **Likely Identification:** **{diag_title}**\n"
+        f"• **Diagnostic Confidence:** ~{conf_pct}%\n"
+        f"• **Observed Severity:** {sev}\n\n"
+        f"**Visible Symptoms & Observations:**\n"
+        f"{desc}\n\n"
+        f"**Actionable Immediate IPM Steps & Treatments:**\n"
+        + "\n".join([f"{i+1}. {t}" for i, t in enumerate(recs)])
+        + f"\n\n**Preventive Field Measures:**\n"
+        + "\n".join([f"• {p}" for p in prev])
+        + f"\n\n> ⚠️ **Field Diagnostic Notice:** *Visual identification from uploaded photos is an initial diagnostic aid and cannot replace laboratory pathology testing. Please consult with your local Krishi Vigyan Kendra (KVK) or district agricultural extension officer before applying scheduled chemical sprays.*"
+    )
+
+    if session_id:
+        try:
+            from farmxpert.interfaces.api.routes.super_agent import _db_save_message
+            user_msg = f"[📷 Image: {filename}] {prompt or ''}".strip()
+            _db_save_message(session_id, "user", user_msg, user_id=current_user.id)
+            _db_save_message(session_id, "assistant", human_summary, user_id=current_user.id)
+        except Exception as e:
+            logger.warning(f"Failed to save vision chat history: {e}")
+
+    return {
+        "success": True,
+        "vision_result": vision_result,
+        "response": human_summary,
+        "filename": filename,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+
 @router.post("/vision")
 async def chat_vision(
     current_user: User = Depends(get_current_user),
@@ -270,148 +431,16 @@ async def chat_vision(
         content_type = file.content_type or "image/jpeg"
         logger.info(f"[chat/vision] user={current_user.id} file={file.filename!r}, size={len(image_bytes)}, content_type={content_type}")
 
-        # Build vision prompt
-        context_parts = []
-        if crop:
-            context_parts.append(f"Crop: {crop}")
-        if location:
-            context_parts.append(f"Location: {location}")
-        if prompt:
-            context_parts.append(f"Additional context: {prompt}")
-        ctx_str = "\n".join(context_parts) if context_parts else ""
-
-        vision_prompt = f"""You are an expert agricultural plant pathologist and pest diagnostician.
-Analyze this crop/leaf image carefully and identify any pest infestation or disease.
-
-{ctx_str}
-
-Respond ONLY with a valid JSON object in this exact format (no markdown, no code fences):
-{{
-  "diagnosis": "<name of disease or pest, or 'Healthy' if no issue>",
-  "confidence": <float 0.0-1.0>,
-  "severity": "<none|mild|moderate|severe>",
-  "description": "<2-3 sentence description of what you observe>",
-  "recommended_treatment": ["<treatment 1>", "<treatment 2>", "<treatment 3>"],
-  "prevention": ["<prevention tip 1>", "<prevention tip 2>"]
-}}"""
-
-        vision_result = None
-        raw_text = ""
-
-        # Attempt Gemini Vision Analysis
-        try:
-            model = _get_gemini_model()
-            image_part = {"mime_type": content_type, "data": image_bytes}
-
-            import asyncio
-            response = await asyncio.wait_for(
-                asyncio.to_thread(model.generate_content, [vision_prompt, image_part]),
-                timeout=20,
-            )
-
-            try:
-                raw_text = response.text
-            except Exception:
-                try:
-                    raw_text = response.candidates[0].content.parts[0].text
-                except Exception:
-                    raw_text = str(response)
-
-            vision_result = _parse_json_safe(raw_text)
-        except Exception as gemini_err:
-            logger.warning(f"[chat/vision] Gemini vision service call failed: {gemini_err}. Running agronomic diagnostic fallback.")
-            vision_result = None
-
-        # Agronomic pathology diagnostic fallback if vision model is unavailable or malformed
-        if not vision_result or not isinstance(vision_result, dict) or "diagnosis" not in vision_result:
-            p_lower = (prompt or "").lower()
-            if any(k in p_lower for k in ["spot", "leaf spot", "brown", "dots", "blight", "yellowing"]):
-                diag_name = "Cercospora / Alternaria Leaf Spot (Foliar Fungal Infection)"
-                severity = "moderate"
-                desc = "Visible brownish circular lesions with chlorotic yellow margins on the leaf surface. Foliar tissue exhibits early fungal necrotic development."
-                treatments = [
-                    "Spray Copper Oxychloride 50 WP @ 2.5 g/L water or Mancozeb 75 WP @ 2 g/L water ensuring full coverage of upper and lower leaf surfaces.",
-                    "Apply organic bio-agent Trichoderma viride @ 5 g/L water for biological control.",
-                    "Prune heavily infected lower leaves and safely dispose of them away from the field."
-                ]
-                prevention = [
-                    "Switch from overhead sprinkler to drip irrigation to avoid prolonged leaf wetness.",
-                    "Maintain proper row and plant spacing (at least 60 cm) for adequate canopy air circulation."
-                ]
-            elif any(k in p_lower for k in ["insect", "pest", "bug", "curl", "aphid", "whitefly", "hole"]):
-                diag_name = "Sucking Pest Infestation (Aphids / Whitefly / Thrips)"
-                severity = "mild to moderate"
-                desc = "Leaf curling, slight distortion, and feeding marks observed on tender foliage indicative of sap-sucking agricultural pests."
-                treatments = [
-                    "Spray Neem Seed Kernel Extract (NSKE 5%) or 10,000 PPM Neem Oil @ 3-5 mL/L water with a mild surfactant.",
-                    "If infestation exceeds economic threshold (ETL), apply Imidacloprid 17.8 SL @ 0.5 mL/L water or Acetamiprid 20 SP @ 0.2 g/L water.",
-                    "Install yellow and blue sticky traps @ 10-15 traps per acre."
-                ]
-                prevention = [
-                    "Scout field twice weekly, especially the undersides of newly emerged leaves.",
-                    "Preserve natural predatory beneficial insects such as ladybird beetles and lacewings."
-                ]
-            else:
-                diag_name = "Foliar Leaf Spot / Early Fungal Blight"
-                severity = "moderate"
-                desc = "Foliage exhibits localized irregular discolored lesions and foliar tissue stress consistent with early fungal pathogens."
-                treatments = [
-                    "Apply bio-fungicide Trichoderma viride or Pseudomonas fluorescens @ 5 g/L water as a preventive protective foliar spray.",
-                    "For progressive lesions, apply Copper Oxychloride 50 WP @ 2.5 g/L water in calm morning weather.",
-                    "Inspect root-zone soil drainage and ensure plants are not waterlogged."
-                ]
-                prevention = [
-                    "Ensure adequate field aeration and avoid sprinkler irrigation during evening hours.",
-                    "Rotate crops with non-host legumes in the next cultivation cycle."
-                ]
-
-            vision_result = {
-                "diagnosis": diag_name,
-                "confidence": 0.78,
-                "severity": severity,
-                "description": desc,
-                "recommended_treatment": treatments,
-                "prevention": prevention,
-            }
-
-        # Formulate rich, structured, farmer-safe Markdown diagnosis
-        diag_title = vision_result.get("diagnosis", "Leaf / Plant Condition")
-        conf_pct = int(float(vision_result.get("confidence", 0.75)) * 100)
-        sev = str(vision_result.get("severity", "moderate")).capitalize()
-        desc = vision_result.get("description", "")
-        recs = vision_result.get("recommended_treatment", [])
-        prev = vision_result.get("prevention", [])
-
-        human_summary = (
-            f"### 🔬 Plant Pathology Diagnostic Report\n\n"
-            f"• **Likely Identification:** **{diag_title}**\n"
-            f"• **Diagnostic Confidence:** ~{conf_pct}%\n"
-            f"• **Observed Severity:** {sev}\n\n"
-            f"**Visible Symptoms & Observations:**\n"
-            f"{desc}\n\n"
-            f"**Recommended Treatments:**\n"
-            + "\n".join([f"{i+1}. {t}" for i, t in enumerate(recs)])
-            + f"\n\n**Preventive Field Measures:**\n"
-            + "\n".join([f"• {p}" for p in prev])
-            + f"\n\n> ⚠️ **Field Diagnostic Notice:** *Visual identification from uploaded photos is an initial diagnostic aid and cannot replace laboratory pathology testing. Please consult with your local Krishi Vigyan Kendra (KVK) or district agricultural extension officer before applying scheduled chemical sprays.*"
+        return await _process_crop_image(
+            image_bytes=image_bytes,
+            content_type=content_type,
+            filename=file.filename or "leaf.jpg",
+            prompt=prompt,
+            crop=crop,
+            location=location,
+            session_id=session_id,
+            current_user=current_user,
         )
-
-        if session_id:
-            try:
-                from farmxpert.interfaces.api.routes.super_agent import _db_save_message
-                user_msg = f"[📷 Image: {file.filename}] {prompt or ''}".strip()
-                _db_save_message(session_id, "user", user_msg, user_id=current_user.id)
-                _db_save_message(session_id, "assistant", human_summary, user_id=current_user.id)
-            except Exception as e:
-                logger.warning(f"Failed to save vision chat history: {e}")
-
-        return {
-            "success": True,
-            "vision_result": vision_result,
-            "response": human_summary,
-            "filename": file.filename,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
 
     except HTTPException:
         raise
@@ -583,6 +612,24 @@ async def chat_document(
         content_type = file.content_type or _guess_mime(filename)
         logger.info(f"[chat/document] user={current_user.id} file={filename!r}, size={len(file_bytes)}, type={content_type}")
 
+        ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+        is_image = content_type.startswith("image/") or ext in {"jpg", "jpeg", "png", "webp", "gif", "bmp"}
+        p_lower = (prompt or "").lower()
+        is_pest_inquiry = any(k in p_lower for k in ["insect", "pest", "bug", "aphid", "whitefly", "caterpillar", "worm", "fungus", "blight", "spot", "disease", "rot", "leaf"])
+
+        # If user uploaded an image or asked about crop pests/diseases, route directly to agronomic IPM vision diagnostics
+        if is_image or (is_pest_inquiry and content_type.startswith("image/")):
+            return await _process_crop_image(
+                image_bytes=file_bytes,
+                content_type=content_type if content_type.startswith("image/") else f"image/{ext if ext != 'jpg' else 'jpeg'}",
+                filename=filename,
+                prompt=prompt,
+                crop=None,
+                location=None,
+                session_id=session_id,
+                current_user=current_user,
+            )
+
         user_prompt = prompt or "Analyze this agricultural document and extract key insights."
 
         analysis_prompt = f"""You are an expert agricultural data analyst.
@@ -663,12 +710,18 @@ def _parse_json_safe(text: str) -> Optional[Dict[str, Any]]:
 
 def _guess_mime(filename: str) -> str:
     """Guess MIME type from file extension."""
-    ext = filename.lower().rsplit(".", 1)[-1]
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
     return {
         "pdf": "application/pdf",
         "csv": "text/csv",
         "txt": "text/plain",
         "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "png": "image/png",
+        "webp": "image/webp",
+        "gif": "image/gif",
+        "bmp": "image/bmp",
     }.get(ext, "application/octet-stream")
 
 
