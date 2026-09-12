@@ -10,7 +10,7 @@ import apiService from '../services/api';
 import DailyFlowTimeline from './DailyFlowTimeline';
 import '../styles/Dashboard/TodayDashboard.css';
 
-const API_BASE_URL = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api';
+import { API_BASE_URL } from '../services/apiBase';
 
 const getCategoryIcon = (category) => {
   switch (category?.toLowerCase()) {
@@ -36,12 +36,23 @@ const TodayDashboard = () => {
     error: null,
   });
 
-  // Daily Flow State
+  // -- Daily Flow state machine ------------------------------------------
+  // flowStatus is the single source of truth for what this page renders:
+  //   'loading'     first load in progress
+  //   'needs_farm'  no farm / crop configured yet
+  //   'no_flow'     farm exists but no tasks generated yet
+  //   'generating'  a season plan is being generated
+  //   'ready'       tasks loaded
+  //   'error'       a request failed
+  // It replaces a bare `flowLoading` boolean that was initialised to true and
+  // only ever cleared inside fetchDailyFlow -- which never ran when the farms
+  // request failed, leaving the page on its skeleton indefinitely.
   const [farmsList, setFarmsList] = useState([]);
   const [selectedFarmId, setSelectedFarmId] = useState(null);
   const [selectedCropId, setSelectedCropId] = useState(null);
   const [flowData, setFlowData] = useState(null);
-  const [flowLoading, setFlowLoading] = useState(true);
+  const [flowStatus, setFlowStatus] = useState('loading');
+  const [missingFields, setMissingFields] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [flowError, setFlowError] = useState(null);
   const [activeTab, setActiveTab] = useState('today'); // 'today' | 'upcoming' | 'timeline' | 'completed' | 'overdue'
@@ -58,60 +69,80 @@ const TodayDashboard = () => {
     };
   }, []);
 
-  // Fetch Farms & Crops
-  const fetchFarmsAndCrops = useCallback(async () => {
-    try {
-      const res = await apiService.get('/api/tasks/farms-and-crops');
-      const data = res?.data || res;
-      if (data?.farms && data.farms.length > 0) {
-        setFarmsList(data.farms);
-        setSelectedFarmId(data.active_farm_id || data.farms[0].id);
-        if (data.active_crop_id) {
-          setSelectedCropId(data.active_crop_id);
-        } else if (data.farms[0].crops && data.farms[0].crops.length > 0) {
-          setSelectedCropId(data.farms[0].crops[0].id);
-        }
-      }
-    } catch (e) {
-      console.warn('Could not load farms and crops:', e);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchFarmsAndCrops();
-  }, [fetchFarmsAndCrops]);
-
-  // Fetch Daily Flow
+  // Fetch the Daily Flow for an already resolved farm/crop.
   const fetchDailyFlow = useCallback(async (farmId, cropId) => {
+    setFlowError(null);
     try {
-      setFlowLoading(true);
-      setFlowError(null);
       const params = new URLSearchParams();
       if (farmId) params.append('farm_id', farmId);
       if (cropId) params.append('crop_id', cropId);
 
       const res = await apiService.get(`/api/tasks/daily-flow?${params.toString()}`);
       const data = res?.data || res;
-      if (data?.success) {
-        setFlowData(data);
+
+      if (data?.status === 'needs_farm_setup') {
+        setMissingFields(data.missing_fields || []);
+        setFlowStatus('needs_farm');
+        return;
       }
+      setFlowData(data);
+      setFlowStatus((data?.total_tasks_count || 0) > 0 ? 'ready' : 'no_flow');
     } catch (e) {
       console.error('Error fetching Daily Flow:', e);
-      const raw = e?.response?.data?.detail || e?.message || '';
-      const safe = (typeof raw === 'string' && (raw.includes('psycopg2') || raw.includes('SQL') || raw.includes('UndefinedColumn') || raw.includes('farms.')))
-        ? 'Unable to retrieve your Daily Flow schedule. Please try refreshing or generating your season plan.'
-        : (raw || 'Failed to load Daily Flow.');
-      setFlowError(safe);
-    } finally {
-      setFlowLoading(false);
+      setFlowError("We couldn't load your task plan. Please try again.");
+      setFlowStatus('error');
     }
   }, []);
 
-  useEffect(() => {
-    if (selectedFarmId) {
-      fetchDailyFlow(selectedFarmId, selectedCropId);
+  // Resolve the farm and crop, then load the flow. Every exit path settles
+  // flowStatus, so the skeleton can never be the page's final state.
+  const fetchFarmsAndCrops = useCallback(async () => {
+    setFlowStatus('loading');
+    setFlowError(null);
+    try {
+      const res = await apiService.get('/api/tasks/farms-and-crops');
+      const data = res?.data || res;
+
+      if (!data?.farms || data.farms.length === 0) {
+        setFarmsList([]);
+        setMissingFields(data?.missing_fields || []);
+        setFlowStatus('needs_farm');
+        return;
+      }
+
+      setFarmsList(data.farms);
+      const farmId = data.active_farm_id || data.farms[0].id;
+      const cropId = data.active_crop_id
+        || (data.farms[0].crops && data.farms[0].crops.length > 0 ? data.farms[0].crops[0].id : null);
+      setSelectedFarmId(farmId);
+      setSelectedCropId(cropId);
+
+      if (!cropId) {
+        setMissingFields(['crop_type']);
+        setFlowStatus('needs_farm');
+        return;
+      }
+      await fetchDailyFlow(farmId, cropId);
+    } catch (e) {
+      console.error('Could not load farms and crops:', e);
+      setFlowError("We couldn't load your farm information. Please try again.");
+      setFlowStatus('error');
     }
-  }, [selectedFarmId, selectedCropId, fetchDailyFlow]);
+  }, [fetchDailyFlow]);
+
+  useEffect(() => {
+    fetchFarmsAndCrops();
+  }, [fetchFarmsAndCrops]);
+
+  // Re-fetch when the farmer switches farm or crop. The first mount is already
+  // covered by fetchFarmsAndCrops, so it is skipped here.
+  const initialised = React.useRef(false);
+  useEffect(() => {
+    if (!selectedFarmId || !selectedCropId) return;
+    if (!initialised.current) { initialised.current = true; return; }
+    setFlowStatus('loading');
+    fetchDailyFlow(selectedFarmId, selectedCropId);
+  }, [selectedFarmId, selectedCropId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Generate / Regenerate Daily Flow
   const handleGenerateDailyFlow = async () => {
@@ -123,16 +154,19 @@ const TodayDashboard = () => {
         crop_id: selectedCropId
       });
       const data = res?.data || res;
-      if (data?.success) {
-        setFlowData(data);
+
+      if (data?.status === 'needs_farm_setup') {
+        setMissingFields(data.missing_fields || []);
+        setFlowStatus('needs_farm');
+        return;
       }
+      setFlowData(data);
+      setFlowStatus((data?.total_tasks_count || 0) > 0 ? 'ready' : 'no_flow');
     } catch (e) {
       console.error('Error generating Daily Flow:', e);
-      const raw = e?.response?.data?.detail || e?.message || '';
-      const safe = (typeof raw === 'string' && (raw.includes('psycopg2') || raw.includes('SQL') || raw.includes('UndefinedColumn') || raw.includes('farms.')))
-        ? 'A database synchronization issue occurred while generating your flow. Please verify your farm details and try again.'
-        : (raw || 'Could not generate season flow. Please check farm details.');
-      setFlowError(safe);
+      // Never surface a raw backend exception to the farmer.
+      setFlowError('Unable to generate your season plan. Please try again.');
+      setFlowStatus('error');
     } finally {
       setGenerating(false);
     }
@@ -396,7 +430,7 @@ const TodayDashboard = () => {
       </div>
 
       {/* Error Alert Banner */}
-      {flowError && flowData && flowData.total_tasks_count > 0 && (
+      {flowError && flowStatus === 'ready' && (
         <div className="checklist-error" style={{ marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <AlertCircle size={18} />
@@ -405,7 +439,7 @@ const TodayDashboard = () => {
           <button 
             className="today-btn secondary"
             style={{ padding: '4px 12px', fontSize: '0.8rem', height: 'auto', flexShrink: 0 }}
-            onClick={() => fetchDailyFlow(selectedFarmId, selectedCropId)}
+            onClick={fetchFarmsAndCrops}
           >
             <RefreshCw size={13} /> Retry
           </button>
@@ -441,8 +475,8 @@ const TodayDashboard = () => {
         </div>
       )}
 
-      {/* STATE 1 — Initial Loading Skeleton */}
-      {flowLoading && !flowData && (
+      {/* STATE 1 — Initial Loading Skeleton (only while actually loading) */}
+      {flowStatus === 'loading' && (
         <div className="daily-flow-loading-skeleton">
           <div className="skeleton-line title" />
           <div className="skeleton-line" style={{ width: '55%' }} />
@@ -455,32 +489,36 @@ const TodayDashboard = () => {
         </div>
       )}
 
-      {/* STATE 2 — No Farm Configured */}
-      {!flowLoading && farmsList.length === 0 && (
+      {/* STATE 2 — No Farm / Crop Configured */}
+      {flowStatus === 'needs_farm' && (
         <div className="daily-flow-card state-no-farm">
           <Sprout size={42} style={{ color: 'var(--dash-emerald)', marginBottom: '12px' }} />
           <h3>Add your farm to generate a seasonal plan.</h3>
-          <p>Set up your farm profile, crop type, and soil details to get tailored seasonal crop timelines and daily operations.</p>
-          <button className="today-btn primary" onClick={() => navigate('/dashboard/settings')}>
+          <p>
+            {missingFields.length > 0
+              ? `Set your ${missingFields.map(f => f.replace(/_/g, ' ')).join(' and ')} in Settings to get a seasonal crop timeline and daily operations.`
+              : 'Set up your farm profile, crop type, and soil details to get tailored seasonal crop timelines and daily operations.'}
+          </p>
+          <button className="today-btn primary" onClick={() => navigate('/dashboard/setting')}>
             Configure Farm Profile
           </button>
         </div>
       )}
 
-      {/* STATE 6 — Generation / Load Failed */}
-      {!flowLoading && flowError && (!flowData || flowData.total_tasks_count === 0) && (
+      {/* STATE 6 — Load / Generation Failed */}
+      {flowStatus === 'error' && (
         <div className="daily-flow-card state-error">
           <AlertCircle size={38} style={{ color: '#ef4444', marginBottom: '10px' }} />
-          <h3>We couldn't generate your seasonal plan.</h3>
+          <h3>Something went wrong.</h3>
           <p>{flowError}</p>
-          <button className="today-btn primary" onClick={handleGenerateDailyFlow} disabled={generating}>
+          <button className="today-btn primary" onClick={fetchFarmsAndCrops} disabled={generating}>
             <RefreshCw size={15} /> Try Again
           </button>
         </div>
       )}
 
-      {/* STATE 3 — Farm Exists, No Flow Generated Yet */}
-      {!flowLoading && !flowError && flowData && flowData.total_tasks_count === 0 && (
+      {/* STATE 3 — Farm Exists, No Season Flow Generated Yet */}
+      {flowStatus === 'no_flow' && !generating && (
         <div className="daily-flow-card state-uninitiated">
           <Sparkles size={40} style={{ color: 'var(--dash-emerald)', marginBottom: '12px' }} />
           <h3>Your seasonal plan hasn't been generated yet.</h3>
@@ -500,8 +538,8 @@ const TodayDashboard = () => {
         </div>
       )}
 
-      {/* STATE 5 — Successfully Generated Flow */}
-      {!flowLoading && !generating && flowData && flowData.total_tasks_count > 0 && (
+      {/* STATE 5 — Season Flow Loaded */}
+      {flowStatus === 'ready' && !generating && flowData && (
         <>
           {/* Crop Season Overview Progress Card */}
           {seasonInfo && (

@@ -1,25 +1,24 @@
 import SVGChart from "./SVG-graph"
-
-export const phData = [
-  { time: "Mon", value: 6.9 },
-  { time: "Tue", value: 5.1 },
-  { time: "Wed", value: 6.9 },
-  { time: "Thu", value: 5.1 },
-  { time: "Fri", value: 6.9 },
-  { time: "Sat", value: 5.1 },
-  { time: "Sun", value: 6.9 },
-]
+import { useTelemetryHistory, toSeries, axisBounds, HistoryPlaceholder } from "./useTelemetryHistory"
 
 export default function PhSVGChart({ width = 600, height = 300 }) {
+  const { loading, hasData, readings, error } = useTelemetryHistory()
+  const data = toSeries(readings, "soil_ph")
+
+  if (loading || !hasData || data.length === 0) {
+    return <HistoryPlaceholder loading={loading} error={error} height={height} />
+  }
+
+  const [yAxisMin, yAxisMax] = axisBounds(data, 0, 14)
   return (
     <SVGChart
-      data={phData}
+      data={data}
       lineColor="#8b5cf6"
-      label="pH Level"
+      label="Soil pH"
       tooltipLabel="pH"
-      tooltipValueColor="#c1a6ff"
-      yAxisMin={5}
-      yAxisMax={7}
+      tooltipValueColor="#a78bfa"
+      yAxisMin={yAxisMin}
+      yAxisMax={yAxisMax}
       width={width}
       height={height}
     />

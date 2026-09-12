@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useQueryClient } from 'react-query';
-const API_BASE_URL = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api';
+import { API_BASE_URL } from '../services/apiBase';
+
+/**
+ * Fired on `window` after the farm profile is successfully saved, carrying the
+ * complete farm record returned by the backend. Any view that renders farm
+ * data should listen for this and re-read, so a save in Settings is visible in
+ * Farm Map (and vice versa) without a reload or a re-login.
+ */
+export const FARM_PROFILE_UPDATED = 'farmxpert:farm-profile-updated';
 
 const AuthContext = createContext();
 
@@ -407,11 +415,25 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to update farm profile');
+        let detail = 'We couldn\'t save your farm details. Please try again.';
+        try {
+          const error = await response.json();
+          if (error?.detail) detail = error.detail;
+        } catch {
+          /* non-JSON error body — keep the friendly message */
+        }
+        throw new Error(detail);
       }
 
-      return { success: true, data: await response.json() };
+      // The response is the complete, committed farm record. Push it out so
+      // every consumer (Settings, Farm Map, Daily Flow, weather, chat context)
+      // re-reads PostgreSQL instead of keeping a divergent local copy.
+      const data = await response.json();
+      queryClient.invalidateQueries({ queryKey: ['farmProfile'] });
+      queryClient.invalidateQueries({ queryKey: ['farm'] });
+      window.dispatchEvent(new CustomEvent(FARM_PROFILE_UPDATED, { detail: data }));
+
+      return { success: true, data };
     } catch (error) {
       console.error('Update farm profile error:', error);
       return { success: false, error: error.message };

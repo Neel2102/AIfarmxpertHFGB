@@ -19,6 +19,12 @@ from farmxpert.interfaces.api.schemas.auth_schemas import (
 )
 from pydantic import BaseModel
 from typing import Optional, Any
+import logging
+
+# save_farm_layout and update_farm_profile log through this. It was previously
+# referenced without ever being defined, so any handled exception inside those
+# handlers raised NameError and turned into an opaque HTTP 500.
+logger = logging.getLogger("auth_routes")
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -69,8 +75,56 @@ class FarmProfileResponse(BaseModel):
     farm_goals: Optional[list] = None
     updated_at: Optional[datetime] = None
 
+    # Canonical `farms` record fields, so one response fully describes the farm
+    # for Settings, Farm Map, Daily Flow, weather and chat context.
+    farm_id: Optional[int] = None
+    size_acres: Optional[float] = None
+    farmer_name: Optional[str] = None
+    farmer_phone: Optional[str] = None
+    farmer_email: Optional[str] = None
+
     class Config:
         from_attributes = True
+
+
+def _farm_profile_response(profile, farm) -> "FarmProfileResponse":
+    """
+    Build the single canonical farm payload from the onboarding profile plus the
+    operational `farms` row. `farms` wins on any field both of them carry,
+    because that is what the rest of the platform reads.
+    """
+    data: Dict[str, Any] = {}
+    if profile is not None:
+        for column in profile.__table__.columns.keys():
+            if column in FarmProfileResponse.model_fields:
+                data[column] = getattr(profile, column, None)
+
+    if farm is not None:
+        data["farm_id"] = farm.id
+        for field, value in (
+            ("farm_name", farm.farm_name),
+            ("location", farm.location),
+            ("state", farm.state),
+            ("district", farm.district),
+            ("village", farm.village),
+            ("soil_type", farm.soil_type),
+            ("crop_type", farm.crop_type),
+            ("farmer_name", farm.farmer_name),
+            ("farmer_phone", farm.farmer_phone),
+            ("farmer_email", farm.farmer_email),
+        ):
+            if value is not None:
+                data[field] = value
+        if farm.latitude is not None:
+            data["latitude"] = float(farm.latitude)
+        if farm.longitude is not None:
+            data["longitude"] = float(farm.longitude)
+        if farm.size_acres is not None:
+            data["size_acres"] = float(farm.size_acres)
+            data.setdefault("farm_size", str(farm.size_acres))
+
+    data.setdefault("crop_type", data.get("specific_crop"))
+    return FarmProfileResponse(**data)
 
 class FarmProfileUpdate(BaseModel):
     farm_name: Optional[str] = None
@@ -627,14 +681,15 @@ async def get_farm_profile(
     current_user: User = Depends(get_current_user),
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """Retrieve the current user's farm profile"""
+    """Retrieve the current user's farm profile, merged with the canonical farm record."""
     profile = auth_service.get_farm_profile(current_user.id)
-    if not profile:
+    farm = auth_service.get_canonical_farm(current_user.id)
+    if not profile and not farm:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Farm profile not found"
         )
-    return profile
+    return _farm_profile_response(profile, farm)
 
 @router.put("/farm-profile", response_model=FarmProfileResponse)
 @router.post("/farm-profile", response_model=FarmProfileResponse)
@@ -643,17 +698,31 @@ async def update_farm_profile(
     current_user: User = Depends(get_current_user),
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """Update the current user's farm profile"""
-    profile = auth_service.update_farm_profile(
-        current_user.id, 
-        profile_data.dict(exclude_unset=True)
-    )
-    if not profile:
+    """
+    Update the current user's farm profile.
+
+    Writes the onboarding profile and the canonical `farms` record in one
+    transaction and returns the complete, freshly committed farm object so the
+    client can replace its local state without a second round trip.
+    """
+    try:
+        profile = auth_service.update_farm_profile(
+            current_user.id,
+            profile_data.dict(exclude_unset=True)
+        )
+    except ValueError as e:
+        # Caller supplied an unusable value (e.g. a non-numeric latitude).
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception:
+        # update_farm_profile has already logged the exception with its
+        # traceback. Do not leak the database error to the farmer.
+        logger.exception("Farm profile update failed for user_id=%s", current_user.id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update farm profile"
+            detail="We couldn't save your farm details. Please try again."
         )
-    return profile
+
+    return _farm_profile_response(profile, auth_service.get_canonical_farm(current_user.id))
 
 
 # ── Farm Layout endpoints ─────────────────────────────────────────────────────
@@ -712,24 +781,9 @@ async def save_farm_layout(
         profile.latitude = centroid_lat
         profile.longitude = centroid_lon
 
-    # Ensure AuthUser exists if database foreign key constraint references auth_users(id)
-    try:
-        au = db.query(AuthUser).filter(AuthUser.id == current_user.id).first()
-        if not au:
-            au = AuthUser(
-                id=current_user.id,
-                farmer_id=f"FRM{current_user.id:04d}",
-                email=current_user.email,
-                username=current_user.username,
-                name=current_user.full_name or current_user.username,
-                phone=current_user.phone,
-                password_hash=current_user.hashed_password,
-                role=getattr(current_user, "role", "farmer"),
-            )
-            db.add(au)
-            db.flush()
-    except Exception as au_err:
-        logger.warning(f"AuthUser sync note in save_farm_layout: {au_err}")
+    # farms.user_id references auth_users(id); create the link row if missing.
+    from farmxpert.services.auth_user_link import ensure_auth_user
+    ensure_auth_user(db, current_user)
 
     # Synchronize canonical Farm record
     farm = db.query(Farm).filter(Farm.user_id == current_user.id).first()
@@ -748,13 +802,17 @@ async def save_farm_layout(
         farm.soil_type = layout.soil_type
         profile.soil_type = layout.soil_type
     if layout.irrigation_type:
-        profile.irrigation_type = layout.irrigation_type
+        # FarmProfile's column is irrigation_method; assigning to a name that is
+        # not a column silently discarded the value.
+        profile.irrigation_method = layout.irrigation_type
     if layout.area_acres is not None:
         try:
             farm.size_acres = float(layout.area_acres)
-            profile.farm_size = float(layout.area_acres)
-        except Exception:
-            pass
+            # farm_size is VARCHAR — a float here makes PostgreSQL reject the
+            # whole UPDATE with a datatype mismatch.
+            profile.farm_size = str(float(layout.area_acres))
+        except (TypeError, ValueError):
+            logger.warning("Ignoring non-numeric area_acres %r", layout.area_acres)
 
     if layout.form_data and isinstance(layout.form_data, dict):
         fd = layout.form_data

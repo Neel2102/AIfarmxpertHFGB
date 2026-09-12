@@ -29,7 +29,7 @@ export default function SoilGauge({ value, type }) {
     switch (type) {
       case "moisture":
         return {
-          color: value < 40 ? "#f59e0b" : value > 80 ? "#ef4444" : "#22c55e",
+          color: !Number.isFinite(value) ? "#9ca3af" : value < 40 ? "#f59e0b" : value > 80 ? "#ef4444" : "#22c55e",
           label: "Moisture",
           unit: "%",
           min: 0,
@@ -38,7 +38,7 @@ export default function SoilGauge({ value, type }) {
         }
       case "temperature":
         return {
-          color: value < 18 ? "#3b82f6" : value > 28 ? "#ef4444" : "#22c55e",
+          color: !Number.isFinite(value) ? "#9ca3af" : value < 18 ? "#3b82f6" : value > 28 ? "#ef4444" : "#22c55e",
           label: "Temperature",
           unit: "°C",
           min: 0,
@@ -47,7 +47,7 @@ export default function SoilGauge({ value, type }) {
         }
       case "ph":
         return {
-          color: value < 5.5 ? "#ef4444" : value > 7.5 ? "#f59e0b" : "#22c55e",
+          color: !Number.isFinite(value) ? "#9ca3af" : value < 5.5 ? "#ef4444" : value > 7.5 ? "#f59e0b" : "#22c55e",
           label: "pH",
           unit: "",
           min: 0,
@@ -66,7 +66,13 @@ export default function SoilGauge({ value, type }) {
     }
   }, [value, type])
 
-  const percentage = Math.max(0, Math.min(100, ((displayValue - min) / (max - min)) * 100))
+  // A null/undefined value means "no measurement", which is NOT the same as a
+  // reading of 0. Rendering 0 here made an unavailable sensor look like a real
+  // zero reading (0% moisture, 0.0 pH), so the gauge stays empty and shows "--".
+  const hasValue = typeof displayValue === "number" && Number.isFinite(displayValue)
+  const percentage = hasValue
+    ? Math.max(0, Math.min(100, ((displayValue - min) / (max - min)) * 100))
+    : 0
   const circumference = 2 * Math.PI * 45
   const strokeDasharray = circumference
   const strokeDashoffset = circumference - (percentage / 100) * circumference
@@ -83,7 +89,7 @@ export default function SoilGauge({ value, type }) {
             cx="60"
             cy="60"
             r="45"
-            stroke={color}
+            stroke={hasValue ? color : "transparent"}
             strokeWidth="8"
             fill="transparent"
             strokeDasharray={strokeDasharray}
@@ -103,9 +109,13 @@ export default function SoilGauge({ value, type }) {
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: "1.25rem", fontWeight: "bold", color: color }}>
-            {type === "ph" ? displayValue.toFixed(1) : displayValue.toFixed(0)}
-            {unit}
+          <div style={{ fontSize: "1.25rem", fontWeight: "bold", color: hasValue ? color : "var(--dash-text-muted, #9ca3af)" }}>
+            {hasValue ? (
+              <>
+                {type === "ph" ? displayValue.toFixed(1) : displayValue.toFixed(0)}
+                {unit}
+              </>
+            ) : "--"}
           </div>
         </div>
       </div>

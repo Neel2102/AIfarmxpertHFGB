@@ -1,25 +1,24 @@
 import SVGChart from "./SVG-graph"
-
-export const temperatureData = [
-  { time: "Mon", value: 22 },
-  { time: "Tue", value: 24 },
-  { time: "Wed", value: 26 },
-  { time: "Thu", value: 25 },
-  { time: "Fri", value: 23 },
-  { time: "Sat", value: 21 },
-  { time: "Sun", value: 22 },
-]
+import { useTelemetryHistory, toSeries, axisBounds, HistoryPlaceholder } from "./useTelemetryHistory"
 
 export default function TemperatureSVGChart({ width = 600, height = 300 }) {
+  const { loading, hasData, readings, error } = useTelemetryHistory()
+  const data = toSeries(readings, "soil_temperature")
+
+  if (loading || !hasData || data.length === 0) {
+    return <HistoryPlaceholder loading={loading} error={error} height={height} />
+  }
+
+  const [yAxisMin, yAxisMax] = axisBounds(data, 0, 50)
   return (
     <SVGChart
-      data={temperatureData}
+      data={data}
       lineColor="#f59e0b"
-      label="Temperature (°C)"
+      label="Soil Temperature"
       tooltipLabel="Temperature"
-      tooltipValueColor="#f59e0b"
-      yAxisMin={20}
-      yAxisMax={30}
+      tooltipValueColor="#fbbf24"
+      yAxisMin={yAxisMin}
+      yAxisMax={yAxisMax}
       width={width}
       height={height}
     />

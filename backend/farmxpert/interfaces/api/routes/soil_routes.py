@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 from farmxpert.models.database import get_db
 from farmxpert.models.farm_models import SoilTest, Farm
 from farmxpert.models.blynk_models import SensorReading, BlynkDevice
+from farmxpert.models.user_models import User
+from farmxpert.interfaces.api.routes.auth_routes import get_current_user
 from farmxpert.core.utils.logger import get_logger
 
 router = APIRouter(prefix="/soil-tests", tags=["Soil Tests"])
@@ -75,33 +77,33 @@ def _to_response(t: SoilTest) -> dict:
 
 
 # ── Endpoints ──────────────────────────────────────────────
+#
+# Every endpoint here is scoped to the authenticated farmer. They previously
+# accepted an optional user_id/farm_id query parameter and otherwise fell back
+# to `db.query(Farm).first()`, which served the first farm in the table to every
+# caller — one farmer's soil data shown to another, with no login required.
+
+
+def _require_own_farm(db: Session, current_user: User) -> Farm:
+    """Return the caller's own farm, or 404. Never another farmer's."""
+    farm = db.query(Farm).filter(Farm.user_id == current_user.id).first()
+    if not farm:
+        raise HTTPException(
+            status_code=404,
+            detail="No farm configured yet. Add your farm details in Settings first.",
+        )
+    return farm
+
 
 @router.post("/save")
-async def save_soil_test(req: SoilTestCreate, db: Session = Depends(get_db)):
-    """Save a new 9-parameter soil test reading from the frontend."""
+async def save_soil_test(
+    req: SoilTestCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Record a soil test reading against the authenticated farmer's own farm."""
+    farm = _require_own_farm(db, current_user)
     try:
-        # Resolve farm
-        farm = None
-        if req.farm_id:
-            farm = db.query(Farm).filter(Farm.id == req.farm_id).first()
-        if not farm and req.user_id:
-            farm = db.query(Farm).filter(Farm.user_id == req.user_id).first()
-        if not farm:
-            farm = db.query(Farm).first()
-        if not farm:
-            farm = Farm(
-                user_id=req.user_id,
-                farm_name="Main Farm",
-                crop_type="Cotton",
-                state="Gujarat",
-                district="Rajkot",
-                soil_type="Black Soil",
-                size_acres=5.0
-            )
-            db.add(farm)
-            db.commit()
-            db.refresh(farm)
-
         test = SoilTest(
             farm_id=farm.id,
             air_temperature=req.air_temperature,
@@ -119,26 +121,31 @@ async def save_soil_test(req: SoilTestCreate, db: Session = Depends(get_db)):
         db.add(test)
         db.commit()
         db.refresh(test)
-
-        logger.info(f"Soil test saved: id={test.id} farm={farm.id}")
+        logger.info("Soil test saved: id=%s farm=%s", test.id, farm.id)
         return {"success": True, "message": "Soil test saved.", "id": test.id}
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
-        logger.error(f"Failed to save soil test: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to save soil test reading.")
+        logger.exception("Failed to save soil test for user_id=%s", current_user.id)
+        raise HTTPException(status_code=500, detail="We couldn't save this soil reading.")
 
 
 @router.get("/list")
 async def list_soil_tests(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get paginated soil test history (newest first)."""
+    """Paginated soil test history for the caller's own farm (newest first)."""
+    farm = db.query(Farm).filter(Farm.user_id == current_user.id).first()
+    if not farm:
+        return {"tests": [], "count": 0, "offset": offset, "limit": limit}
+
     tests = (
         db.query(SoilTest)
+        .filter(SoilTest.farm_id == farm.id)
         .order_by(SoilTest.test_date.desc())
         .limit(limit)
         .offset(offset)
@@ -153,164 +160,72 @@ async def list_soil_tests(
 
 
 @router.get("/latest")
-async def latest_soil_test(db: Session = Depends(get_db)):
-    """Get the most recent soil test reading."""
-    test = db.query(SoilTest).order_by(SoilTest.test_date.desc()).first()
+async def latest_soil_test(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Most recent soil test for the caller's own farm."""
+    farm = db.query(Farm).filter(Farm.user_id == current_user.id).first()
+    if not farm:
+        return {"has_data": False, "message": "No farm configured yet."}
+
+    test = (
+        db.query(SoilTest)
+        .filter(SoilTest.farm_id == farm.id)
+        .order_by(SoilTest.test_date.desc())
+        .first()
+    )
     if not test:
         return {"has_data": False, "message": "No soil tests recorded yet."}
     return {"has_data": True, "test": _to_response(test)}
 
 
 @router.get("/farm-info")
-async def get_farm_info(db: Session = Depends(get_db)):
-    """Get the farmer's farm info (auto-populated from users table)."""
-    try:
-        farm = db.query(Farm).first()
-        if not farm:
-            return {"has_farm": False}
-        return {
-            "has_farm": True,
-            "farm": {
-                "id": farm.id,
-                "name": getattr(farm, "farm_name", None) or getattr(farm, "name", None) or "My Farm",
-                "farmer_name": getattr(farm, "farmer_name", None),
-                "farmer_phone": getattr(farm, "farmer_phone", None),
-                "farmer_email": getattr(farm, "farmer_email", None),
-                "location": getattr(farm, "location", None),
-                "size_acres": getattr(farm, "size_acres", None),
-            },
-        }
-    except Exception as e:
-        logger.error(f"Failed to fetch farm info: {e}")
-        return {"has_farm": False, "error": str(e)}
-
-
-@router.get("/user-live")
-async def get_user_live_soil_telemetry(
-    user_id: Optional[int] = None,
+async def get_farm_info(
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get live telemetry for a specific user's farm (pass user_id as query param).
-    The frontend passes the user_id from AuthContext to scope data correctly.
-    """
-    try:
-        farm = None
-        if user_id:
-            farm = db.query(Farm).filter(Farm.user_id == user_id).first()
-        if not farm:
-            farm = db.query(Farm).first()
-
-        latest_test = None
-        if farm:
-            latest_test = (
-                db.query(SoilTest)
-                .filter(SoilTest.farm_id == farm.id)
-                .order_by(SoilTest.test_date.desc())
-                .first()
-            )
-        if not latest_test:
-            latest_test = (
-                db.query(SoilTest)
-                .order_by(SoilTest.test_date.desc())
-                .first()
-            )
-
-        if not latest_test:
-            return {"has_data": False, "message": "No sensor data recorded yet."}
-
-        return {
-            "has_data": True,
-            "source": "soil_test",
-            "data": {
-                "air_temperature": latest_test.air_temperature,
-                "air_humidity": latest_test.air_humidity,
-                "soil_moisture": latest_test.soil_moisture,
-                "soil_temperature": latest_test.soil_temperature,
-                "soil_ec": latest_test.soil_ec,
-                "soil_ph": latest_test.soil_ph,
-                "nitrogen": latest_test.nitrogen,
-                "phosphorus": latest_test.phosphorus,
-                "potassium": latest_test.potassium,
-            },
-            "timestamp": latest_test.test_date.isoformat() if latest_test.test_date else None,
-        }
-    except Exception as e:
-        logger.error(f"Error fetching user-live telemetry: {e}", exc_info=True)
-        return {"has_data": False, "message": "Failed to fetch sensor data."}
+    """The caller's own farm record."""
+    farm = db.query(Farm).filter(Farm.user_id == current_user.id).first()
+    if not farm:
+        return {"has_farm": False}
+    return {
+        "has_farm": True,
+        "farm": {
+            "id": farm.id,
+            "name": farm.farm_name,
+            "farmer_name": farm.farmer_name,
+            "farmer_phone": farm.farmer_phone,
+            "farmer_email": farm.farmer_email,
+            "location": farm.location,
+            "size_acres": float(farm.size_acres) if farm.size_acres is not None else None,
+            "latitude": float(farm.latitude) if farm.latitude is not None else None,
+            "longitude": float(farm.longitude) if farm.longitude is not None else None,
+            "soil_type": farm.soil_type,
+            "crop_type": farm.crop_type,
+        },
+    }
 
 
 @router.get("/live")
-async def get_live_soil_telemetry(db: Session = Depends(get_db)):
-    """Get the latest live soil telemetry data from active FarmHardware node."""
+async def get_live_soil_telemetry(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Live soil telemetry.
+
+    Delegates to the one canonical telemetry service so this endpoint, the
+    Hardware IoT page and the Soil & Sensors page can never disagree. Kept as an
+    alias for existing callers; /api/blynk/telemetry/live is the primary route.
+    """
+    from farmxpert.services.telemetry_service import get_live_telemetry
+    from farmxpert.config.settings import settings
+
     try:
-        farm = db.query(Farm).first()
-
-        latest_sensor = None
-        if farm:
-            latest_sensor = (
-                db.query(SensorReading)
-                .filter(SensorReading.farm_id == farm.id)
-                .order_by(SensorReading.recorded_at.desc())
-                .first()
-            )
-
-        # If no sensor data, fall back to latest SoilTest
-        if not latest_sensor:
-            latest_soil_test = None
-            if farm:
-                latest_soil_test = (
-                    db.query(SoilTest)
-                    .filter(SoilTest.farm_id == farm.id)
-                    .order_by(SoilTest.test_date.desc())
-                    .first()
-                )
-            if not latest_soil_test:
-                latest_soil_test = (
-                    db.query(SoilTest)
-                    .order_by(SoilTest.test_date.desc())
-                    .first()
-                )
-            
-            if not latest_soil_test:
-                return {"has_data": False, "message": "No soil telemetry data available."}
-            
-            return {
-                "has_data": True,
-                "source": "soil_test",
-                "data": {
-                    "air_temperature": latest_soil_test.air_temperature,
-                    "air_humidity": latest_soil_test.air_humidity,
-                    "soil_moisture": latest_soil_test.soil_moisture,
-                    "soil_temperature": latest_soil_test.soil_temperature,
-                    "soil_ec": latest_soil_test.soil_ec,
-                    "soil_ph": latest_soil_test.soil_ph,
-                    "nitrogen": latest_soil_test.nitrogen,
-                    "phosphorus": latest_soil_test.phosphorus,
-                    "potassium": latest_soil_test.potassium,
-                },
-                "timestamp": latest_soil_test.test_date.isoformat() if latest_soil_test.test_date else None,
-                "notes": latest_soil_test.notes,
-            }
-
-        # Return SensorReading data (preferred - more recent)
-        return {
-            "has_data": True,
-            "source": "sensor_reading",
-            "data": {
-                "air_temperature": float(latest_sensor.air_temperature) if latest_sensor.air_temperature else None,
-                "air_humidity": float(latest_sensor.air_humidity) if latest_sensor.air_humidity else None,
-                "soil_moisture": float(latest_sensor.soil_moisture) if latest_sensor.soil_moisture else None,
-                "soil_temperature": float(latest_sensor.soil_temperature) if latest_sensor.soil_temperature else None,
-                "soil_ec": float(latest_sensor.soil_ec) if latest_sensor.soil_ec else None,
-                "soil_ph": float(latest_sensor.soil_ph) if latest_sensor.soil_ph else None,
-                "nitrogen": float(latest_sensor.nitrogen) if latest_sensor.nitrogen else None,
-                "phosphorus": float(latest_sensor.phosphorus) if latest_sensor.phosphorus else None,
-                "potassium": float(latest_sensor.potassium) if latest_sensor.potassium else None,
-            },
-            "timestamp": latest_sensor.recorded_at.isoformat() if latest_sensor.recorded_at else None,
-            "device_id": latest_sensor.device_id,
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to fetch live soil telemetry: {e}", exc_info=True)
-        return {"has_data": False, "message": "Failed to fetch live soil telemetry."}
+        return await get_live_telemetry(
+            db, current_user.id, settings.blynk_base_url or "https://blr1.blynk.cloud"
+        )
+    except Exception:
+        logger.exception("Live soil telemetry failed for user_id=%s", current_user.id)
+        raise HTTPException(status_code=503, detail="Live sensor data is temporarily unavailable.")

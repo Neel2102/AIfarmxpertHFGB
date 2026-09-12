@@ -227,16 +227,31 @@ async def ingest_sensor_data(req: SensorIngestRequest, db: Session = Depends(get
 
 @router.get("/readings")
 async def get_sensor_readings(
-    farm_id: Optional[int] = None,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Paginated sensor readings for dashboard charts."""
-    query = db.query(SensorReading)
-    if farm_id:
-        query = query.filter(SensorReading.farm_id == farm_id)
-    readings = query.order_by(SensorReading.recorded_at.desc()).limit(limit).offset(offset).all()
+    """
+    Paginated sensor readings for dashboard charts.
+
+    Scoped to the caller's own device. The farm_id query parameter was removed:
+    it let any caller read any farm's telemetry.
+    """
+    from farmxpert.services.telemetry_service import get_active_device
+
+    device = get_active_device(db, current_user.id)
+    if not device:
+        return {"readings": [], "count": 0, "offset": offset, "limit": limit}
+
+    readings = (
+        db.query(SensorReading)
+        .filter(SensorReading.device_id == device.id)
+        .order_by(SensorReading.recorded_at.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
 
     return {
         "readings": [
@@ -263,12 +278,15 @@ async def get_sensor_readings(
 
 
 @router.get("/latest")
-async def get_latest_reading(farm_id: Optional[int] = None, db: Session = Depends(get_db)):
-    """Latest single sensor reading for live dashboard."""
-    query = db.query(SensorReading)
-    if farm_id:
-        query = query.filter(SensorReading.farm_id == farm_id)
-    reading = query.order_by(SensorReading.recorded_at.desc()).first()
+async def get_latest_reading(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Latest stored reading for the caller's own device."""
+    from farmxpert.services.telemetry_service import get_active_device, latest_stored_reading
+
+    device = get_active_device(db, current_user.id)
+    reading = latest_stored_reading(db, device) if device else None
 
     if not reading:
         return {"has_data": False, "message": "Waiting for first data from device..."}
@@ -292,106 +310,69 @@ async def get_latest_reading(farm_id: Optional[int] = None, db: Session = Depend
 
 @router.get("/telemetry/live")
 async def get_live_telemetry(
-    farm_id: Optional[int] = None,
-    current_user: Optional[User] = Depends(get_current_user_optional),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
-    Get live sensor telemetry from Blynk IoT device.
-    Returns a clean state without 404:
-    - If hardware not registered: connected=False, status='not_connected', message="Your IoT device is not connected yet."
-    - If hardware registered but no data: connected=True, has_data=False, status='waiting_for_data'
-    - If live data exists: connected=True, has_data=True, status='active', data={...}
+    Canonical live telemetry for the authenticated farmer.
+
+    Both the Hardware IoT page and the Soil & Sensors page read this endpoint,
+    so they can no longer disagree. The backend polls Blynk itself using the
+    token stored at device registration; the token never reaches the browser.
+
+    Requires authentication: telemetry belongs to one farm and must not be
+    readable by anyone who knows the URL.
     """
-    user_id = current_user.id if current_user else None
-    
-    # 1. Check if device is registered for this user or farm
-    device_query = db.query(BlynkDevice).filter(BlynkDevice.is_active == True)
-    if user_id:
-        device_query = device_query.filter(BlynkDevice.farm_id == user_id)
-    elif farm_id:
-        device_query = device_query.filter(BlynkDevice.farm_id == farm_id)
-    
-    device = device_query.first()
-    if not device and not user_id and not farm_id:
-        device = db.query(BlynkDevice).filter(BlynkDevice.is_active == True).first()
+    from farmxpert.services.telemetry_service import get_live_telemetry as _live
+    from farmxpert.config.settings import settings
 
-    if not device:
-        return {
-            "connected": False,
-            "has_data": False,
-            "status": "not_connected",
-            "message": "Your IoT device is not connected yet.",
-            "data": None
-        }
+    base_url = settings.blynk_base_url or "https://blr1.blynk.cloud"
+    try:
+        return await _live(db, current_user.id, base_url)
+    except Exception:
+        logger.exception("Live telemetry failed for user_id=%s", current_user.id)
+        raise HTTPException(
+            status_code=503,
+            detail="Live sensor data is temporarily unavailable.",
+        )
 
-    # 2. Retrieve latest sensor reading
-    reading = (
-        db.query(SensorReading)
-        .filter(SensorReading.device_id == device.id)
-        .order_by(SensorReading.recorded_at.desc())
-        .first()
+
+@router.get("/telemetry/history")
+async def get_telemetry_history(
+    hours: int = Query(24, ge=1, le=720),
+    limit: int = Query(500, ge=1, le=2000),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Real stored telemetry for the authenticated farmer's device, newest first.
+
+    Returns only measurements that were actually recorded — no interpolation and
+    no synthetic back-fill, so charts always plot real timestamps.
+    """
+    from datetime import timedelta
+    from farmxpert.services.telemetry_service import (
+        get_active_device, reading_to_payload,
     )
 
-    # Fallback to latest soil test if sensor reading is empty
-    if not reading and user_id:
-        farm = db.query(Farm).filter(Farm.user_id == user_id).first()
-        if farm:
-            soil_test = (
-                db.query(SoilTest)
-                .filter(SoilTest.farm_id == farm.id)
-                .order_by(SoilTest.test_date.desc())
-                .first()
-            )
-            if soil_test:
-                return {
-                    "connected": True,
-                    "has_data": True,
-                    "status": "active",
-                    "source": "soil_test",
-                    "device": {"id": device.id, "device_name": device.device_name, "status": device.status},
-                    "data": {
-                        "air_temperature": soil_test.air_temperature,
-                        "air_humidity": soil_test.air_humidity,
-                        "soil_moisture": soil_test.soil_moisture,
-                        "soil_temperature": soil_test.soil_temperature,
-                        "soil_ec": soil_test.soil_ec,
-                        "soil_ph": soil_test.soil_ph,
-                        "nitrogen": soil_test.nitrogen,
-                        "phosphorus": soil_test.phosphorus,
-                        "potassium": soil_test.potassium,
-                        "recorded_at": soil_test.test_date.isoformat() if soil_test.test_date else None,
-                    }
-                }
+    device = get_active_device(db, current_user.id)
+    if not device:
+        return {"connected": False, "has_data": False, "readings": [], "count": 0}
 
-    if not reading:
-        return {
-            "connected": True,
-            "has_data": False,
-            "status": "waiting_for_data",
-            "message": "IoT device connected. Waiting for first telemetry reading...",
-            "device": {"id": device.id, "device_name": device.device_name, "status": device.status},
-            "data": None
-        }
-
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    rows = (
+        db.query(SensorReading)
+        .filter(SensorReading.device_id == device.id, SensorReading.recorded_at >= since)
+        .order_by(SensorReading.recorded_at.desc())
+        .limit(limit)
+        .all()
+    )
     return {
         "connected": True,
-        "has_data": True,
-        "status": "active",
-        "source": "blynk",
-        "device": {"id": device.id, "device_name": device.device_name, "status": device.status},
-        "data": {
-            "air_temperature": float(reading.air_temperature) if reading.air_temperature is not None else None,
-            "air_humidity": float(reading.air_humidity) if reading.air_humidity is not None else None,
-            "soil_moisture": float(reading.soil_moisture) if reading.soil_moisture is not None else None,
-            "soil_temperature": float(reading.soil_temperature) if reading.soil_temperature is not None else None,
-            "soil_ec": float(reading.soil_ec) if reading.soil_ec is not None else None,
-            "soil_ph": float(reading.soil_ph) if reading.soil_ph is not None else None,
-            "nitrogen": float(reading.nitrogen) if reading.nitrogen is not None else None,
-            "phosphorus": float(reading.phosphorus) if reading.phosphorus is not None else None,
-            "potassium": float(reading.potassium) if reading.potassium is not None else None,
-            "recorded_at": reading.recorded_at.isoformat() if reading.recorded_at else None,
-        }
+        "has_data": bool(rows),
+        "window_hours": hours,
+        "readings": [reading_to_payload(r) for r in rows],
+        "count": len(rows),
     }
 
 

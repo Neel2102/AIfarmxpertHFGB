@@ -110,24 +110,21 @@ async def _ensure_tables_exist():
         logger.warning(f"Could not log connection details: {e}")
         
     try:
-        # Check if we should use SSL connect args (SQLAlchemy 2.0+)
-        connect_args = {}
-        if "sslmode" in settings.database_url:
-            connect_args["sslmode"] = "require"
-            
+        # 1. Create any table that does not exist yet.
         Base.metadata.create_all(bind=engine)
+
+        # 2. Converge pre-existing tables onto the canonical model shape.
+        #    create_all() never ALTERs an existing table, so a database created
+        #    by an older migration keeps the legacy `farms` columns and breaks
+        #    every farm INSERT/SELECT with UndefinedColumn / NotNullViolation.
+        from farmxpert.services.schema_guard import reconcile_schema
+        changes = reconcile_schema(engine)
+        if changes:
+            logger.warning("Schema guard reconciled %d drift(s) on startup.", len(changes))
+
         logger.info("Database tables verified successfully.")
         _db_status = "connected"
-        
-        # Raw psycopg2 connectivity test
-        try:
-            import psycopg2
-            conn = psycopg2.connect(settings.database_url)
-            logger.info("Psycopg2: Database connected successfully")
-            conn.close()
-        except Exception as py_e:
-            logger.error(f"Psycopg2: Database connection failed: {py_e}")
-            
+
     except Exception as e:
         _startup_error = str(e)
         _db_status = "failed"
@@ -146,14 +143,14 @@ async def diagnostic():
         pref, suff = db_url.split("@", 1)
         db_url = f"{pref.split('://')[0]}://****:****@{suff}"
         
+    # Deliberately minimal: this endpoint is public, so it must not disclose
+    # the environment variable inventory, the import path or the filesystem
+    # layout of the container.
     return {
         "status": "online",
         "database_status": _db_status,
         "startup_error": _startup_error,
-        "detected_db_url": db_url,
-        "env_keys": list(os.environ.keys()),
-        "python_path": sys.path,
-        "cwd": os.getcwd()
+        "database_host": db_url.split("@")[-1].split("/")[0] if "@" in db_url else None,
     }
 
 @app.get("/")

@@ -8,7 +8,10 @@ from farmxpert.interfaces.api.schemas.farm_schemas import (
     CropCreate, CropResponse, SoilTestCreate, SoilTestResponse
 )
 
-router = APIRouter(prefix="/api/farms", tags=["farms"])
+# main.py mounts this router with prefix="/api", so the prefix here must NOT
+# repeat it — it produced /api/api/farms/... and every frontend call to
+# /api/farms/... returned 404.
+router = APIRouter(prefix="/farms", tags=["farms"])
 
 @router.get("/{farm_id}/summary")
 async def get_farm_summary(farm_id: int, db: Session = Depends(get_db)):

@@ -3,7 +3,7 @@
  * Handles all backend communication for the orchestrator components
  */
 
-const API_BASE_URL = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api';
+import { API_BASE_URL } from './apiBase';
 
 class ApiService {
     constructor() {

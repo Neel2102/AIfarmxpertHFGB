@@ -158,7 +158,9 @@ class DailyFlowService:
                         profile.primary_crops[0] if profile.primary_crops and isinstance(profile.primary_crops, list) and len(profile.primary_crops) > 0 else None
                     )
             if not crop_name:
-                crop_name = "Cotton"
+                # The farmer has not chosen a crop. Refuse rather than inventing
+                # one — a fabricated crop would produce a wrong season plan.
+                raise ValueError("No crop configured for this farm")
 
             duration = DailyFlowService.get_crop_duration(crop_name)
             # Default to 25 days into the season so active vegetative tasks exist
@@ -285,11 +287,18 @@ class DailyFlowService:
         if crop and crop.planting_date:
             return crop
 
-        # Fallback to Onboarding or Farm data
-        crop_type = farm.crop_type or "Cotton"
+        # Use the crop the farmer actually chose. The profile is the more
+        # recently edited of the two, so it wins. Never substitute a demo crop:
+        # a wrong crop would silently drive the whole season plan.
         farm_profile = db.query(FarmProfile).filter(FarmProfile.user_id == user.id).first()
+        crop_type = None
         if farm_profile and farm_profile.specific_crop:
             crop_type = farm_profile.specific_crop
+        elif farm_profile and isinstance(farm_profile.primary_crops, list) and farm_profile.primary_crops:
+            crop_type = str(farm_profile.primary_crops[0])
+        crop_type = crop_type or farm.crop_type
+        if not crop_type:
+            raise ValueError("No crop configured for this farm")
 
         duration = DailyFlowService.get_crop_duration(crop_type)
         now = datetime.utcnow()
@@ -311,7 +320,7 @@ class DailyFlowService:
             variety="Standard High-Yield",
             planting_date=planting_dt,
             expected_harvest_date=harvest_dt,
-            area_acres=farm.size_acres or 5.0,
+            area_acres=float(farm.size_acres) if farm.size_acres else 1.0,
             status="growing",
             created_at=now
         )
