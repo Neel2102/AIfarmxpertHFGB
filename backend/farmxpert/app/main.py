@@ -42,27 +42,46 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Robust Production CORS configuration
-# Explicit origins + regex allow credentials to work with all Vercel previews and production
+# ── CORS ─────────────────────────────────────────────────────────────────────
+# The browser only sends credentials cross-origin when the response echoes the
+# exact origin, so a wildcard cannot be used here. Every origin the frontend is
+# actually served from must be listed or matched by the regex below.
+#
+# The production site moved to the custom domain farmxpert.in; only *.vercel.app
+# was allowed, so every request from https://www.farmxpert.in — including
+# /api/auth/login — was blocked before it reached the application.
 allowed_origins = [
+    # Local development
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3001",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    # Production custom domain (apex and www)
+    "https://farmxpert.in",
+    "https://www.farmxpert.in",
+    # Legacy Vercel production URL
     "https://a-ifarmxpert-hfgb-git-c38026-neelsutariya21-gmailcoms-projects.vercel.app",
 ]
+
+# CORS_ORIGINS lets a deployment add origins without a code change.
 custom_origins = os.getenv("CORS_ORIGINS", "")
 if custom_origins:
     for o in custom_origins.split(","):
         if o.strip():
             allowed_origins.append(o.strip())
 
+# Any subdomain of farmxpert.in, plus Vercel preview deployments.
+ALLOWED_ORIGIN_REGEX = (
+    r"^https://([a-z0-9-]+\.)*farmxpert\.in$"      # apex + any subdomain
+    r"|^https://([a-z0-9-]+\.)*vercel\.app$"        # Vercel preview deployments
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"^https://.*\.vercel\.app$",
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
