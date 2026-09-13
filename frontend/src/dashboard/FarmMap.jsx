@@ -199,7 +199,7 @@ export default function FarmMap() {
 
     loadGoogleMaps().then(maps => {
       if (disposed || !mapRef.current) return;
-      const map = new maps.Map(mapRef.current, { center: { lat: 23.0225, lng: 72.5714 }, zoom: 13, mapTypeId: "satellite" });
+      const map = new maps.Map(mapRef.current, { center: { lat: 23.0225, lng: 72.5714 }, zoom: 13, mapTypeId: "hybrid" });
       mapInstanceRef.current = map;
       setMapReady(true);
 

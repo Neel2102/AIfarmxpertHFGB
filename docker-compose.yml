@@ -169,7 +169,7 @@ services:
       - backend
     environment:
       - DANGEROUSLY_DISABLE_HOST_CHECK=true
-      - REACT_APP_API_URL=https://therianthropic-lance-isodiametric.ngrok-free.dev
+      - REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL-}
       - REACT_APP_GOOGLE_MAPS_API_KEY=${REACT_APP_GOOGLE_MAPS_API_KEY}
     networks:
       - farmxpert-network
