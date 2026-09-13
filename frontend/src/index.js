@@ -32,8 +32,27 @@ root.render(
           toastOptions={{
             duration: 4000,
             style: {
-              background: '#363636',
-              color: '#fff',
+              background: 'var(--dash-card-bg)',
+              backdropFilter: 'var(--dash-backdrop-blur-deep)',
+              WebkitBackdropFilter: 'var(--dash-backdrop-blur-deep)',
+              border: '1px solid var(--dash-card-border)',
+              borderRadius: '18px',
+              boxShadow: 'var(--dash-card-shadow-hover)',
+              color: 'var(--dash-text-heading)',
+            },
+            success: {
+              iconTheme: {
+                primary: 'var(--dash-emerald)',
+                secondary: 'var(--dash-card-bg-elevated)',
+              },
+              style: {
+                background: 'var(--dash-card-bg)',
+                backdropFilter: 'blur(32px) saturate(220%)',
+                WebkitBackdropFilter: 'blur(32px) saturate(220%)',
+                border: '1px solid var(--dash-card-border-hover)',
+                boxShadow: 'var(--dash-card-shadow-hover), 0 0 24px var(--dash-glow-subtle)',
+                color: 'var(--dash-text-heading)',
+              },
             },
           }}
         />

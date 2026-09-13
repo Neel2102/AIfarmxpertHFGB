@@ -9,7 +9,7 @@
 #   5. React Frontend (port 3000)
 # ============================================================
 
-version: '3.8'
+# version: '3.8'
 
 networks:
   farmxpert-network:
@@ -168,7 +168,9 @@ services:
     depends_on:
       - backend
     environment:
-      - REACT_APP_API_URL=https://6c415e8983d35ff1-157-49-127-200.serveousercontent.com
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
+      - REACT_APP_API_URL=https://therianthropic-lance-isodiametric.ngrok-free.dev
+      - REACT_APP_GOOGLE_MAPS_API_KEY=${REACT_APP_GOOGLE_MAPS_API_KEY}
     networks:
       - farmxpert-network
     volumes:
