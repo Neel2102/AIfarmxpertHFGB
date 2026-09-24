@@ -1,6 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useQueryClient } from 'react-query';
-const API_BASE_URL = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api';
+import { API_BASE_URL } from '../services/apiBase';
+import {
+  SESSION_EXPIRED, clearSession, decodeJwt, refreshAccessToken,
+} from '../services/authSession';
+
+/**
+ * Fired on `window` after the farm profile is successfully saved, carrying the
+ * complete farm record returned by the backend. Any view that renders farm
+ * data should listen for this and re-read, so a save in Settings is visible in
+ * Farm Map (and vice versa) without a reload or a re-login.
+ */
+export const FARM_PROFILE_UPDATED = 'farmxpert:farm-profile-updated';
 
 const AuthContext = createContext();
 
@@ -29,26 +40,9 @@ export const AuthProvider = ({ children }) => {
         if (storedToken && storedUser) {
           const parsedUser = JSON.parse(storedUser);
           
-          // Safely decode Base64URL JWT payload
-          let payload = null;
-          try {
-            const parts = storedToken.split('.');
-            if (parts.length >= 2) {
-              let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-              while (base64.length % 4 !== 0) {
-                base64 += '=';
-              }
-              const jsonStr = decodeURIComponent(
-                atob(base64)
-                  .split('')
-                  .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-                  .join('')
-              );
-              payload = JSON.parse(jsonStr);
-            }
-          } catch {
-            payload = null;
-          }
+          // Decoded with the shared helper so the app has one definition of
+          // what a session token looks like.
+          const payload = decodeJwt(storedToken);
 
           if (!payload) {
             console.warn('Authentication token malformed. Resetting session.');
@@ -56,8 +50,20 @@ export const AuthProvider = ({ children }) => {
           }
 
           if (payload.exp && payload.exp * 1000 < Date.now()) {
-            console.info('Authentication session expired. Please log in again.');
-            throw new Error('Token expired');
+            // The access token lives 30 minutes, the refresh token 7 days.
+            // Reloading the page after half an hour used to sign the farmer
+            // out; try to renew the session before giving up on it.
+            const renewed = await refreshAccessToken();
+            if (!renewed) {
+              throw new Error('Token expired');
+            }
+            setToken(renewed);
+            setUser(parsedUser);
+            if ((parsedUser?.role || '').toLowerCase() !== 'admin'
+                && !parsedUser.onboarding_completed) {
+              setNeedsOnboarding(true);
+            }
+            return;
           }
 
           setToken(storedToken);
@@ -74,10 +80,7 @@ export const AuthProvider = ({ children }) => {
         if (error.message !== 'Token expired') {
           console.warn('Auth check notice:', error.message);
         }
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('session_token');
-        localStorage.removeItem('user');
+        clearSession();
         setToken(null);
         setUser(null);
       } finally {
@@ -94,8 +97,19 @@ export const AuthProvider = ({ children }) => {
         setToken(null);
       }
     };
+    // Any API call whose session could not be renewed raises this, so the UI
+    // drops to the sign-in state instead of leaving the farmer on a page that
+    // silently fails every request.
+    const handleSessionExpired = () => {
+      setUser(null);
+      setToken(null);
+    };
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener(SESSION_EXPIRED, handleSessionExpired);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener(SESSION_EXPIRED, handleSessionExpired);
+    };
   }, []);
 
   const login = async (username, password) => {
@@ -308,36 +322,20 @@ export const AuthProvider = ({ children }) => {
   };
 
   const refreshToken = async () => {
-    try {
-      const refreshTokenValue = localStorage.getItem('refresh_token');
-      if (!refreshTokenValue) {
-        throw new Error('No refresh token available');
+    // Delegates to the shared single-flight refresh so concurrent callers
+    // cannot each burn a refresh attempt.
+    const renewed = await refreshAccessToken();
+    if (renewed) {
+      setToken(renewed);
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        try { setUser(JSON.parse(stored)); } catch { /* keep current user */ }
       }
-
-      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          refresh_token: refreshTokenValue,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Token refresh failed');
-      }
-
-      const data = await response.json();
-      localStorage.setItem('access_token', data.access_token);
-      setToken(data.access_token);
-      
-      return { success: true, token: data.access_token };
-    } catch (error) {
-      console.error('Token refresh error:', error);
-      logout(); // Logout on refresh failure
-      return { success: false, error: error.message };
+      return { success: true, access_token: renewed };
     }
+    setToken(null);
+    setUser(null);
+    return { success: false, error: 'Session expired. Please sign in again.' };
   };
 
   const getAuthHeaders = () => {
@@ -415,11 +413,25 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to update farm profile');
+        let detail = 'We couldn\'t save your farm details. Please try again.';
+        try {
+          const error = await response.json();
+          if (error?.detail) detail = error.detail;
+        } catch {
+          /* non-JSON error body — keep the friendly message */
+        }
+        throw new Error(detail);
       }
 
-      return { success: true, data: await response.json() };
+      // The response is the complete, committed farm record. Push it out so
+      // every consumer (Settings, Farm Map, Daily Flow, weather, chat context)
+      // re-reads PostgreSQL instead of keeping a divergent local copy.
+      const data = await response.json();
+      queryClient.invalidateQueries({ queryKey: ['farmProfile'] });
+      queryClient.invalidateQueries({ queryKey: ['farm'] });
+      window.dispatchEvent(new CustomEvent(FARM_PROFILE_UPDATED, { detail: data }));
+
+      return { success: true, data };
     } catch (error) {
       console.error('Update farm profile error:', error);
       return { success: false, error: error.message };

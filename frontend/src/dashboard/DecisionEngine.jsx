@@ -7,7 +7,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import '../styles/Dashboard/TodayDashboard.css'; // Reusing styles for consistency
 
-const API_BASE_URL = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api';
+import { API_BASE_URL } from '../services/apiBase';
 
 const DecisionEngine = () => {
   const navigate = useNavigate();

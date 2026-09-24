@@ -185,14 +185,12 @@ class FarmContextResolver:
             except Exception:
                 pass
 
-        if not user_farms:
-            # Fallback for single-farm local databases where user_id was not populated
-            try:
-                all_f = db.query(Farm).all()
-                if len(all_f) == 1:
-                    user_farms = all_f
-            except Exception:
-                pass
+        # NOTE: there used to be a fallback here that adopted the only farm in
+        # the table when the user had none of their own. It existed because farm
+        # creation was broken, so users routinely had no farm. With farms.user_id
+        # now populated correctly that fallback only served another farmer's
+        # data — including their coordinates and soil readings — into this
+        # user's chat context, so it has been removed.
 
         # Also check FarmProfile (from onboarding)
         farm_profile: Optional[FarmProfile] = None

@@ -4,6 +4,7 @@ Handles user authentication, session management, and JWT tokens
 """
 
 import jwt
+import logging
 import secrets
 import hashlib
 from datetime import datetime, timedelta, timezone
@@ -18,6 +19,7 @@ from farmxpert.config.settings import get_settings
 from farmxpert.services.email_service import email_service
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 class AuthService:
     """Service for handling authentication operations"""
@@ -439,46 +441,119 @@ class AuthService:
         """Get farm profile by user ID"""
         return self.db.query(FarmProfile).filter(FarmProfile.user_id == user_id).first()
 
-    def update_farm_profile(self, user_id: int, profile_data: dict) -> Optional[FarmProfile]:
-        """Update farm profile data and synchronize with canonical Farm database record."""
-        try:
-            from farmxpert.models.farm_models import Farm, Crop
-            from farmxpert.models.user_models import AuthUser
+    # ── Farm profile canonical contract ──────────────────────────────────────
+    #
+    # The Settings UI, the onboarding wizard and the Farm Map each used to send
+    # slightly different key spellings for the same value. Everything is mapped
+    # onto the snake_case column names below before it reaches the database, so
+    # there is exactly one contract. Unknown keys are reported, never silently
+    # dropped.
+    FARM_FIELD_ALIASES = {
+        "farmName": "farm_name",
+        "name": "farm_name",
+        "farmSize": "farm_size",
+        "size": "farm_size",
+        "size_acres": "farm_size",
+        "sizeAcres": "farm_size",
+        "farmSizeUnit": "farm_size_unit",
+        "soilType": "soil_type",
+        "cropType": "specific_crop",
+        "crop_type": "specific_crop",
+        "specificCrop": "specific_crop",
+        "primaryCrops": "primary_crops",
+        "irrigationMethod": "irrigation_method",
+        "irrigation_type": "irrigation_method",
+        "waterSource": "water_source",
+        "lat": "latitude",
+        "lng": "longitude",
+        "lon": "longitude",
+        "farm_location": "location",
+        "laborSetup": "labor_setup",
+        "techComfort": "tech_comfort",
+        "farmGoals": "farm_goals",
+        "farmerName": "farmer_name",
+        "farmerPhone": "farmer_phone",
+        "farmerEmail": "farmer_email",
+    }
 
+    # Accepted by the API and forwarded to the canonical Farm record, but not
+    # columns on FarmProfile.
+    FARM_ONLY_FIELDS = {"farmer_name", "farmer_phone", "farmer_email"}
+
+    @classmethod
+    def normalize_farm_payload(cls, profile_data: dict):
+        """
+        Map any accepted key spelling onto the canonical snake_case field name.
+        Returns (canonical_payload, unknown_keys).
+        """
+        canonical = {}
+        unknown = []
+        known = set(FarmProfile.__table__.columns.keys()) | cls.FARM_ONLY_FIELDS
+        for key, value in (profile_data or {}).items():
+            field = cls.FARM_FIELD_ALIASES.get(key, key)
+            if field in known:
+                canonical[field] = value
+            else:
+                unknown.append(key)
+        return canonical, unknown
+
+    def _ensure_auth_user(self, user_id: int) -> None:
+        """
+        farms.user_id references auth_users(id), so the link row must exist
+        before a farm can be written. See farmxpert.services.auth_user_link for
+        why this cannot be a naive insert.
+        """
+        from farmxpert.services.auth_user_link import ensure_auth_user
+
+        user = self.db.query(User).filter(User.id == user_id).first()
+        ensure_auth_user(self.db, user)
+
+    def update_farm_profile(self, user_id: int, profile_data: dict) -> FarmProfile:
+        """
+        Update the farm profile and synchronise the canonical `farms` record.
+
+        PostgreSQL is the single source of truth: FarmProfile holds the
+        onboarding questionnaire, `farms` holds the operational record that the
+        dashboard, Daily Flow, Farm Map, weather and chat context all read.
+        Both are written in one transaction.
+
+        Raises on failure — the caller must not report success for a write that
+        did not commit.
+        """
+        from farmxpert.models.farm_models import Farm, Crop
+
+        canonical, unknown = self.normalize_farm_payload(profile_data)
+        if unknown:
+            logger.warning(
+                "update_farm_profile(user=%s): ignoring unrecognised field(s) %s",
+                user_id, ", ".join(sorted(unknown)),
+            )
+
+        try:
             profile = self.get_farm_profile(user_id)
             if not profile:
                 profile = FarmProfile(user_id=user_id, created_at=datetime.utcnow())
                 self.db.add(profile)
-            
-            # Update fields on profile
-            for field, value in profile_data.items():
-                if hasattr(profile, field):
-                    setattr(profile, field, value)
-            
+
+            profile_columns = FarmProfile.__table__.columns
+            for field, value in canonical.items():
+                if field not in profile_columns:
+                    continue
+                # farm_size is a VARCHAR ("5", "5 acres"). Writing a float into
+                # it makes PostgreSQL reject the whole statement.
+                if value is not None and not isinstance(value, str):
+                    try:
+                        if profile_columns[field].type.python_type is str:
+                            value = str(value)
+                    except NotImplementedError:
+                        pass
+                setattr(profile, field, value)
+
             profile.updated_at = datetime.utcnow()
 
-            # Ensure AuthUser exists if database foreign key constraint references auth_users(id)
-            try:
-                u = self.db.query(User).filter(User.id == user_id).first()
-                if u:
-                    au = self.db.query(AuthUser).filter(AuthUser.id == user_id).first()
-                    if not au:
-                        au = AuthUser(
-                            id=user_id,
-                            farmer_id=f"FRM{user_id:04d}",
-                            email=u.email,
-                            username=u.username,
-                            name=u.full_name or u.username,
-                            phone=u.phone,
-                            password_hash=u.hashed_password,
-                            role=getattr(u, "role", "farmer"),
-                        )
-                        self.db.add(au)
-                        self.db.flush()
-            except Exception as au_err:
-                print(f"AuthUser sync note: {au_err}")
+            self._ensure_auth_user(user_id)
 
-            # Synchronize canonical Farm record
+            # ── Canonical Farm record ────────────────────────────────────────
             farm = self.db.query(Farm).filter(Farm.user_id == user_id).first()
             if not farm:
                 farm = Farm(user_id=user_id)
@@ -486,8 +561,6 @@ class AuthService:
 
             if profile.farm_name:
                 farm.farm_name = profile.farm_name
-            if profile.location:
-                farm.location = profile.location
             if profile.state:
                 farm.state = profile.state
             if profile.district:
@@ -497,71 +570,77 @@ class AuthService:
             if profile.soil_type:
                 farm.soil_type = profile.soil_type
 
-            # Check latitude/longitude from profile or incoming data
-            if profile_data.get("latitude") is not None:
-                try:
-                    lat_val = float(profile_data["latitude"])
-                    profile.latitude = lat_val
-                    farm.latitude = lat_val
-                except (ValueError, TypeError):
-                    pass
-            elif profile.latitude is not None:
-                farm.latitude = profile.latitude
+            # Location: prefer an explicit value, otherwise compose it from the
+            # administrative fields so Farm Map and weather always have one.
+            if profile.location:
+                farm.location = profile.location
+            else:
+                parts = [p for p in (profile.village, profile.district, profile.state) if p]
+                if parts:
+                    farm.location = ", ".join(parts)
+                    profile.location = farm.location
 
-            if profile_data.get("longitude") is not None:
-                try:
-                    lon_val = float(profile_data["longitude"])
-                    profile.longitude = lon_val
-                    farm.longitude = lon_val
-                except (ValueError, TypeError):
-                    pass
-            elif profile.longitude is not None:
-                farm.longitude = profile.longitude
+            for attr in ("latitude", "longitude"):
+                if canonical.get(attr) is not None:
+                    try:
+                        value = float(canonical[attr])
+                    except (TypeError, ValueError):
+                        raise ValueError("%s must be a number" % attr)
+                    setattr(profile, attr, value)
+                    setattr(farm, attr, value)
+                elif getattr(profile, attr) is not None:
+                    setattr(farm, attr, getattr(profile, attr))
 
-            # Crop sync
-            if profile_data.get("crop_type"):
-                farm.crop_type = str(profile_data["crop_type"])
-                profile.specific_crop = str(profile_data["crop_type"])
-            elif profile.specific_crop:
-                farm.crop_type = profile.specific_crop
-            elif profile.primary_crops and isinstance(profile.primary_crops, list) and len(profile.primary_crops) > 0:
-                farm.crop_type = str(profile.primary_crops[0])
+            for attr in ("farmer_name", "farmer_phone", "farmer_email"):
+                if canonical.get(attr) is not None:
+                    setattr(farm, attr, canonical[attr])
 
-            if profile_data.get("size_acres") is not None:
-                try:
-                    farm.size_acres = float(profile_data["size_acres"])
-                except Exception:
-                    pass
-            elif profile.farm_size:
+            # Crop
+            chosen_crop = profile.specific_crop
+            if not chosen_crop and isinstance(profile.primary_crops, list) and profile.primary_crops:
+                chosen_crop = str(profile.primary_crops[0])
+            if chosen_crop:
+                farm.crop_type = chosen_crop
+
+            # Size: FarmProfile.farm_size is free text, farms.size_acres numeric.
+            if profile.farm_size:
                 try:
                     farm.size_acres = float(str(profile.farm_size).split()[0])
-                except Exception:
-                    pass
+                except (ValueError, IndexError):
+                    logger.info(
+                        "update_farm_profile(user=%s): farm_size %r is not numeric; "
+                        "leaving farms.size_acres unchanged", user_id, profile.farm_size,
+                    )
 
             self.db.flush()
 
-            # Synchronize active Crop record for this farm
+            # Keep exactly one active crop row in step with the farm's crop.
             if farm.crop_type:
-                try:
-                    crop = self.db.query(Crop).filter(Crop.farm_id == farm.id).first()
-                    if not crop:
-                        crop = Crop(
-                            farm_id=farm.id,
-                            crop_type=farm.crop_type,
-                            variety="Standard",
-                            area_acres=float(farm.size_acres or 5.0),
-                            status="growing"
-                        )
-                        self.db.add(crop)
-                    else:
-                        crop.crop_type = farm.crop_type
-                except Exception as crop_err:
-                    print(f"Crop sync note: {crop_err}")
+                crop = self.db.query(Crop).filter(Crop.farm_id == farm.id).first()
+                if not crop:
+                    crop = Crop(
+                        farm_id=farm.id,
+                        crop_type=farm.crop_type,
+                        variety="Standard",
+                        area_acres=float(farm.size_acres or 0) or 1.0,
+                        status="growing",
+                    )
+                    self.db.add(crop)
+                else:
+                    crop.crop_type = farm.crop_type
 
             self.db.commit()
             self.db.refresh(profile)
             return profile
-        except Exception as e:
-            print(f"Error updating farm profile: {e}")
+        except Exception:
             self.db.rollback()
-            return None
+            # Log the real exception with its traceback so the root cause is
+            # visible in the server logs instead of being replaced by a generic
+            # "Failed to update farm profile".
+            logger.exception("update_farm_profile failed for user_id=%s", user_id)
+            raise
+
+    def get_canonical_farm(self, user_id: int):
+        """Return the user's canonical `farms` row, or None."""
+        from farmxpert.models.farm_models import Farm
+        return self.db.query(Farm).filter(Farm.user_id == user_id).first()

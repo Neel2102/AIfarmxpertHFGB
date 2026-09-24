@@ -68,8 +68,27 @@ class Settings(BaseSettings):
     
     # API Settings
     api_v1_prefix: str = Field(default="/api/v1", env="API_V1_PREFIX")
-    cors_origins: List[str] = Field(default=["http://localhost:3000", "http://localhost:8080"], env="CORS_ORIGINS")
-    
+    # Raw CORS_ORIGINS value. Typed as a plain string because
+    # pydantic-settings JSON-decodes complex types straight from the .env file,
+    # before any validator runs — so a CSV value (which app/main.py has always
+    # used) or an empty value made the whole settings class fail to import.
+    # Use `cors_origins_list` to read it.
+    cors_origins: Optional[str] = Field(default=None, env="CORS_ORIGINS")
+
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """CORS_ORIGINS as a list, accepting CSV or a JSON array."""
+        raw = (self.cors_origins or "").strip()
+        if not raw:
+            return ["http://localhost:3000", "http://localhost:8080"]
+        if raw.startswith("["):
+            import json
+            try:
+                return [str(o) for o in json.loads(raw)]
+            except json.JSONDecodeError:
+                return []
+        return [part.strip() for part in raw.split(",") if part.strip()]
+
     # Rate Limiting
     rate_limit_requests: int = Field(default=100, env="RATE_LIMIT_REQUESTS")
     rate_limit_window: int = Field(default=60, env="RATE_LIMIT_WINDOW")

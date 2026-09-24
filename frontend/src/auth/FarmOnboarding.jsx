@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import styles from './FarmOnboarding.module.css';
 
-const API_BASE_URL = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api';
+import { API_BASE_URL } from '../services/apiBase';
 
 const FarmOnboarding = () => {
   const [currentStep, setCurrentStep] = useState(0);

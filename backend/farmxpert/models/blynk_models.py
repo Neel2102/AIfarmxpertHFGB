@@ -4,7 +4,7 @@ Blynk Device and Sensor Reading Models
 
 from sqlalchemy import (
     Column, BigInteger, Integer, String, Text, Boolean, Numeric,
-    DateTime, ForeignKey, UniqueConstraint
+    DateTime, ForeignKey, Sequence, UniqueConstraint
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -40,7 +40,17 @@ class SensorReading(Base):
         {"implicit_returning": False},  # Required for partitioned tables
     )
 
-    id = Column(BigInteger, primary_key=True)
+    # (id, recorded_at) is a composite primary key because the table is meant to
+    # be partitioned by time. SQLAlchemy does not auto-increment a column in a
+    # composite key unless it is told to, so without this explicit sequence every
+    # INSERT sent id=NULL and failed the NOT NULL check — which is why no
+    # telemetry was ever persisted.
+    id = Column(
+        BigInteger,
+        Sequence("sensor_readings_id_seq"),
+        primary_key=True,
+        autoincrement=True,
+    )
     device_id = Column(BigInteger, nullable=False, index=True)
     farm_id = Column(BigInteger, nullable=False, index=True)
 

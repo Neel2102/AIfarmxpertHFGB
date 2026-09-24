@@ -22,10 +22,10 @@ import {
   Activity
 } from "lucide-react";
 import "../styles/Dashboard/FarmMap.css";
+import { API_BASE_URL } from '../services/apiBase';
 
 // Leaflet is loaded from CDN in index.html
 const L = window.L;
-const API_BASE_URL = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api';
 
 export default function FarmMap() {
   const mapRef = useRef(null);
@@ -153,7 +153,22 @@ export default function FarmMap() {
       })
         .then(r => r.ok ? r.json() : null)
         .then(data => {
-          if (data && data.has_layout && data.polygon) {
+          if (!data) return;
+
+          // Farm details saved in Settings must show here even when the farmer
+          // has never drawn a boundary — previously the whole block was gated
+          // on a polygon existing, so Settings and Farm Map disagreed.
+          const savedFormData = data.form_data || {};
+          if (Object.keys(savedFormData).length > 0) {
+            setFormData(prev => ({ ...prev, ...savedFormData }));
+          }
+
+          // Centre the map on the farm's stored coordinates.
+          if (data.latitude != null && data.longitude != null && mapInstanceRef.current) {
+            mapInstanceRef.current.setView([data.latitude, data.longitude], 15);
+          }
+
+          if (data.has_layout && data.polygon) {
             const restoredPolygon = data.polygon.type === 'Feature'
               ? data.polygon
               : { type: 'Feature', geometry: data.polygon };
@@ -162,16 +177,14 @@ export default function FarmMap() {
             const layer = L.geoJSON(restoredPolygon);
             drawnItems.addLayer(layer);
 
-            const savedFormData = data.form_data || {};
-            if (Object.keys(savedFormData).length > 0) {
-              setFormData(prev => ({ ...prev, ...savedFormData }));
-            }
             const area = savedFormData.land_area || calculateArea(
               restoredPolygon.geometry || restoredPolygon
             );
             setStatus({ text: 'Loaded saved farm layout from cloud', area: `${area} acres`, isSuccess: true });
             setActiveStep(3);
             setButtonsEnabled(true);
+          } else if (Object.keys(savedFormData).length > 0) {
+            setStatus({ text: 'Loaded your saved farm details. Draw a boundary to map it.', isSuccess: true });
           }
         })
         .catch(err => console.warn('Could not load saved farm layout:', err));

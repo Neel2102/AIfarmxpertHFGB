@@ -42,3 +42,8 @@ out
 
 # Office temporary files
 ~$*
+
+# Build output. Vercel builds from source; a committed bundle has whatever
+# REACT_APP_BACKEND_URL the machine that built it had baked in, which is a
+# deploy landmine (a locally built bundle points every API call at localhost).
+frontend/build/

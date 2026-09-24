@@ -3,9 +3,12 @@ import { Cpu, Wifi, AlertCircle, Loader2, Trash2, ThermometerSun, Droplets, Flas
 import "../styles/Dashboard/HardwareIoT.css";
 import { useAuth } from "../contexts/AuthContext";
 
-const BLYNK_CLOUD_URL = "https://blr1.blynk.cloud/external/api/get";
-const RAW_BACKEND = process.env.REACT_APP_BACKEND_URL || '';
-const API_BASE_URL = RAW_BACKEND.endsWith('/api') ? RAW_BACKEND : (RAW_BACKEND ? `${RAW_BACKEND}/api` : '/api');
+// The browser no longer calls the Blynk cloud directly. It used to fetch nine
+// virtual pins with the farmer's auth token exposed in the page, which meant
+// readings only existed while this tab was open — which is exactly why the
+// Soil & Sensors page showed "--" while this page showed live values.
+// Both pages now read the same backend telemetry endpoint.
+import { API_BASE_URL } from '../services/apiBase';
 
 const SENSORS = [
   { label: "Air Temperature", pin: "V0", unit: "°C", color: "#FF6B6B" },
@@ -18,6 +21,20 @@ const SENSORS = [
   { label: "Phosphorus (P)", pin: "V7", unit: "mg/kg", color: "#FFFFD2" },
   { label: "Potassium (K)", pin: "V8", unit: "mg/kg", color: "#837E7C" },
 ];
+
+// Canonical telemetry field for each virtual pin. Must match
+// farmxpert/services/telemetry_service.py PIN_MAP.
+const FIELD_BY_PIN = {
+  V0: "air_temperature",
+  V1: "air_humidity",
+  V2: "soil_moisture",
+  V3: "soil_temperature",
+  V4: "soil_ec",
+  V5: "soil_ph",
+  V6: "nitrogen",
+  V7: "phosphorus",
+  V8: "potassium",
+};
 
 const SENSOR_RANGES = {
   V0: { min: 0, max: 50 },
@@ -60,10 +77,8 @@ const toPercent = (pin, n) => {
 
 export default function HardwareIoT() {
   const { user } = useAuth();
-  const blynkTokenStorageKey = user?.id ? `blynk_token_${user.id}` : null;
-
-  // Token state — scoped per-user (prevents token leaking across logins)
-  const [blynkToken, setBlynkToken] = useState("");
+  // The Blynk auth token is no longer kept in the browser at all. It is stored
+  // server-side at registration and only the backend ever sends it to Blynk.
   const [hasDevice, setHasDevice] = useState(false);
   const [checkingDevice, setCheckingDevice] = useState(true);
 
@@ -75,6 +90,7 @@ export default function HardwareIoT() {
 
   // Sensor dashboard state
   const [sensorData, setSensorData] = useState({});
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -96,8 +112,6 @@ export default function HardwareIoT() {
     }
 
     // Reset all frontend state
-    if (blynkTokenStorageKey) localStorage.removeItem(blynkTokenStorageKey);
-    setBlynkToken("");
     setHasDevice(false);
     setCheckingDevice(false);
     setSensorData({});
@@ -107,24 +121,21 @@ export default function HardwareIoT() {
     setDeviceNameInput("");
   };
 
-  // Sync token when user changes
+  // Reset device state when the signed-in user changes.
   useEffect(() => {
     if (!user) {
-      setBlynkToken("");
       setHasDevice(false);
       setCheckingDevice(false);
       return;
     }
-
-    const stored = blynkTokenStorageKey ? localStorage.getItem(blynkTokenStorageKey) : "";
-    setBlynkToken(stored || "");
     setSensorData({});
+    setLastUpdated(null);
     setLoading(true);
     setError(null);
     setTokenInput("");
     setDeviceNameInput("");
     setCheckingDevice(true);
-  }, [user, blynkTokenStorageKey]);
+  }, [user]);
 
   // Check if farmer already has a Blynk device registered
   useEffect(() => {
@@ -155,75 +166,71 @@ export default function HardwareIoT() {
     checkDevice();
   }, [user]);
 
-  // Fetch sensor data when we have a token
+  // Read the canonical telemetry endpoint. The backend polls Blynk with the
+  // token stored at device registration, normalises the nine parameters and
+  // persists them, so this page and Soil & Sensors always agree.
   const fetchData = useCallback(async () => {
-    if (!blynkToken) return;
     try {
-      const baseUrl = `${BLYNK_CLOUD_URL}?token=${blynkToken}`;
-      const promises = SENSORS.map(async (sensor) => {
-        const response = await fetch(`${baseUrl}&${sensor.pin}`);
-        if (!response.ok) throw new Error(`Failed to fetch ${sensor.label}`);
-        const value = await response.text();
-        return { [sensor.pin]: value };
+      const token = localStorage.getItem('access_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      const response = await fetch(`${API_BASE_URL}/blynk/telemetry/live`, { headers });
+      if (!response.ok) {
+        throw new Error(`Telemetry request failed with status ${response.status}`);
+      }
+      const json = await response.json();
+
+      if (!json.connected) {
+        setHasDevice(false);
+        setSensorData({});
+        setError(null);
+        return;
+      }
+
+      if (!json.has_data || !json.data) {
+        setSensorData({});
+        setError(json.message || "Device connected. Waiting for the first sensor reading.");
+        return;
+      }
+
+      // Map the canonical field names back onto the virtual pins this page
+      // renders. A missing value stays undefined so it renders as "--" rather
+      // than a misleading 0.
+      const d = json.data;
+      const byPin = {};
+      Object.entries(FIELD_BY_PIN).forEach(([pin, field]) => {
+        if (d[field] !== null && d[field] !== undefined) byPin[pin] = d[field];
       });
 
-      const results = await Promise.all(promises);
-      const newData = results.reduce((acc, curr) => ({ ...acc, ...curr }), {});
-      setSensorData(newData);
-      setLoading(false);
-      setError(null);
-
-      // Auto-save to soil_tests table (every fetch cycle)
-      try {
-        const token = localStorage.getItem('access_token');
-        const headers = {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        };
-
-        await fetch(`${API_BASE_URL}/soil-tests/save`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            air_temperature: parseNumeric(newData.V0),
-            air_humidity: parseNumeric(newData.V1),
-            soil_moisture: parseNumeric(newData.V2),
-            soil_temperature: parseNumeric(newData.V3),
-            soil_ec: parseNumeric(newData.V4),
-            soil_ph: parseNumeric(newData.V5),
-            nitrogen: parseNumeric(newData.V6),
-            phosphorus: parseNumeric(newData.V7),
-            potassium: parseNumeric(newData.V8),
-            source: "blynk",
-          }),
-        });
-      } catch (saveErr) {
-        console.warn("Auto-save to soil_tests skipped:", saveErr);
-      }
+      setSensorData(byPin);
+      setLastUpdated(d.recorded_at || null);
+      setError(
+        json.status === "stale"
+          ? "Showing the most recent stored reading; the device is not responding right now."
+          : null
+      );
     } catch (err) {
       console.error("Error fetching sensor data:", err);
-      setError("Failed to fetch sensor data. Please check connection.");
+      setError("Live sensor data is temporarily unavailable.");
+    } finally {
       setLoading(false);
     }
-  }, [blynkToken]);
+  }, []);
 
   useEffect(() => {
-    if (!hasDevice || !blynkToken) return;
+    if (!hasDevice) return;
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+    // The backend caches a Blynk poll for ~15s, so a 10s cadence here stays
+    // live without hammering either the backend or the Blynk API.
+    const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
-  }, [fetchData, hasDevice, blynkToken]);
+  }, [fetchData, hasDevice]);
 
   // Handle token registration
   const handleRegisterDevice = async (e) => {
     e.preventDefault();
     if (!tokenInput.trim()) {
       setRegisterError("Please enter your Blynk Auth Token");
-      return;
-    }
-
-    if (!blynkTokenStorageKey) {
-      setRegisterError("Please log in again and try.");
       return;
     }
 
@@ -255,9 +262,9 @@ export default function HardwareIoT() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Registration failed");
 
-      // Save token locally and activate dashboard
-      localStorage.setItem(blynkTokenStorageKey, tokenInput.trim());
-      setBlynkToken(tokenInput.trim());
+      // The token now lives only in the backend. Activate the dashboard and
+      // let the next poll pull readings through the canonical endpoint.
+      setTokenInput("");
       setHasDevice(true);
     } catch (err) {
       setRegisterError(err.message || "Failed to register device.");
@@ -365,7 +372,11 @@ export default function HardwareIoT() {
       <div className="hardware-iot-header">
         <div className="hardware-iot-header-left">
           <div className="hardware-iot-title">Live Farm Sensors</div>
-          <div className="hardware-iot-subtitle">Real-time environmental and soil monitoring.</div>
+          <div className="hardware-iot-subtitle">
+            {lastUpdated
+              ? `Last reading ${new Date(lastUpdated).toLocaleString()}`
+              : "Real-time environmental and soil monitoring."}
+          </div>
         </div>
         <div className="hardware-iot-header-right">
           <div className="hardware-iot-status">

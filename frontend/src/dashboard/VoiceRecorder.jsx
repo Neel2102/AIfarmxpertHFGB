@@ -2,7 +2,9 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Mic, Square, Loader, Volume2, AlertCircle, Check, User, Bot } from 'lucide-react';
 import '../styles/Dashboard/VoiceRecorder.css';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+import { BACKEND_ORIGIN } from '../services/apiBase';
+
+const API_URL = BACKEND_ORIGIN || 'http://localhost:8000';
 
 export default function VoiceRecorder() {
   const [status, setStatus] = useState('idle');

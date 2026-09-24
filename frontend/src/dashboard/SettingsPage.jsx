@@ -6,7 +6,7 @@ import {
   Sprout, Droplets, Truck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, FARM_PROFILE_UPDATED } from '../contexts/AuthContext';
 import '../styles/Dashboard/SettingsPage.css';
 
 const safeString = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
@@ -39,11 +39,22 @@ const SettingsPage = () => {
   useEffect(() => {
     const loadFarm = async () => {
       setLoadingFarm(true);
-      const data = await fetchFarmProfile();
-      if (data) setFarmData(data);
-      setLoadingFarm(false);
+      try {
+        const data = await fetchFarmProfile();
+        // Fall back to an empty object so a farmer who has never saved a farm
+        // can still fill the form in — previously farmData stayed null and the
+        // save silently skipped the farm entirely.
+        setFarmData(data || {});
+      } finally {
+        setLoadingFarm(false);
+      }
     };
     loadFarm();
+
+    // Pick up a farm saved elsewhere (e.g. from the Farm Map).
+    const onFarmUpdated = (e) => { if (e.detail) setFarmData(e.detail); };
+    window.addEventListener(FARM_PROFILE_UPDATED, onFarmUpdated);
+    return () => window.removeEventListener(FARM_PROFILE_UPDATED, onFarmUpdated);
   }, [fetchFarmProfile]);
 
   const handleChange = (key) => (e) => {
@@ -51,7 +62,13 @@ const SettingsPage = () => {
   };
 
   const handleFarmChange = (key) => (e) => {
-    setFarmData(p => ({ ...p, [key]: e.target.value }));
+    const raw = e.target.value;
+    // latitude/longitude are numeric columns — send a number, or null when the
+    // field is cleared, rather than an empty string.
+    const value = (key === 'latitude' || key === 'longitude')
+      ? (raw === '' ? null : Number(raw))
+      : raw;
+    setFarmData(p => ({ ...(p || {}), [key]: value }));
   };
 
   const handleSave = async () => {
@@ -71,6 +88,9 @@ const SettingsPage = () => {
       if (farmData) {
         const farmRes = await updateFarmProfile(farmData);
         if (!farmRes?.success) throw new Error(farmRes?.error || 'Failed to update farm profile');
+        // Replace the form with what the database actually stored, so the UI
+        // can never show a value the backend rejected or normalised.
+        if (farmRes.data) setFarmData(farmRes.data);
       }
 
       toast.success('Settings updated successfully!');
@@ -198,13 +218,62 @@ const SettingsPage = () => {
                       <div className="input-group">
                         <label>Soil Type</label>
                         <select value={farmData?.soil_type || ''} onChange={handleFarmChange('soil_type')}>
+                          <option value="">Select soil type</option>
                           <option value="Loamy">Loamy</option>
                           <option value="Silty">Silty</option>
                           <option value="Clay">Clay</option>
                           <option value="Sandy">Sandy</option>
+                          <option value="Black Soil">Black Soil</option>
+                          <option value="Red Soil">Red Soil</option>
+                          <option value="Alluvial">Alluvial</option>
                         </select>
                       </div>
                     </div>
+                    {/* Crop and location were missing from this form even though
+                        the dashboard tells the farmer to set them here, and the
+                        season planner, Farm Map and weather all depend on them. */}
+                    <div className="input-group">
+                      <label>Current Crop</label>
+                      <input
+                        value={farmData?.crop_type || farmData?.specific_crop || ''}
+                        onChange={handleFarmChange('crop_type')}
+                        placeholder="e.g. Wheat, Cotton, Rice"
+                      />
+                    </div>
+                    <div className="input-group">
+                      <label>Farm Location</label>
+                      <input
+                        value={farmData?.location || ''}
+                        onChange={handleFarmChange('location')}
+                        placeholder="Village, District, State"
+                      />
+                    </div>
+                    <div className="input-row">
+                      <div className="input-group">
+                        <label>Latitude</label>
+                        <input
+                          value={farmData?.latitude ?? ''}
+                          onChange={handleFarmChange('latitude')}
+                          type="number"
+                          step="any"
+                          placeholder="22.3039"
+                        />
+                      </div>
+                      <div className="input-group">
+                        <label>Longitude</label>
+                        <input
+                          value={farmData?.longitude ?? ''}
+                          onChange={handleFarmChange('longitude')}
+                          type="number"
+                          step="any"
+                          placeholder="70.8022"
+                        />
+                      </div>
+                    </div>
+                    <p className="input-hint" style={{ fontSize: '0.78rem', opacity: 0.7, marginTop: '4px' }}>
+                      Coordinates are used for weather and field alerts. You can also set them
+                      by drawing your boundary on the Farm Map.
+                    </p>
                   </div>
 
                   <div className="form-card">

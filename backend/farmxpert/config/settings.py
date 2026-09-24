@@ -55,6 +55,10 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("REDIS_URL", "redis_url")
     )
+    # This default exists only so local development works out of the box. It is
+    # published in the repository, so anyone could mint a valid token with it —
+    # see the DEFAULT_DEV_SECRET check below, which refuses to start a
+    # non-development deployment that is still using it.
     secret_key: str = Field(
         default="farmxpert-super-secret-jwt-key-2026",
         validation_alias=AliasChoices("SECRET_KEY", "JWT_SECRET_KEY", "JWT_SECRET", "secret_key")
@@ -111,3 +115,30 @@ def get_settings() -> Settings:
     """Get the settings instance"""
     return settings
 
+
+DEFAULT_DEV_SECRET = "farmxpert-super-secret-jwt-key-2026"
+
+
+def verify_production_secret(settings_obj) -> None:
+    """
+    Refuse to run a non-development deployment on the published default secret.
+
+    Tokens are signed with this key. If it is left at the repository default in
+    production, anyone who has read the source can forge a session for any
+    farmer. Failing loudly at startup is far safer than serving forgeable
+    sessions, and it is also why auth appeared to "work" while being unsafe.
+    """
+    import os
+
+    env = (settings_obj.app_env or "").strip().lower()
+    # A hosted deployment is treated as production even when APP_ENV was never
+    # set, otherwise the check silently does nothing exactly where it matters.
+    on_hosting = any(os.getenv(k) for k in ("RENDER", "RENDER_SERVICE_ID", "DYNO", "KUBERNETES_SERVICE_HOST"))
+    if not on_hosting and env in ("development", "dev", "local", "test", "testing"):
+        return
+    if settings_obj.secret_key == DEFAULT_DEV_SECRET:
+        raise RuntimeError(
+            "SECRET_KEY is still the built-in development default while APP_ENV=%s. "
+            "Set SECRET_KEY to a long random value in the deployment environment "
+            "before starting the server." % settings_obj.app_env
+        )
