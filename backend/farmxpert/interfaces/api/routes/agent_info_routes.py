@@ -98,20 +98,34 @@ async def search_agents(q: str = Query(..., description="Search query")):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
-@router.get("/{agent_name}")
-async def get_agent_details(agent_name: str):
-    """Get detailed information about a specific agent"""
+# NOTE: /status/active MUST be registered before /{agent_name} wildcard route
+# otherwise FastAPI matches "status" as an agent_name path parameter
+@router.get("/status/active")
+async def get_active_agents():
+    """Get list of currently active agents (for UI display)"""
     try:
-        agent_info = agent_config_service.get_agent_display_info(agent_name)
+        # This would integrate with the actual agent registry
+        # For now, return all configured agents
+        agents = agent_config_service.get_all_agents()
+        active_agents = []
         
-        if not agent_info:
-            raise HTTPException(status_code=404, detail="Agent not found")
+        for agent_key, agent_config in agents.items():
+            active_agents.append({
+                "key": agent_key,
+                "indian_name": agent_config.get("indian_name", agent_key),
+                "full_name": agent_config.get("full_name", agent_key),
+                "role": agent_config.get("role", "Agent"),
+                "avatar": agent_config.get("avatar", "AI"),
+                "status": "active",  # This would be dynamic in a real implementation
+                "last_activity": "2025-01-01T00:00:00Z"  # This would be dynamic
+            })
         
-        return agent_info
-    except HTTPException:
-        raise
+        return {
+            "active_agents": active_agents,
+            "total_active": len(active_agents)
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get agent details: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get active agents: {str(e)}")
 
 @router.get("/indian-name/{indian_name}")
 async def get_agent_by_indian_name(indian_name: str):
@@ -143,29 +157,17 @@ async def get_agent_expertise(agent_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get agent expertise: {str(e)}")
 
-@router.get("/status/active")
-async def get_active_agents():
-    """Get list of currently active agents (for UI display)"""
+@router.get("/{agent_name}")
+async def get_agent_details(agent_name: str):
+    """Get detailed information about a specific agent"""
     try:
-        # This would integrate with the actual agent registry
-        # For now, return all configured agents
-        agents = agent_config_service.get_all_agents()
-        active_agents = []
+        agent_info = agent_config_service.get_agent_display_info(agent_name)
         
-        for agent_key, agent_config in agents.items():
-            active_agents.append({
-                "key": agent_key,
-                "indian_name": agent_config.get("indian_name", agent_key),
-                "full_name": agent_config.get("full_name", agent_key),
-                "role": agent_config.get("role", "Agent"),
-                "avatar": agent_config.get("avatar", "AI"),
-                "status": "active",  # This would be dynamic in a real implementation
-                "last_activity": "2025-01-01T00:00:00Z"  # This would be dynamic
-            })
+        if not agent_info:
+            raise HTTPException(status_code=404, detail="Agent not found")
         
-        return {
-            "active_agents": active_agents,
-            "total_active": len(active_agents)
-        }
+        return agent_info
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get active agents: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get agent details: {str(e)}")

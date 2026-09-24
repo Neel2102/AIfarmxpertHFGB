@@ -53,10 +53,11 @@ export const AgentProvider = ({ children }) => {
       const response = await fetch(`${API_BASE_URL}/agents/status/active`);
       if (response.ok) {
         const data = await response.json();
-        setActiveAgents(data.active_agents);
+        setActiveAgents(data.active_agents || []);
       }
     } catch (err) {
-      console.error('Error fetching active agents:', err);
+      // Silently fail - active agents is non-critical, avoid console spam
+      // This can happen if the server is waking up (cold start on Render)
     }
   };
 

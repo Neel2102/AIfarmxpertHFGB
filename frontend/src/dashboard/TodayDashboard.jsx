@@ -337,8 +337,8 @@ const TodayDashboard = () => {
             <MessageSquare size={16} />
             Ask AI
           </button>
-          <button 
-            className="today-btn primary" 
+          <button
+            className="today-btn primary"
             onClick={handleGenerateDailyFlow}
             disabled={generating}
             style={{ minWidth: '170px' }}
@@ -402,7 +402,7 @@ const TodayDashboard = () => {
             <AlertCircle size={18} />
             <span>{flowError}</span>
           </div>
-          <button 
+          <button
             className="today-btn secondary"
             style={{ padding: '4px 12px', fontSize: '0.8rem', height: 'auto', flexShrink: 0 }}
             onClick={() => fetchDailyFlow(selectedFarmId, selectedCropId)}
@@ -539,9 +539,9 @@ const TodayDashboard = () => {
                   <span>{seasonInfo.progress_pct}% Completed</span>
                 </div>
                 <div className="season-progress-bar">
-                  <div 
-                    className="season-progress-fill" 
-                    style={{ width: `${seasonInfo.progress_pct}%` }} 
+                  <div
+                    className="season-progress-fill"
+                    style={{ width: `${seasonInfo.progress_pct}%` }}
                   />
                 </div>
               </div>
@@ -622,224 +622,224 @@ const TodayDashboard = () => {
               ) : (
                 <div className="task-list">
                   {flowData.today.map((task) => (
-                <div 
-                  key={task.id} 
-                  className={`task-item ${task.is_completed ? 'completed' : ''} priority-${task.priority.toLowerCase()}`}
-                  onClick={() => handleToggleTask(task.id, task.is_completed)}
-                >
-                  <div className="task-checkbox">
-                    {task.is_completed ? (
-                      <CheckCircle2 className="checked" size={24} />
-                    ) : (
+                    <div
+                      key={task.id}
+                      className={`task-item ${task.is_completed ? 'completed' : ''} priority-${task.priority.toLowerCase()}`}
+                      onClick={() => handleToggleTask(task.id, task.is_completed)}
+                    >
+                      <div className="task-checkbox">
+                        {task.is_completed ? (
+                          <CheckCircle2 className="checked" size={24} />
+                        ) : (
+                          <Circle className="unchecked" size={24} />
+                        )}
+                      </div>
+
+                      <div className="task-content">
+                        <div className="task-title-row">
+                          <h4 className="task-title">{task.title}</h4>
+                          <span className={`task-badge ${task.priority.toLowerCase()}`}>
+                            {task.priority.toUpperCase()}
+                          </span>
+                        </div>
+                        <p className="task-desc">{task.description}</p>
+                        <div className="task-meta">
+                          <span className="task-category">
+                            {getCategoryIcon(task.category)}
+                            {task.category?.toUpperCase() || 'OPERATION'}
+                          </span>
+                          <span className="task-time">
+                            <Calendar size={13} /> Today
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab 2: Tomorrow & Next 7 Days */}
+          {activeTab === 'upcoming' && (
+            <div className="upcoming-tasks-section" style={{ marginBottom: '28px' }}>
+              {/* Tomorrow Section */}
+              <div className="daily-checklist" style={{ margin: '0 0 20px 0' }}>
+                <div className="checklist-header">
+                  <div>
+                    <h3>Tomorrow's Tasks</h3>
+                    <p className="subtitle">Scheduled operations for tomorrow</p>
+                  </div>
+                  <span className="flow-tab-badge">{tomorrowCount} tasks</span>
+                </div>
+
+                {tomorrowCount === 0 ? (
+                  <div style={{ padding: '20px', color: 'var(--dash-text-muted)', fontSize: '0.86rem' }}>
+                    No specific tasks scheduled for tomorrow.
+                  </div>
+                ) : (
+                  <div className="task-list">
+                    {flowData.tomorrow.map(task => (
+                      <div
+                        key={task.id}
+                        className={`task-item ${task.is_completed ? 'completed' : ''} priority-${task.priority.toLowerCase()}`}
+                        onClick={() => handleToggleTask(task.id, task.is_completed)}
+                      >
+                        <div className="task-checkbox">
+                          {task.is_completed ? <CheckCircle2 className="checked" size={24} /> : <Circle className="unchecked" size={24} />}
+                        </div>
+                        <div className="task-content">
+                          <div className="task-title-row">
+                            <h4 className="task-title">{task.title}</h4>
+                            <span className={`task-badge ${task.priority.toLowerCase()}`}>{task.priority.toUpperCase()}</span>
+                          </div>
+                          <p className="task-desc">{task.description}</p>
+                          <div className="task-meta">
+                            <span className="task-category">{getCategoryIcon(task.category)} {task.category?.toUpperCase()}</span>
+                            <span className="task-time"><Calendar size={13} /> {task.scheduled_date_str}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Next 7 Days Section */}
+              <div className="daily-checklist" style={{ margin: 0 }}>
+                <div className="checklist-header">
+                  <div>
+                    <h3>Next 7 Days Operational Horizon</h3>
+                    <p className="subtitle">Upcoming work scheduled over the coming week</p>
+                  </div>
+                  <span className="flow-tab-badge">{upcoming7Count} tasks</span>
+                </div>
+
+                {upcoming7Count === 0 ? (
+                  <div style={{ padding: '20px', color: 'var(--dash-text-muted)', fontSize: '0.86rem' }}>
+                    No tasks scheduled for the next 7 days.
+                  </div>
+                ) : (
+                  <div className="task-list">
+                    {flowData.upcoming_7_days.map(task => (
+                      <div
+                        key={task.id}
+                        className={`task-item ${task.is_completed ? 'completed' : ''} priority-${task.priority.toLowerCase()}`}
+                        onClick={() => handleToggleTask(task.id, task.is_completed)}
+                      >
+                        <div className="task-checkbox">
+                          {task.is_completed ? <CheckCircle2 className="checked" size={24} /> : <Circle className="unchecked" size={24} />}
+                        </div>
+                        <div className="task-content">
+                          <div className="task-title-row">
+                            <h4 className="task-title">{task.title}</h4>
+                            <span className={`task-badge ${task.priority.toLowerCase()}`}>{task.priority.toUpperCase()}</span>
+                          </div>
+                          <p className="task-desc">{task.description}</p>
+                          <div className="task-meta">
+                            <span className="task-category">{getCategoryIcon(task.category)} {task.category?.toUpperCase()}</span>
+                            <span className="task-time"><Calendar size={13} /> {task.scheduled_date_str}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Tab 3: Season Flow Timeline */}
+          {activeTab === 'timeline' && (
+            <DailyFlowTimeline
+              stages={flowData?.season_plan || []}
+              onToggleTask={handleToggleTask}
+            />
+          )}
+
+          {/* Tab 4: Overdue Tasks */}
+          {activeTab === 'overdue' && (
+            <div className="daily-checklist" style={{ margin: '0 0 28px 0', borderColor: 'rgba(239, 68, 68, 0.4)' }}>
+              <div className="checklist-header">
+                <div>
+                  <h3 style={{ color: '#ef4444' }}>Overdue Tasks</h3>
+                  <p className="subtitle">Tasks past their scheduled deadline requiring immediate attention</p>
+                </div>
+              </div>
+
+              <div className="task-list">
+                {flowData?.overdue?.map(task => (
+                  <div
+                    key={task.id}
+                    className="task-item priority-high"
+                    onClick={() => handleToggleTask(task.id, task.is_completed)}
+                  >
+                    <div className="task-checkbox">
                       <Circle className="unchecked" size={24} />
-                    )}
-                  </div>
-                  
-                  <div className="task-content">
-                    <div className="task-title-row">
-                      <h4 className="task-title">{task.title}</h4>
-                      <span className={`task-badge ${task.priority.toLowerCase()}`}>
-                        {task.priority.toUpperCase()}
-                      </span>
-                    </div>
-                    <p className="task-desc">{task.description}</p>
-                    <div className="task-meta">
-                      <span className="task-category">
-                        {getCategoryIcon(task.category)}
-                        {task.category?.toUpperCase() || 'OPERATION'}
-                      </span>
-                      <span className="task-time">
-                        <Calendar size={13} /> Today
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tab 2: Tomorrow & Next 7 Days */}
-      {activeTab === 'upcoming' && (
-        <div className="upcoming-tasks-section" style={{ marginBottom: '28px' }}>
-          {/* Tomorrow Section */}
-          <div className="daily-checklist" style={{ margin: '0 0 20px 0' }}>
-            <div className="checklist-header">
-              <div>
-                <h3>Tomorrow's Tasks</h3>
-                <p className="subtitle">Scheduled operations for tomorrow</p>
-              </div>
-              <span className="flow-tab-badge">{tomorrowCount} tasks</span>
-            </div>
-
-            {tomorrowCount === 0 ? (
-              <div style={{ padding: '20px', color: 'var(--dash-text-muted)', fontSize: '0.86rem' }}>
-                No specific tasks scheduled for tomorrow.
-              </div>
-            ) : (
-              <div className="task-list">
-                {flowData.tomorrow.map(task => (
-                  <div 
-                    key={task.id} 
-                    className={`task-item ${task.is_completed ? 'completed' : ''} priority-${task.priority.toLowerCase()}`}
-                    onClick={() => handleToggleTask(task.id, task.is_completed)}
-                  >
-                    <div className="task-checkbox">
-                      {task.is_completed ? <CheckCircle2 className="checked" size={24} /> : <Circle className="unchecked" size={24} />}
                     </div>
                     <div className="task-content">
                       <div className="task-title-row">
                         <h4 className="task-title">{task.title}</h4>
-                        <span className={`task-badge ${task.priority.toLowerCase()}`}>{task.priority.toUpperCase()}</span>
+                        <span className="task-badge high">OVERDUE</span>
                       </div>
                       <p className="task-desc">{task.description}</p>
                       <div className="task-meta">
                         <span className="task-category">{getCategoryIcon(task.category)} {task.category?.toUpperCase()}</span>
-                        <span className="task-time"><Calendar size={13} /> {task.scheduled_date_str}</span>
+                        <span className="task-time" style={{ color: '#ef4444' }}>
+                          <Calendar size={13} /> Was scheduled: {task.scheduled_date_str}
+                        </span>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-
-          {/* Next 7 Days Section */}
-          <div className="daily-checklist" style={{ margin: 0 }}>
-            <div className="checklist-header">
-              <div>
-                <h3>Next 7 Days Operational Horizon</h3>
-                <p className="subtitle">Upcoming work scheduled over the coming week</p>
-              </div>
-              <span className="flow-tab-badge">{upcoming7Count} tasks</span>
-            </div>
-
-            {upcoming7Count === 0 ? (
-              <div style={{ padding: '20px', color: 'var(--dash-text-muted)', fontSize: '0.86rem' }}>
-                No tasks scheduled for the next 7 days.
-              </div>
-            ) : (
-              <div className="task-list">
-                {flowData.upcoming_7_days.map(task => (
-                  <div 
-                    key={task.id} 
-                    className={`task-item ${task.is_completed ? 'completed' : ''} priority-${task.priority.toLowerCase()}`}
-                    onClick={() => handleToggleTask(task.id, task.is_completed)}
-                  >
-                    <div className="task-checkbox">
-                      {task.is_completed ? <CheckCircle2 className="checked" size={24} /> : <Circle className="unchecked" size={24} />}
-                    </div>
-                    <div className="task-content">
-                      <div className="task-title-row">
-                        <h4 className="task-title">{task.title}</h4>
-                        <span className={`task-badge ${task.priority.toLowerCase()}`}>{task.priority.toUpperCase()}</span>
-                      </div>
-                      <p className="task-desc">{task.description}</p>
-                      <div className="task-meta">
-                        <span className="task-category">{getCategoryIcon(task.category)} {task.category?.toUpperCase()}</span>
-                        <span className="task-time"><Calendar size={13} /> {task.scheduled_date_str}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Tab 3: Season Flow Timeline */}
-      {activeTab === 'timeline' && (
-        <DailyFlowTimeline
-          stages={flowData?.season_plan || []}
-          onToggleTask={handleToggleTask}
-        />
-      )}
-
-      {/* Tab 4: Overdue Tasks */}
-      {activeTab === 'overdue' && (
-        <div className="daily-checklist" style={{ margin: '0 0 28px 0', borderColor: 'rgba(239, 68, 68, 0.4)' }}>
-          <div className="checklist-header">
-            <div>
-              <h3 style={{ color: '#ef4444' }}>Overdue Tasks</h3>
-              <p className="subtitle">Tasks past their scheduled deadline requiring immediate attention</p>
-            </div>
-          </div>
-
-          <div className="task-list">
-            {flowData?.overdue?.map(task => (
-              <div 
-                key={task.id} 
-                className="task-item priority-high"
-                onClick={() => handleToggleTask(task.id, task.is_completed)}
-              >
-                <div className="task-checkbox">
-                  <Circle className="unchecked" size={24} />
-                </div>
-                <div className="task-content">
-                  <div className="task-title-row">
-                    <h4 className="task-title">{task.title}</h4>
-                    <span className="task-badge high">OVERDUE</span>
-                  </div>
-                  <p className="task-desc">{task.description}</p>
-                  <div className="task-meta">
-                    <span className="task-category">{getCategoryIcon(task.category)} {task.category?.toUpperCase()}</span>
-                    <span className="task-time" style={{ color: '#ef4444' }}>
-                      <Calendar size={13} /> Was scheduled: {task.scheduled_date_str}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Tab 5: Completed Tasks */}
-      {activeTab === 'completed' && (
-        <div className="daily-checklist" style={{ margin: '0 0 28px 0' }}>
-          <div className="checklist-header">
-            <div>
-              <h3>Completed Operations</h3>
-              <p className="subtitle">Audit log of fulfilled tasks across the crop cycle</p>
-            </div>
-            <span className="flow-tab-badge">{completedCount} Completed</span>
-          </div>
-
-          {completedCount === 0 ? (
-            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--dash-text-muted)' }}>
-              No tasks completed yet. Check off tasks in Today or the Timeline as you complete them!
-            </div>
-          ) : (
-            <div className="task-list">
-              {flowData?.completed?.map(task => (
-                <div 
-                  key={task.id} 
-                  className="task-item completed"
-                  onClick={() => handleToggleTask(task.id, task.is_completed)}
-                >
-                  <div className="task-checkbox">
-                    <CheckCircle2 className="checked" size={24} />
-                  </div>
-                  <div className="task-content">
-                    <div className="task-title-row">
-                      <h4 className="task-title">{task.title}</h4>
-                      <span className="task-badge" style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' }}>COMPLETED</span>
-                    </div>
-                    <p className="task-desc">{task.description}</p>
-                    <div className="task-meta">
-                      <span className="task-category">{getCategoryIcon(task.category)} {task.category?.toUpperCase()}</span>
-                      <span className="task-time"><Calendar size={13} /> {task.scheduled_date_str}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
-        </div>
-      )}
-      </>
+
+          {/* Tab 5: Completed Tasks */}
+          {activeTab === 'completed' && (
+            <div className="daily-checklist" style={{ margin: '0 0 28px 0' }}>
+              <div className="checklist-header">
+                <div>
+                  <h3>Completed Operations</h3>
+                  <p className="subtitle">Audit log of fulfilled tasks across the crop cycle</p>
+                </div>
+                <span className="flow-tab-badge">{completedCount} Completed</span>
+              </div>
+
+              {completedCount === 0 ? (
+                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--dash-text-muted)' }}>
+                  No tasks completed yet. Check off tasks in Today or the Timeline as you complete them!
+                </div>
+              ) : (
+                <div className="task-list">
+                  {flowData?.completed?.map(task => (
+                    <div
+                      key={task.id}
+                      className="task-item completed"
+                      onClick={() => handleToggleTask(task.id, task.is_completed)}
+                    >
+                      <div className="task-checkbox">
+                        <CheckCircle2 className="checked" size={24} />
+                      </div>
+                      <div className="task-content">
+                        <div className="task-title-row">
+                          <h4 className="task-title">{task.title}</h4>
+                          <span className="task-badge" style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' }}>COMPLETED</span>
+                        </div>
+                        <p className="task-desc">{task.description}</p>
+                        <div className="task-meta">
+                          <span className="task-category">{getCategoryIcon(task.category)} {task.category?.toUpperCase()}</span>
+                          <span className="task-time"><Calendar size={13} /> {task.scheduled_date_str}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* Preserved Telemetry Action Grid */}

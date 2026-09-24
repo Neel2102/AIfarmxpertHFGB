@@ -157,7 +157,15 @@ export const AuthProvider = ({ children }) => {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Registration failed');
+        // FastAPI 422 returns detail as an array of validation error objects
+        const detail = error.detail;
+        let message;
+        if (Array.isArray(detail)) {
+          message = detail.map(e => e.msg || JSON.stringify(e)).join('; ');
+        } else {
+          message = detail || 'Registration failed';
+        }
+        throw new Error(message);
       }
 
       const data = await response.json();
